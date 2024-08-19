@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hashbrown = { version = "0.14.5", features= ["ahash", "allocator-api2", "inline-more", "rayon"] }
 thiserror = "1.0.63"
 
 [dependencies.bevy]
