@@ -48,14 +48,16 @@ fn corner_to_corner_64() {
 
     let _ = pathfinding.get_point_path(
         Vec3::new(0., 0., 0.),
-        Vec3::new(63., 63., 0.)
+        Vec3::new(63., 63., 0.),
+        false
     );
 }
 
 fn corner_to_corner_64_without_setup(pathfinding: &mut Pathfinding) {
     let _ = pathfinding.get_point_path(
         Vec3::new(0., 0., 0.),
-        Vec3::new(63., 63., 0.)
+        Vec3::new(63., 63., 0.),
+        false
     );    
 }
 
@@ -108,7 +110,7 @@ fn benchmarks(c: &mut Criterion) {
 
     group.sample_size(10);
     group.bench_function("corner_to_corner_64", |b| b.iter(|| corner_to_corner_64() ));
-    group.bench_function("without_setup", |b| b.iter(|| corner_to_corner_64_without_setup(&mut pathfinding)));
+    group.bench_function("without_setup", |b| b.iter(|| corner_to_corner_64_without_setup(&mut pathfinding.clone())));
     group.finish();
 }
 

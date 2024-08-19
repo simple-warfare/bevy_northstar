@@ -1,8 +1,57 @@
 use std::{collections::BinaryHeap, sync::{Arc, Mutex}};
+use hashbrown::{HashMap, HashSet};
 
-use bevy::{prelude::*, utils::{hashbrown::HashMap, HashSet}};
+use bevy::prelude::*;
 use thiserror::Error;
 
+use std::hash::{Hash, Hasher};
+
+
+#[derive(Default, Debug, Clone)]
+struct PointGuard(pub Arc<Mutex<Point>>);
+
+impl PointGuard {
+    fn new(id: i64, pos: Vec3, weight: f32, enabled: bool) -> Self {
+        PointGuard(Arc::new(Mutex::new(
+            Point {
+                id,
+                pos,
+                weight,
+                enabled,
+                ..Default::default()
+            }
+        )))
+    }
+}
+
+impl Eq for PointGuard{}
+
+impl PartialEq for PointGuard {
+    fn eq(&self, other: &Self) -> bool {
+        let internal = self.0.lock().unwrap();
+        let other = other.0.lock().unwrap();
+
+        internal.id == other.id
+    }
+}
+
+impl Hash for PointGuard {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.lock().unwrap().id.hash(state);
+    }
+}
+
+impl PartialOrd for PointGuard {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.0.lock().unwrap().f_score.partial_cmp(&self.0.lock().unwrap().f_score)
+    }
+}
+
+impl Ord for PointGuard {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap().reverse()
+    }
+}
 
 #[derive(Default, Debug, Clone)]
 struct Point {
@@ -13,13 +62,13 @@ struct Point {
     enabled: bool,
 
     // Neighbors
-    neighbors: HashSet<i64>,
-    unlinked_neighbors: HashSet<i64>,
+    neighbors: HashSet<PointGuard>,
+    unlinked_neighbors: HashSet<PointGuard>,
 
-    prev_point: Option<i64>,
+    prev_point: Option<PointGuard>,
 
-    //open_pass: u64,
-    //closed_pass: u64,
+    open_pass: u64,
+    closed_pass: u64,
 
     g_score: f32,
     f_score: f32,
@@ -49,7 +98,7 @@ impl Ord for Point {
     }
 }
 
-mod segment_direction {
+/* mod segment_direction {
     pub const NONE: u8 = 0;
     pub const FORWARD: u8 = 1;
     pub const BACKWARD: u8 = 2;
@@ -60,14 +109,15 @@ mod segment_direction {
 struct Segment {
     key: (i64, i64),
     direction: u8,
-}
+} */
 
-#[derive(Default, Resource)]
+#[derive(Default, Resource, Clone)]
 pub struct Pathfinding {
-    points: HashMap<i64, Arc<Mutex<Point>>>,
-    segments: HashSet<Segment>,
+    points: HashMap<i64, PointGuard>,
+    //segments: HashSet<Segment>,
 
     pass: u64,
+    last_closest_point: Option<PointGuard>,
 }
 
 // Errors
@@ -92,23 +142,17 @@ impl Pathfinding {
     }
 
     pub fn add_point(&mut self, id: i64, pos: Vec3, weight: f32) {
-        if let Some(point_mutex) = self.points.get_mut(&id) {
-            let mut point = point_mutex.lock().unwrap();
+        if let Some(point_guard) = self.points.get_mut(&id) {
+            let mut point = point_guard.0.lock().unwrap();
             point.pos = pos;
             point.weight = weight;
         } else {
-            self.points.insert(id, Arc::new(Mutex::new(Point {
-                id,
-                pos,
-                weight,
-                enabled: true,
-                ..Default::default()
-            })));
+            self.points.insert(id, PointGuard::new(id, pos, weight, true));
         }
     }
 
 
-    fn get_point(&self, id: &i64) -> Result<&Arc<Mutex<Point>>, PathfindingError> {
+    fn get_point(&self, id: &i64) -> Result<&PointGuard, PathfindingError> {
         let Some(point) = self.points.get(id) else {return Err(PathfindingError::PointDoesNotExist)};
 
         Ok(point)
@@ -126,21 +170,23 @@ impl Pathfinding {
             return Err(PathfindingError::IdsAreEqual);
         }
 
-        let Some(from_mutex) = self.points.get(&from_id) else {return Err(PathfindingError::PointDoesNotExist)};
-        let Some(to_mutex) = self.points.get(&to_id) else {return Err(PathfindingError::PointDoesNotExist)};
+        let Some(from_guard) = self.points.get(&from_id) else {return Err(PathfindingError::PointDoesNotExist)};
+        let Some(to_guard) = self.points.get(&to_id) else {return Err(PathfindingError::PointDoesNotExist)};
 
-        let mut from = from_mutex.lock().unwrap();
-        let mut to = to_mutex.lock().unwrap();
+        let mut from = from_guard.0.lock().unwrap();
+        from.neighbors.insert(to_guard.clone());
 
-        from.neighbors.insert(to_id);
+        std::mem::drop(from);
 
         if bidirectional {
-            to.neighbors.insert(from_id);
+            let mut to = to_guard.0.lock().unwrap();
+            to.neighbors.insert(from_guard.clone());
         } else {
-            to.unlinked_neighbors.insert(from_id);
+            let mut to = to_guard.0.lock().unwrap();
+            to.unlinked_neighbors.insert(from_guard.clone());
         }
 
-        let mut s = Segment { key: (from_id, to_id), direction: segment_direction::NONE };
+        /* let mut s = Segment { key: (from_id, to_id), direction: segment_direction::NONE };
 
         if bidirectional {
             s.direction = segment_direction::BIDIRECTIONAL;
@@ -150,12 +196,12 @@ impl Pathfinding {
             s.direction |= element.direction;
 
             if s.direction == segment_direction::BIDIRECTIONAL {
-                to.unlinked_neighbors.remove(&from.id);
-                from.unlinked_neighbors.remove(&to.id);
+                to.unlinked_neighbors.remove(from_guard);
+                from.unlinked_neighbors.remove(to_guard);
             }
         }
 
-        self.segments.insert(s);
+        self.segments.insert(s);*/
 
         Ok(())
     }
@@ -169,7 +215,12 @@ impl Pathfinding {
         (x << 40) | (y << 20) | z
     }
 
-    pub fn get_point_path_by_index(&mut self, start_index: i64, end_index: i64) -> Result<Vec<Vec3>, PathfindingError> {
+    pub fn get_point_path_by_index(
+        &mut self, 
+        start_index: i64, 
+        end_index: i64,
+        allow_partial: bool
+    ) -> Result<Vec<Vec3>, PathfindingError> {
         let mut path: Vec<Vec3> = Vec::new();
 
         if !self.points.contains_key(&start_index) || !self.points.contains_key(&end_index) {
@@ -180,22 +231,16 @@ impl Pathfinding {
             return Err(PathfindingError::IdsAreEqual)
         }
 
-        let maybe_last_point = self.solve(start_index, end_index)?;
-
-        if let Some(last_point) = maybe_last_point {
-            let mut point_arc = self.get_point(&last_point.id)?;
-            let mut point = point_arc.lock().unwrap();
-
-            while point.prev_point.is_some() {
-                path.push(point.pos);
-
-                let prev_point_id = point.prev_point.unwrap();
-                point_arc = self.get_point(&prev_point_id)?;
-                std::mem::drop(point);
-                point = point_arc.lock().unwrap();
-            }
-        } else {
+        if !self.solve(start_index, end_index, allow_partial)? {
             return Err(PathfindingError::Unsolvable)
+        }
+
+        let mut current = self.last_closest_point.clone();
+
+        while let Some(point_guard) = current {
+            let point = point_guard.0.lock().unwrap();
+            path.push(point.pos);
+            current = point.prev_point.clone();
         }
 
         path.reverse();
@@ -203,67 +248,70 @@ impl Pathfinding {
         Ok(path)
     }
 
-    pub fn get_point_path(&mut self, start: Vec3, end: Vec3) -> Result<Vec<Vec3>, PathfindingError> {
+    pub fn get_point_path(
+        &mut self, 
+        start: Vec3, 
+        end: Vec3, 
+        allow_partial: bool
+    ) -> Result<Vec<Vec3>, PathfindingError> {
         let start_index = Pathfinding::calculate_index(start);
         let end_index = Pathfinding::calculate_index(end);
 
-        self.get_point_path_by_index(start_index, end_index)
+        self.get_point_path_by_index(start_index, end_index, allow_partial)
     }
 
-    fn solve(&mut self, begin_index: i64, end_index: i64) -> Result<Option<Point>, PathfindingError> {
+    fn solve(&mut self, begin_index: i64, end_index: i64, allow_partial: bool) -> Result<bool, PathfindingError> {
         if begin_index == end_index {
-            return Ok(None);
+            return Ok(false);
         }
 
         self.pass += 1;
 
-        let begin_arc = self.get_point(&begin_index)?;
-        let end_arc = self.get_point(&end_index)?;
+        let begin_guard = self.get_point(&begin_index)?;
+        let end_guard = self.get_point(&end_index)?;
 
-        let mut begin = begin_arc.lock().unwrap();
+        let mut begin = begin_guard.0.lock().unwrap();
         let end_pos = {
-            let end = end_arc.lock().unwrap();
+            let end = end_guard.0.lock().unwrap();
             end.pos
         };
 
-        let mut open_list: BinaryHeap<Point> = BinaryHeap::new();
-        let mut open_list_ids: Vec<i64> = Vec::new();
-        let mut closed_list: Vec<i64> = Vec::new();
+        let mut open_list: BinaryHeap<PointGuard> = BinaryHeap::new();
 
         begin.f_score = begin.pos.distance(end_pos);
         begin.abs_f_score = begin.f_score;
 
-        open_list.push(begin.clone());
+        begin.closed_pass = self.pass;
+
+        open_list.push(begin_guard.clone());
 
         std::mem::drop(begin);
 
-        let mut last_closest_point: Option<Point> = None;
-
         while !open_list.is_empty() {
-            let point = open_list.pop().unwrap();
+            let point_guard = open_list.pop().unwrap();
+            let point = point_guard.0.lock().unwrap();
 
-            if let Some(lcp) = last_closest_point.clone() {
+            if let Some(lcp) = self.last_closest_point.clone() {
+                let lcp = lcp.0.lock().unwrap();
+
                 if lcp.abs_f_score > point.abs_f_score
                     || (lcp.abs_f_score >= point.abs_f_score && lcp.abs_g_score > point.abs_g_score) 
                 {
-                    last_closest_point = Some(point.clone());
+                    self.last_closest_point = Some(point_guard.clone());
                 }
             } else {
-                last_closest_point = Some(point.clone());
+                self.last_closest_point = Some(point_guard.clone());
             }
 
             if point.id == end_index {
-                last_closest_point = Some(point.clone());
+                self.last_closest_point = Some(point_guard.clone());
                 break;
             }
 
-            closed_list.push(point.id);
+            for neighbor_guard in point.neighbors.clone().into_iter() {
+                let mut neighbor = neighbor_guard.0.lock().unwrap();
 
-            for neighbor_id in point.neighbors.clone().into_iter() {
-                let Some(neighbor_arc) = self.points.get(&neighbor_id) else {return Err(PathfindingError::PointDoesNotExist)};
-                let mut neighbor = neighbor_arc.lock().unwrap();
-
-                if !neighbor.enabled || closed_list.contains(&neighbor.id) {
+                if !neighbor.enabled || neighbor.closed_pass == self.pass {
                     continue;
                 }
 
@@ -273,31 +321,38 @@ impl Pathfinding {
 
                 let mut new_point = false;
 
-                if !open_list_ids.contains(&neighbor.id) {
+                if neighbor.open_pass != self.pass {
+                    neighbor.open_pass = self.pass;
                     new_point = true;
-                    open_list_ids.push(neighbor_id);
-                }
-                else if tentative_g_score >= neighbor.g_score {
+                    //open_list.push(neighbor_guard.clone());
+                } else if tentative_g_score >= neighbor.g_score {
                     continue;
                 }
 
-                neighbor.prev_point = Some(point.id); 
+                neighbor.prev_point = Some(point_guard.clone()); 
                 neighbor.g_score = tentative_g_score;
                 neighbor.f_score = neighbor.g_score + distance;
                 neighbor.abs_g_score = tentative_g_score;
                 neighbor.abs_f_score = neighbor.f_score - neighbor.g_score;
 
-                if new_point {
-                    open_list.push(neighbor.clone());
-                }
-
                 std::mem::drop(neighbor);                               
+
+                if new_point { open_list.push(neighbor_guard.clone()) };
+
             }
 
             std::mem::drop(point);
         }
 
-        Ok(last_closest_point)
+        if let Some(lcp) = &self.last_closest_point {
+            if end_index == lcp.0.lock().unwrap().id || allow_partial {
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        } else {
+            Err(PathfindingError::Unsolvable)
+        }
     }
 }
 
@@ -343,7 +398,7 @@ mod tests {
 
         pathfinding.add_point(0, Vec3::new(0.0, 0.0, 0.0), 1.0);
 
-        assert_eq!(pathfinding.solve(0, 0).unwrap(), None);
+        assert_eq!(pathfinding.solve(0, 0, false).unwrap(), false);
     }
 
     #[test]
@@ -365,7 +420,7 @@ mod tests {
         let _ = pathfinding.connect_points_by_index(i1, i2, true);
         let _ = pathfinding.connect_points_by_index(i2, i3, true);
 
-        assert_ne!(pathfinding.solve(i1, i3).unwrap(), None);
+        assert_eq!(pathfinding.solve(i1, i3, false).unwrap(), true);
     }
 
     #[test]
@@ -381,15 +436,39 @@ mod tests {
         let v4 = Vec3::new(3.0, 0.0, 0.0);
         let i4 = Pathfinding::calculate_index(v4);
 
-        pathfinding.add_point(i1, v1, 1.0);
-        pathfinding.add_point(i2, v2, 1.0);
-        pathfinding.add_point(i3, v3, 1.0);
+        pathfinding.add_point(i1, v1, 0.0);
+        pathfinding.add_point(i2, v2, 0.0);
+        pathfinding.add_point(i3, v3, 0.0);
         pathfinding.add_point(i4, v4, 0.0);
 
         let _ = pathfinding.connect_points_by_index(i1, i2, false);
         let _ = pathfinding.connect_points_by_index(i2, i3, false);
 
-        assert_ne!(pathfinding.solve(i1, i4).unwrap(), None);        
+        assert_eq!(pathfinding.solve(i1, i4, false).unwrap(), false);        
+    }
+
+    #[test]
+    fn test_partial() {
+        let mut pathfinding = Pathfinding::default();
+
+        let v1 = Vec3::new(0.0, 0.0, 0.0);
+        let i1 = Pathfinding::calculate_index(v1);
+        let v2 = Vec3::new(1.0, 0.0, 0.0);
+        let i2 = Pathfinding::calculate_index(v2);
+        let v3 = Vec3::new(2.0, 0.0, 1.0);
+        let i3 = Pathfinding::calculate_index(v3);
+        let v4 = Vec3::new(3.0, 0.0, 0.0);
+        let i4 = Pathfinding::calculate_index(v4);
+
+        pathfinding.add_point(i1, v1, 0.0);
+        pathfinding.add_point(i2, v2, 0.0);
+        pathfinding.add_point(i3, v3, 0.0);
+        pathfinding.add_point(i4, v4, 0.0);
+
+        let _ = pathfinding.connect_points_by_index(i1, i2, false);
+        let _ = pathfinding.connect_points_by_index(i2, i3, false);
+
+        assert_eq!(pathfinding.solve(i1, i4, true).unwrap(), true);        
     }
 
     #[test]
@@ -410,9 +489,9 @@ mod tests {
         let _ = pathfinding.connect_points_by_index(i1, i2, true);
         let _ = pathfinding.connect_points_by_index(i2, i3, true);
 
-        let path = pathfinding.get_point_path(v1, v3).unwrap();
+        let path = pathfinding.get_point_path(v1, v3, false).unwrap();
 
-        let test = vec![v2, v3];
+        let test = vec![v1, v2, v3];
 
         assert_eq!(path, test);
     }
@@ -440,21 +519,21 @@ mod tests {
         for x in 0..4 {
             for y in 0..4 {
                 if x > 0 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x-1][y].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x-1][y].1, false).unwrap();
                 }
                 if x < 3 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x+1][y].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x+1][y].1, false).unwrap();
                 }
                 if y > 0 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y-1].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y-1].1, false).unwrap();
                 }
                 if y < 3 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y+1].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y+1].1, false).unwrap();
                 }
             }
         }
 
-        path_one = pathfinding.get_point_path_by_index(0, 15).unwrap();
+        path_one = pathfinding.get_point_path_by_index(0, 15, false).unwrap();
 
         grid[1][0].0 = 0.0;
 
@@ -470,21 +549,21 @@ mod tests {
         for x in 0..4 {
             for y in 0..4 {
                 if x > 0 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x-1][y].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x-1][y].1, false).unwrap();
                 }
                 if x < 3 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x+1][y].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x+1][y].1, false).unwrap();
                 }
                 if y > 0 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y-1].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y-1].1, false).unwrap();
                 }
                 if y < 3 {
-                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y+1].1, true).unwrap();
+                    pathfinding.connect_points_by_index(grid[x][y].1, grid[x][y+1].1, false).unwrap();
                 }
             }
         }        
 
-        path_two = pathfinding.get_point_path_by_index(0, 15).unwrap();
+        path_two = pathfinding.get_point_path_by_index(0, 15, false).unwrap();
 
         assert_ne!(path_one, path_two);
     }
