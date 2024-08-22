@@ -1,116 +1,16 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use bevy_northstar::Pathfinding;
-use bevy::math::Vec3;
-
-const N: usize = 64;
-
-fn corner_to_corner_64() {
-    let mut pathfinding = Pathfinding::default();
-
-    for x in 0..N {
-        for y in 0..N {
-            pathfinding.add_vec(Vec3::new(x as f32, y as f32, 0.0), 0.0);
-        }
-    }
-
-    for x in 0..N {
-        for y in 0..N {
-            if x > 0 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32 - 1.0, y as f32, 0.), 
-                    false
-                ).unwrap();
-            }
-            if x < 63 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32 + 1.0, y as f32, 0.), 
-                    false
-                ).unwrap();
-            }
-            if y > 0 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32, y as f32 - 1.0, 0.), 
-                    false 
-                ).unwrap();
-            }
-            if y < 63 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32, y as f32 + 1.0, 0.), 
-                    false
-                ).unwrap();
-            }
-        }
-    }
-
-    let _ = pathfinding.get_point_path(
-        Vec3::new(0., 0., 0.),
-        Vec3::new(63., 63., 0.),
-        false
-    );
-}
-
-fn corner_to_corner_64_without_setup(pathfinding: &mut Pathfinding) {
-    let _ = pathfinding.get_point_path(
-        Vec3::new(0., 0., 0.),
-        Vec3::new(63., 63., 0.),
-        false
-    );    
-}
-
+use bevy_northstar::{GridPosition, Pathfinding, PathfindingError};
 
 fn benchmarks(c: &mut Criterion) {
-    let mut pathfinding = Pathfinding::default();
-
-    for x in 0..N {
-        for y in 0..N {
-            pathfinding.add_vec(Vec3::new(x as f32, y as f32, 0.0), 0.0);
-        }
-    }
-
-    for x in 0..N {
-        for y in 0..N {
-            if x > 0 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32 - 1.0, y as f32, 0.), 
-                    false
-                ).unwrap();
-            }
-            if x < 63 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32 + 1.0, y as f32, 0.), 
-                    false
-                ).unwrap();
-            }
-            if y > 0 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32, y as f32 - 1.0, 0.), 
-                    false 
-                ).unwrap();
-            }
-            if y < 63 {
-                pathfinding.connect_points(
-                    Vec3::new(x as f32, y as f32, 0.), 
-                    Vec3::new(x as f32, y as f32 + 1.0, 0.), 
-                    false
-                ).unwrap();
-            }
-        }
-    } 
-
     let mut group = c.benchmark_group("pathfinding");
 
-    println!("Done with setup.");
+    let mut pathfinding = Pathfinding::new(64, 64, 4, 1, true);
 
     group.sample_size(10);
-    group.bench_function("corner_to_corner_64", |b| b.iter(|| corner_to_corner_64() ));
-    group.bench_function("without_setup", |b| b.iter(|| corner_to_corner_64_without_setup(&mut pathfinding.clone())));
+    group.bench_function("init_grid", |b| b.iter(|| pathfinding.init_grid(1, true) ));
+    group.bench_function("bench_pathfinding", |b| b.iter(||
+        assert_ne!(pathfinding.get_path(&GridPosition::new(0, 0, 0), &GridPosition::new(63, 63, 3)), Err(PathfindingError::NoPathToGoal))
+    ));
     group.finish();
 }
 
