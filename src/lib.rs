@@ -1,4 +1,5 @@
 use std::{cmp::Ordering, collections::BinaryHeap, hash::BuildHasherDefault};
+use nohash_hasher::{BuildNoHashHasher, NoHashHasher};
 
 use std::hash::Hash;
 
@@ -6,6 +7,10 @@ use bevy::prelude::Resource;
 use indexmap::{IndexMap, map::Entry::{Occupied, Vacant}};
 use rustc_hash::FxHasher;
 use thiserror::Error;
+
+mod math;
+
+type Cost = usize;
 
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -15,6 +20,7 @@ pub enum PathfindingError {
 }
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
+//type FxIndexMap<K, V> = IndexMap<K, V, BuildNoHashHasher<usize>>;
 
 #[allow(clippy::needless_collect)]
 fn reverse_path<N, V, F>(parents: &FxIndexMap<N, V>, mut parent: F, start: usize) -> Vec<N>
@@ -41,11 +47,11 @@ pub struct Pathfinding {
     width: usize,
     height: usize,
     depth: usize,
-    heuristic: fn(GridPosition, GridPosition) -> usize,
+    heuristic: fn(GridPosition, GridPosition) -> Cost,
 }
 
 impl Pathfinding {
-    pub fn new(width: usize, height: usize, depth: usize, default_cost: usize, default_enabled: bool) -> Self {
+    pub fn new(width: usize, height: usize, depth: usize, default_cost: Cost, default_enabled: bool) -> Self {
         Pathfinding {
             grid: vec![Point::new(default_cost, default_enabled); width * height * depth],
             width,
@@ -55,23 +61,46 @@ impl Pathfinding {
         }
     }
 
-    pub fn init_grid(&mut self, default_cost: usize, default_enabled: bool) {
+    pub fn init_grid(&mut self, default_cost: Cost, default_enabled: bool) {
         self.grid = vec![Point::new(default_cost, default_enabled); self.width * self.height * self.depth];
     }
 
-    fn default_heuristic(position: GridPosition, goal: GridPosition) -> usize {
+    pub fn disable_position(&mut self, x: usize, y: usize, z: usize) {
+        let index = self.get_index(x, y, z);
+        self.grid[index].enabled = false;
+    }
+
+    pub fn enable_position(&mut self, x: usize, y: usize, z: usize) {
+        let index = self.get_index(x, y, z);
+        self.grid[index].enabled = true;
+    }
+
+    pub fn set_position(
+        &mut self,
+        x: usize,
+        y: usize,
+        z: usize,
+        cost: usize,
+        enabled: bool
+    ) {
+        let index = self.get_index(x, y, z);
+        self.grid[index].cost = cost;
+        self.grid[index].enabled = enabled;
+    }
+
+    fn default_heuristic(position: GridPosition, goal: GridPosition) -> Cost {
         (
             (position.x - goal.x).abs() 
             + (position.y - goal.y).abs() 
             + (position.z - goal.z).abs()
-        ) as usize
+        ) as Cost
     }
 
-    pub fn get_index(&self, x: usize, y: usize, z: usize) -> usize {
+    fn get_index(&self, x: usize, y: usize, z: usize) -> usize {
         x + y * self.width + z * self.width * self.height
     }
 
-    fn succesors(&self, position: &GridPosition) -> Vec<(GridPosition, usize)> {
+    fn succesors(&self, position: &GridPosition) -> Vec<(GridPosition, Cost)> {
         let mut ret = Vec::with_capacity(32);
     
         for dx in -1i32..=1 {
@@ -115,18 +144,18 @@ impl Pathfinding {
 
     pub fn get_path(&self, start: &GridPosition, goal: &GridPosition) 
     -> Result<
-            (Vec<GridPosition>, usize), 
+            (Vec<GridPosition>, Cost), 
             PathfindingError
         > 
     {
-        let mut open = BinaryHeap::new();
+        let mut open = BinaryHeap::new(); //with_capacity(32);
         open.push(SmallestCostHolder {
             estimated_cost: 0,
             cost: 0,
             index: 0,
         });
 
-        let mut closed: FxIndexMap<GridPosition, (usize, usize)> = FxIndexMap::default();
+        let mut closed: FxIndexMap<GridPosition, (usize, Cost)> = FxIndexMap::default();
         closed.insert(start.clone(), (usize::MAX, 0));
 
         while let Some(SmallestCostHolder { cost, index, .. }) = open.pop() {
@@ -189,8 +218,8 @@ impl Pathfinding {
 }
 
 struct SmallestCostHolder {
-    estimated_cost: usize,
-    cost: usize,
+    estimated_cost: Cost,
+    cost: Cost,
     index: usize,
 }
 
@@ -219,12 +248,12 @@ impl Ord for SmallestCostHolder {
 
 #[derive(Default, Clone)]
 struct Point {
-    cost: usize,
+    cost: Cost,
     enabled: bool
 }
 
 impl Point {
-    fn new(cost: usize, enabled: bool) -> Self {
+    fn new(cost: Cost, enabled: bool) -> Self {
         Point { cost, enabled }
     }
 }
@@ -263,5 +292,18 @@ mod tests {
         let path = pathfinding.get_path(&GridPosition::new(0, 0, 0), &GridPosition::new(3, 3, 0));
 
         assert_eq!(path.unwrap(), (desired, 0));
+    }
+
+    #[test]
+    fn test_wall() {
+        use crate::PathfindingError;
+
+        let mut pathfinding = Pathfinding::new(1024, 1024, 1, 1, true);
+
+        for y in 1..1024 {
+            pathfinding.disable_position(512, y, 0);
+        }
+
+        assert_ne!(pathfinding.get_path(&GridPosition::new(0,0,0), &GridPosition::new(1023, 1023, 0)), Err(PathfindingError::NoPathToGoal));
     }
 }

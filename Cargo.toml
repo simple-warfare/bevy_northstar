@@ -8,6 +8,8 @@ hashbrown = { version = "0.14.5", features= ["ahash", "allocator-api2", "inline-
 indexmap = "2.4.0"
 rustc-hash = "2.0.0"
 thiserror = "1.0.63"
+nohash-hasher = "0.2.0"
+
 
 [dependencies.bevy]
 version = "0.14"
@@ -15,6 +17,7 @@ default-features = false
 
 [dev-dependencies]
 criterion = {version = "0.5.1", features = ["html_reports"]}
+rand = "0.8.5"
 
 [[bench]]
 name = "benches"
