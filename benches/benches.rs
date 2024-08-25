@@ -1,6 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use bevy_northstar::{GridPosition, Pathfinding, PathfindingError};
-use rand::Rng;
 
 fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("pathfinding");

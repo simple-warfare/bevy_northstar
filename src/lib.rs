@@ -1,14 +1,10 @@
 use std::{cmp::Ordering, collections::BinaryHeap, hash::BuildHasherDefault};
-use nohash_hasher::{BuildNoHashHasher, NoHashHasher};
-
 use std::hash::Hash;
 
 use bevy::prelude::Resource;
 use indexmap::{IndexMap, map::Entry::{Occupied, Vacant}};
 use rustc_hash::FxHasher;
 use thiserror::Error;
-
-mod math;
 
 type Cost = usize;
 
@@ -20,7 +16,6 @@ pub enum PathfindingError {
 }
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
-//type FxIndexMap<K, V> = IndexMap<K, V, BuildNoHashHasher<usize>>;
 
 #[allow(clippy::needless_collect)]
 fn reverse_path<N, V, F>(parents: &FxIndexMap<N, V>, mut parent: F, start: usize) -> Vec<N>
