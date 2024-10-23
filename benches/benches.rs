@@ -1,35 +1,84 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use bevy_northstar::{GridPosition, Pathfinding, PathfindingError};
+
+use bevy_northstar::grid::{Grid, GridSettings};
+
+mod profiler;
+
 
 fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("pathfinding");
 
-    let mut pathfinding = Pathfinding::new(64, 64, 4, 1, true);
+    let grid_settings = GridSettings {
+        width: 64,
+        height: 64,
+        depth: 1,
+        chunk_depth: 1,
+        chunk_size: 32,
+        default_cost: 1,
+        default_wall: false,
+        jump_height: 1,
+    };
+
+    let mut grid = Grid::new(&grid_settings);
 
     group.sample_size(10);
-    group.bench_function("init_grid", |b| b.iter(|| pathfinding.init_grid(1, true) ));
-    group.bench_function("small_grid", |b| b.iter(||
-        assert_ne!(pathfinding.get_path(&GridPosition::new(0, 0, 0), &GridPosition::new(63, 63, 3)), Err(PathfindingError::NoPathToGoal))
+    group.bench_function("init_grid_64x64", |b| b.iter(|| 
+        grid = Grid::new(&grid_settings)
+    ));
+    group.bench_function("build_grid_64x64", |b| b.iter(|| 
+        grid.build()
     ));
 
-    let pathfinding = Pathfinding::new(4092, 4092, 16, 1, true);
+    let grid_settings = GridSettings {
+        width: 512,
+        height: 512,
+        depth: 1,
+        chunk_depth: 1,
+        chunk_size: 32,
+        default_cost: 1,
+        default_wall: false,
+        jump_height: 1,
+    };
 
-    group.bench_function("huge_grid", |b| b.iter(|| 
-        assert_ne!(pathfinding.get_path(&GridPosition::new(0,0,0), &GridPosition::new(4091, 4091, 15)), Err(PathfindingError::NoPathToGoal))
+    let mut grid = Grid::new(&grid_settings);
+
+    group.bench_function("init_grid_512x512", |b| b.iter(|| 
+        grid = Grid::new(&grid_settings)
+    ));
+    group.bench_function("build_grid_512x512", |b| b.iter(|| 
+        grid.build()
     ));
 
-    let mut pathfinding = Pathfinding::new(64, 64, 1, 1, true);
 
-    for y in 1..64 {
-        pathfinding.disable_position(32, y, 0);
-    }
+    let grid_settings = GridSettings {
+        width: 1024,
+        height: 1024,
+        depth: 1,
+        chunk_depth: 1,
+        chunk_size: 32,
+        default_cost: 1,
+        default_wall: false,
+        jump_height: 1,
+    };
 
-    group.bench_function("mid_grid_with_wall", |b| b.iter(|| 
-        assert_ne!(pathfinding.get_path(&GridPosition::new(0,0,0), &GridPosition::new(31, 31, 0)), Err(PathfindingError::NoPathToGoal))
+    let mut grid = Grid::new(&grid_settings);
+
+    group.bench_function("init_grid_1024x1024", |b| b.iter(|| 
+        grid = Grid::new(&grid_settings)
     ));
+    group.bench_function("build_grid_1024x1024", |b| b.iter(|| 
+        grid.build()
+    ));
+
 
     group.finish();
 }
 
-criterion_group!(benches, benchmarks);
+criterion_group!{
+    name = benches;
+    config = Criterion::default().with_profiler(profiler::FlamegraphProfiler::new(100)).sample_size(10);
+    targets = benchmarks
+}
+
 criterion_main!(benches);
+
