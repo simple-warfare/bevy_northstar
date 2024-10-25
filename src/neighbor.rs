@@ -52,8 +52,8 @@ impl Neighborhood for CardinalNeighborhood {
     }
 
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (pos.x as i32 - target.x as i32).abs() as u32;
-        let dy = (pos.y as i32 - target.y as i32).abs() as u32;
+        let dx = if pos.x > target.x { pos.x - target.x } else { target.x - pos.x };
+        let dy = if pos.y > target.y { pos.y - target.y } else { target.y - pos.y };
 
         dx + dy
     }
@@ -106,9 +106,9 @@ impl Neighborhood for CardinalNeighboorhood3d {
     }
 
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (pos.x as i32 - target.x as i32).abs() as u32;
-        let dy = (pos.y as i32 - target.y as i32).abs() as u32;
-        let dz = (pos.z as i32 - target.z as i32).abs() as u32;
+        let dx = pos.x.max(target.x) - pos.x.min(target.x);
+        let dy = pos.y.max(target.y) - pos.y.min(target.y);
+        let dz = pos.z.max(target.z) - pos.z.min(target.z);
 
         dx + dy + dz
     }
@@ -122,9 +122,9 @@ pub struct OrdinalNeighborhood3d;
 
 impl Neighborhood for OrdinalNeighborhood3d {
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
-        let x = pos.x;
-        let y = pos.y;
-        let z = pos.z;
+        let x = pos.x as i32;
+        let y = pos.y as i32;
+        let z = pos.z as i32;
 
         for i in -1..=1 {
             for j in -1..=1 {
@@ -133,24 +133,24 @@ impl Neighborhood for OrdinalNeighborhood3d {
                         continue;
                     }
 
-                    let x = x as i32 + i;
-                    let y = y as i32 + j;
-                    let z = z as i32 + k;
+                    let nx = x + i;
+                    let ny = y + j;
+                    let nz = z + k;
 
-                    if x < 0 || y < 0 || z < 0 {
+                    if nx < 0 || ny < 0 || nz < 0 {
                         continue;
                     }
 
-                    let x = x as u32;
-                    let y = y as u32;
-                    let z = z as u32;
+                    let nx = nx as usize;
+                    let ny = ny as usize;
+                    let nz = nz as usize;
 
-                    if x >= grid.shape()[0] as u32 || y >= grid.shape()[1] as u32 || z >= grid.shape()[2] as u32 {
+                    if nx >= grid.shape()[0] || ny >= grid.shape()[1] || nz >= grid.shape()[2] {
                         continue;
                     }
 
-                    let neighbor = UVec3::new(x, y, z);
-                    let point = &grid[[x as usize, y as usize, z as usize]];
+                    let neighbor = UVec3::new(nx as u32, ny as u32, nz as u32);
+                    let point = &grid[[nx, ny, nz]];
 
                     if point.wall {
                         continue;
@@ -163,9 +163,9 @@ impl Neighborhood for OrdinalNeighborhood3d {
     }
 
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (pos.x as i32 - target.x as i32).abs() as u32;
-        let dy = (pos.y as i32 - target.y as i32).abs() as u32;
-        let dz = (pos.z as i32 - target.z as i32).abs() as u32;
+        let dx = pos.x.max(target.x) - pos.x.min(target.x);
+        let dy = pos.y.max(target.y) - pos.y.min(target.y);
+        let dz = pos.z.max(target.z) - pos.z.min(target.z);
 
         dx + dy + dz
     }

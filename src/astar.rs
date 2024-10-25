@@ -7,11 +7,8 @@ use rustc_hash::FxHasher;
 use ndarray::ArrayView3;
 
 use crate::graph::Graph;
-use crate::neighbor;
+use crate::{neighbor, FxIndexMap};
 use crate::{neighbor::Neighborhood, path::Path, Point, SmallestCostHolder};
-
-type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
-
 
 pub fn astar_grid<N: Neighborhood>(
     neighborhood: N,
@@ -132,14 +129,8 @@ pub fn astar_graph<N: Neighborhood>(
             }
 
             let node = graph.get_node(*current_pos).unwrap();
-            let neighbors = node.get_edges();
-            neighbors
+            node.get_edges()
         };
-
-        for neighbor in neighbors.iter() {
-            // Print edges
-            let neighbor_node = graph.get_node(*neighbor).unwrap();
-        }
 
         for neighbor in neighbors.iter() {
             let neighbor_node = graph.get_node(*neighbor).unwrap();

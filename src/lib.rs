@@ -1,11 +1,15 @@
 use std::cmp::Ordering;
+use std::hash::BuildHasherDefault;
 
 use bevy::math::UVec3;
 use bevy::prelude::Plugin;
 use dir::Dir;
+use indexmap::IndexMap;
+use rustc_hash::FxHasher;
 
 mod astar;
 mod chunk;
+mod dijkstra;
 mod dir;
 mod neighbor;
 mod node;
@@ -16,6 +20,9 @@ pub mod path;
 pub struct NorthstarPlugin;
 
 pub type NodeId = usize;
+
+type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
+
 
 
 #[derive(Debug, Default, Clone, Copy)]

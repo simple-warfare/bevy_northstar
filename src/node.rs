@@ -4,6 +4,13 @@ use std::hash::{Hash, Hasher};
 use crate::dir::Dir;
 use crate::path::Path;
 use crate::chunk::Chunk;
+use crate::NodeId;
+
+#[derive(Debug)]
+pub struct NodeList {
+    nodes: slab::Slab<Node>,
+    node_ids: HashMap<UVec3, NodeId>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Node {

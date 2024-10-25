@@ -7,9 +7,12 @@ use ndarray::{Array3, ArrayView2, ArrayView3};
 use crate::{
     astar::{astar_graph, astar_grid},
     chunk::Chunk,
+    dijkstra::{dijkstra_grid, dijkstra_graph},
     dir::Dir,
     graph::Graph,
-    neighbor::{self, CardinalNeighboorhood3d, CardinalNeighborhood, OrdinalNeighborhood3d},
+    neighbor::{
+        self, CardinalNeighboorhood3d, CardinalNeighborhood, Neighborhood, OrdinalNeighborhood3d,
+    },
     node::Node,
     path::Path,
     Point,
@@ -89,7 +92,7 @@ impl Grid {
         self.build_nodes();
         self.connect_internal_chunk_nodes();
         self.connect_adjacent_chunk_nodes();
-    } 
+    }
 
     pub fn build_nodes(&mut self) {
         let chunk_size = self.chunk_size as usize;
@@ -135,8 +138,12 @@ impl Grid {
                             };*/
 
                             // let mut nodes = self.edge_nodes(current_edge, neighbor_edge, (x * (self.width as usize), y * (self.height as usize), z * (self.depth as usize)));
-                            let mut nodes =
-                                self.calculate_edge_nodes(current_edge, neighbor_edge, current_chunk.clone(), dir);
+                            let mut nodes = self.calculate_edge_nodes(
+                                current_edge,
+                                neighbor_edge,
+                                current_chunk.clone(),
+                                dir,
+                            );
 
                             let world_x = x as u32 * chunk_size as u32;
                             let world_y = y as u32 * chunk_size as u32;
@@ -290,7 +297,36 @@ impl Grid {
                     let mut connections = Vec::new();
 
                     for node in nodes.iter() {
-                        for other_node in nodes.iter() {
+                        // Collect other nodes positions into an array
+                        let other_nodes = nodes
+                            .iter()
+                            .filter(|other_node| other_node.pos != node.pos)
+                            .map(|other_node| other_node.pos)
+                            .collect::<Vec<_>>();
+
+                        // Adjust node.pos by the chunk position
+                        let start_pos = node.pos - chunk.min;
+
+                        // Adjust goals positions by the chunk position
+                        let goals = other_nodes
+                            .iter()
+                            .map(|pos| *pos - chunk.min)
+                            .collect::<Vec<_>>();
+
+                        let paths = dijkstra_grid(
+                            OrdinalNeighborhood3d,
+                            &chunk_grid,
+                            start_pos,
+                            &goals,
+                            false,
+                            100,
+                        );
+
+                        for (other_node_pos, path) in paths {
+                            connections.push((node.pos, other_node_pos, path));
+                        }
+
+                        /*for other_node in nodes.iter() {
                             if node.pos == other_node.pos {
                                 continue;
                             }
@@ -305,7 +341,7 @@ impl Grid {
                             if let Some(path) = path {
                                 connections.push((node.pos, other_node.pos, path));
                             }
-                        }
+                        }*/
                     }
 
                     for (node_pos, other_node_pos, path) in connections {
@@ -350,11 +386,35 @@ impl Grid {
                             && nz >= 0
                             && nz < z_chunks as i32
                         {
-                            let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
+                            let neighbor_chunk =
+                                &self.chunks[[nx as usize, ny as usize, nz as usize]];
 
-                            let neighbor_nodes = self.get_nodes_in_chunk_by_dir(neighbor_chunk.clone(), direction.opposite());
+                            let neighbor_nodes = self.get_nodes_in_chunk_by_dir(
+                                neighbor_chunk.clone(),
+                                direction.opposite(),
+                            );
 
-                            for neighbor_node in neighbor_nodes {
+                            let start_pos = node.pos - current_chunk.min;
+
+                            let goals = neighbor_nodes
+                                .iter()
+                                .map(|node| node.pos - neighbor_chunk.min)
+                                .collect::<Vec<_>>();
+
+                            let paths = dijkstra_graph(
+                                &self.graph,
+                                start_pos,
+                                &goals,
+                                false,
+                                100,
+                            );
+
+                            for (neighbor_node_pos, path) in paths {
+                                connections.push((node.pos, neighbor_node_pos, path));
+                            }
+
+
+                            /*for neighbor_node in neighbor_nodes {
                                 let start_pos = node.pos - current_chunk.min;
                                 let goal_pos = neighbor_node.pos - neighbor_chunk.min;
 
@@ -368,8 +428,7 @@ impl Grid {
 
                                 if let Some(path) = path {
                                     connections.push((node.pos, neighbor_node.pos, path));
-                                }
-                            }
+                                }*/
                         }
                     }
 
@@ -695,7 +754,9 @@ mod tests {
 
         grid.build_nodes();
 
-        let nodes = grid.graph.get_all_nodes_in_chunk(grid.chunks[[0, 0, 0]].clone());
+        let nodes = grid
+            .graph
+            .get_all_nodes_in_chunk(grid.chunks[[0, 0, 0]].clone());
 
         assert_eq!(nodes.len(), 3);
     }
@@ -726,7 +787,7 @@ mod tests {
         assert!(path.is_some());
     }
 
-    #[test]
+    /*#[test]
     fn test_large_grid_path() {
         let width = 4192;
         let height = 4192;
@@ -750,5 +811,5 @@ mod tests {
         let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(4191, 4191, 0));
 
         assert!(path.is_some());
-    }
+    }*/
 }

@@ -1,3 +1,4 @@
+use bevy::math::UVec3;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::grid::{Grid, GridSettings};
@@ -29,6 +30,10 @@ fn benchmarks(c: &mut Criterion) {
         grid.build()
     ));
 
+    group.bench_function("pathfind_64x64", |b| b.iter(|| 
+        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0))
+    ));
+
     let grid_settings = GridSettings {
         width: 512,
         height: 512,
@@ -49,13 +54,17 @@ fn benchmarks(c: &mut Criterion) {
         grid.build()
     ));
 
+    group.bench_function("pathfind_512x512", |b| b.iter(|| 
+        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0))
+    ));
+
 
     let grid_settings = GridSettings {
-        width: 1024,
-        height: 1024,
-        depth: 1,
+        width: 128,
+        height: 128,
+        depth: 4,
         chunk_depth: 1,
-        chunk_size: 32,
+        chunk_size: 16,
         default_cost: 1,
         default_wall: false,
         jump_height: 1,
@@ -63,13 +72,34 @@ fn benchmarks(c: &mut Criterion) {
 
     let mut grid = Grid::new(&grid_settings);
 
-    group.bench_function("init_grid_1024x1024", |b| b.iter(|| 
+    group.bench_function("init_grid_128x128x4", |b| b.iter(|| 
         grid = Grid::new(&grid_settings)
     ));
-    group.bench_function("build_grid_1024x1024", |b| b.iter(|| 
+    group.bench_function("build_grid_128x128x4", |b| b.iter(|| 
         grid.build()
     ));
 
+    group.bench_function("pathfind_128x128x4", |b| b.iter(|| 
+        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3))
+    ));
+
+    // Benchmark large grid without connecting nodes
+    let grid_settings = GridSettings {
+        width: 512,
+        height: 512,
+        depth: 4,
+        chunk_depth: 1,
+        chunk_size: 16,
+        default_cost: 1,
+        default_wall: false,
+        jump_height: 1,
+    };
+
+    let mut grid = Grid::new(&grid_settings);
+    
+    group.bench_function("semi_build_grid_512x512x4", |b| b.iter(|| 
+        grid.build_nodes()
+    ));
 
     group.finish();
 }

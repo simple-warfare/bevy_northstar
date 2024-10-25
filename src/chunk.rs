@@ -2,13 +2,15 @@
 use bevy::{math::UVec3, utils::HashMap};
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
-use crate::{dir::Dir, NodeId, Point};
+use crate::{dir::Dir, Point};
 
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub min: UVec3,
     pub max: UVec3,
+
+    //pub nodes: Vec<Node>,
 }
 
 impl PartialEq for Chunk {
