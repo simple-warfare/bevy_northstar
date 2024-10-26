@@ -33,7 +33,7 @@ impl Dir {
             SOUTH => NORTH,
             WEST => EAST,
             UP => DOWN,
-            DOWN => UP
+            DOWN => UP,
         }
     }
 

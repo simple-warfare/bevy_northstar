@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
 
 use bevy::math::UVec3;
-use bevy::prelude::Plugin;
 use dir::Dir;
 use indexmap::IndexMap;
 use rustc_hash::FxHasher;
@@ -11,10 +10,10 @@ mod astar;
 mod chunk;
 mod dijkstra;
 mod dir;
-mod neighbor;
-mod node;
 mod graph;
 pub mod grid;
+mod neighbor;
+mod node;
 pub mod path;
 
 pub struct NorthstarPlugin;
@@ -22,8 +21,6 @@ pub struct NorthstarPlugin;
 pub type NodeId = usize;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
-
-
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
@@ -33,14 +30,14 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn new(
-        cost: u32,
-        wall: bool,
-    ) -> Self {
-        Point { cost, wall, ramp: false }
+    pub fn new(cost: u32, wall: bool) -> Self {
+        Point {
+            cost,
+            wall,
+            ramp: false,
+        }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Edge {
@@ -53,7 +50,13 @@ pub struct Edge {
 
 impl Edge {
     pub fn new(start: UVec3, end: UVec3, dir: Dir, cost: u32, walkable: bool) -> Self {
-        Edge { start, end, dir, cost, walkable }
+        Edge {
+            start,
+            end,
+            dir,
+            cost,
+            walkable,
+        }
     }
 }
 

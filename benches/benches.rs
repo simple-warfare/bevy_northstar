@@ -82,24 +82,23 @@ fn benchmarks(c: &mut Criterion) {
     group.bench_function("pathfind_128x128x4", |b| b.iter(|| 
         grid.get_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3))
     ));
-
-    // Benchmark large grid without connecting nodes
-    let grid_settings = GridSettings {
-        width: 512,
-        height: 512,
-        depth: 4,
-        chunk_depth: 1,
-        chunk_size: 16,
-        default_cost: 1,
-        default_wall: false,
-        jump_height: 1,
-    };
-
-    let mut grid = Grid::new(&grid_settings);
     
-    group.bench_function("semi_build_grid_512x512x4", |b| b.iter(|| 
-        grid.build_nodes()
-    ));
+    group.bench_function("full_bench", |b| b.iter(|| {
+        let grid_settings = GridSettings {
+            width: 256,
+            height: 256,
+            depth: 8,
+            chunk_depth: 4,
+            chunk_size: 32,
+            default_cost: 1,
+            default_wall: false,
+            jump_height: 1,
+        };
+
+        let mut grid = Grid::new(&grid_settings);
+        grid.build();
+        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(255, 255, 7));
+    }));
 
     group.finish();
 }

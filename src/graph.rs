@@ -1,5 +1,4 @@
 use bevy::{math::UVec3, utils::hashbrown::HashMap};
-use ndarray::ArrayView2;
 
 use crate::chunk::Chunk;
 use crate::dir::Dir;
@@ -24,8 +23,13 @@ impl Graph {
         self.node_ids.get(&pos).and_then(|&id| self.nodes.get(id))
     }
 
+    pub fn get_nodes(&self) -> Vec<&Node> {
+        self.nodes.iter().map(|(_, node)| node).collect()
+    }
+
     pub fn get_nodes_in_chunk(&self, chunk: Chunk) -> Vec<&Node> {
-        let nodes = self.nodes
+        let nodes = self
+            .nodes
             .iter()
             .filter(|(_, node)| node.chunk == chunk)
             .map(|(_, node)| node)
@@ -35,7 +39,8 @@ impl Graph {
     }
 
     pub fn get_closest_node_in_chunk(&self, pos: UVec3, chunk: Chunk) -> Option<&Node> {
-        let node = self.get_nodes_in_chunk(chunk)
+        let node = self
+            .get_nodes_in_chunk(chunk)
             .iter()
             .min_by_key(|node| {
                 let dx = (node.pos.x as i32 - pos.x as i32).abs();
@@ -49,7 +54,8 @@ impl Graph {
     }
 
     pub fn get_nodes_in_range(&self, range: Vec<UVec3>) -> Vec<&Node> {
-        let nodes = self.nodes
+        let nodes = self
+            .nodes
             .iter()
             .filter(|(_, node)| range.contains(&node.pos))
             .map(|(_, node)| node)
@@ -72,7 +78,8 @@ impl Graph {
 
     pub fn add_nodes(&mut self, nodes: &Vec<Node>) {
         for node in nodes {
-            self.node_ids.insert(node.pos, self.nodes.insert(node.clone()));
+            self.node_ids
+                .insert(node.pos, self.nodes.insert(node.clone()));
         }
     }
 
@@ -112,7 +119,8 @@ impl Graph {
     }
 
     pub fn get_all_nodes_in_chunk(&self, chunk: Chunk) -> Vec<&Node> {
-        let nodes = self.nodes
+        let nodes = self
+            .nodes
             .iter()
             .filter(|(_, node)| node.chunk == chunk)
             .map(|(_, node)| node)
@@ -132,11 +140,13 @@ mod tests {
         let mut graph = Graph::new();
         let pos = UVec3::new(0, 0, 0);
         let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
-        let id = graph.add_node(pos, chunk, None);
+        let id = graph.add_node(pos, chunk.clone(), None);
 
-        assert_eq!(graph.node_count(), 1);
-        assert_eq!(graph.edge_count(), 0);
-        assert_eq!(graph.get_node(pos).unwrap().pos, pos);
+        let node = graph.get_node(pos).unwrap();
+        assert_eq!(node.pos, pos);
+        assert_eq!(node.chunk, chunk);
+        assert_eq!(node.dir, None);
+        assert_eq!(id, 0);
     }
 
     #[test]
@@ -166,6 +176,11 @@ mod tests {
         let pos = UVec3::new(0, 1, 0);
         let node = graph.get_closest_node_in_chunk(pos, chunk).unwrap();
         assert_eq!(node.pos, pos1);
+
+        // (2 * 1) * 4 = 8
+        // (3 * 2) * 4 = 24
+        // (4 * 3) * 1 = 12
+        // 8 + 24 + 12 = 44
     }
 
     #[test]

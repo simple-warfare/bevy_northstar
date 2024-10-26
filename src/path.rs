@@ -1,4 +1,4 @@
-use bevy::{math::UVec3, utils::hashbrown::HashMap};
+use bevy::math::UVec3;
 
 #[derive(Debug, Clone)]
 pub struct Path {
@@ -57,3 +57,14 @@ impl PartialEq for Path {
 }
 
 impl Eq for Path {}
+
+
+// Implement iter for Path
+impl IntoIterator for Path {
+    type Item = UVec3;
+    type IntoIter = std::vec::IntoIter<UVec3>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.path.into_iter()
+    }
+}

@@ -1,14 +1,11 @@
-use std::{collections::BinaryHeap, hash::BuildHasherDefault};
+use std::collections::BinaryHeap;
 
 use bevy::math::UVec3;
-use indexmap::IndexMap;
 use indexmap::map::Entry::{Occupied, Vacant};
-use rustc_hash::FxHasher;
 use ndarray::ArrayView3;
 
 use crate::graph::Graph;
-use crate::{neighbor, FxIndexMap};
-use crate::{neighbor::Neighborhood, path::Path, Point, SmallestCostHolder};
+use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
 pub fn astar_grid<N: Neighborhood>(
     neighborhood: N,
@@ -27,7 +24,7 @@ pub fn astar_grid<N: Neighborhood>(
     let mut visited: FxIndexMap<UVec3, (usize, u32)> = FxIndexMap::default();
     visited.insert(start, (usize::MAX, 0));
 
-    while let Some(SmallestCostHolder {cost, index, .. }) = to_visit.pop() {
+    while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
             if *current_pos == goal {
@@ -54,7 +51,11 @@ pub fn astar_grid<N: Neighborhood>(
         };
 
         for &neighbor in neighbors.iter() {
-            let neighbor_point = &grid[[neighbor.x as usize, neighbor.y as usize, neighbor.z as usize]];
+            let neighbor_point = &grid[[
+                neighbor.x as usize,
+                neighbor.y as usize,
+                neighbor.z as usize,
+            ]];
 
             if neighbor_point.wall || neighbor_point.cost == 0 {
                 continue;
@@ -72,7 +73,7 @@ pub fn astar_grid<N: Neighborhood>(
                     if e.get().1 > new_cost {
                         h = neighborhood.heuristic(neighbor, goal);
                         n = e.index();
-                        e.insert((index, new_cost));             
+                        e.insert((index, new_cost));
                     } else {
                         continue;
                     }
@@ -107,7 +108,7 @@ pub fn astar_graph<N: Neighborhood>(
     let mut visited: FxIndexMap<UVec3, (usize, u32)> = FxIndexMap::default();
     visited.insert(start, (usize::MAX, 0));
 
-    while let Some(SmallestCostHolder {cost, index, .. }) = to_visit.pop() {
+    while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
             if *current_pos == goal {
@@ -129,7 +130,9 @@ pub fn astar_graph<N: Neighborhood>(
             }
 
             let node = graph.get_node(*current_pos).unwrap();
-            node.get_edges()
+            let neighbors = node.get_edges();
+
+            neighbors
         };
 
         for neighbor in neighbors.iter() {
@@ -139,6 +142,7 @@ pub fn astar_graph<N: Neighborhood>(
             }
 
             let new_cost = cost + 1;
+
             let h;
             let n;
             match visited.entry(neighbor_node.pos) {
@@ -151,7 +155,7 @@ pub fn astar_graph<N: Neighborhood>(
                     if e.get().1 > new_cost {
                         h = neighborhood.heuristic(neighbor_node.pos, goal);
                         n = e.index();
-                        e.insert((index, new_cost));             
+                        e.insert((index, new_cost));
                     } else {
                         continue;
                     }
@@ -172,8 +176,8 @@ pub fn astar_graph<N: Neighborhood>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neighbor::OrdinalNeighborhood3d;
     use crate::chunk::Chunk;
+    use crate::neighbor::OrdinalNeighborhood3d;
 
     #[test]
     fn test_astar_grid() {
@@ -225,16 +229,51 @@ mod tests {
     fn test_astar_graph() {
         let mut graph = Graph::new();
 
-        let _ = graph.add_node(UVec3::new(0, 0, 0), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let _ = graph.add_node(UVec3::new(1, 1, 1), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let _ = graph.add_node(UVec3::new(2, 2, 2), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
+        let _ = graph.add_node(
+            UVec3::new(0, 0, 0),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let _ = graph.add_node(
+            UVec3::new(1, 1, 1),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let _ = graph.add_node(
+            UVec3::new(2, 2, 2),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
 
-        graph.connect_node(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1), Path::new(vec![UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)], 1));
-        graph.connect_node(UVec3::new(1, 1, 1), UVec3::new(0, 0, 0), Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(0, 0, 0)], 1));
-        graph.connect_node(UVec3::new(1, 1, 1), UVec3::new(2, 2, 2), Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)], 1));
-        graph.connect_node(UVec3::new(2, 2, 2), UVec3::new(1, 1, 1), Path::new(vec![UVec3::new(2, 2, 2), UVec3::new(1, 1, 1)], 1));
+        graph.connect_node(
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 1, 1),
+            Path::new(vec![UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(1, 1, 1),
+            UVec3::new(0, 0, 0),
+            Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(0, 0, 0)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(1, 1, 1),
+            UVec3::new(2, 2, 2),
+            Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(2, 2, 2),
+            UVec3::new(1, 1, 1),
+            Path::new(vec![UVec3::new(2, 2, 2), UVec3::new(1, 1, 1)], 1),
+        );
 
-        let path = astar_graph(OrdinalNeighborhood3d, &graph, UVec3::new(0, 0, 0), UVec3::new(2, 2, 2), 64).unwrap();
+        let path = astar_graph(
+            OrdinalNeighborhood3d,
+            &graph,
+            UVec3::new(0, 0, 0),
+            UVec3::new(2, 2, 2),
+            64,
+        )
+        .unwrap();
 
         assert_eq!(path.cost(), 2);
         assert_eq!(path.len(), 3);

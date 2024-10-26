@@ -1,11 +1,14 @@
 use std::collections::BinaryHeap;
 
-use bevy::{math::UVec3, utils::hashbrown::{HashMap, HashSet}};
-use ndarray::ArrayView3;
+use bevy::{
+    math::UVec3,
+    utils::hashbrown::{HashMap, HashSet},
+};
 use indexmap::map::Entry::{Occupied, Vacant};
+use ndarray::ArrayView3;
 
 use crate::{
-    graph::Graph, neighbor::{self, Neighborhood}, path::Path, FxIndexMap, Point, SmallestCostHolder
+    graph::Graph, neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder,
 };
 
 pub fn dijkstra_grid<N: Neighborhood>(
@@ -46,12 +49,16 @@ pub fn dijkstra_grid<N: Neighborhood>(
         };
 
         for &neighbor in neighbors.iter() {
-            let neighbor_point = &grid[[neighbor.x as usize, neighbor.y as usize, neighbor.z as usize]];
+            let neighbor_point = &grid[[
+                neighbor.x as usize,
+                neighbor.y as usize,
+                neighbor.z as usize,
+            ]];
 
             if neighbor_point.wall || neighbor_point.cost == 0 {
                 continue;
             }
-            
+
             let new_cost = cost + neighbor_point.cost;
             let n;
 
@@ -95,12 +102,13 @@ pub fn dijkstra_grid<N: Neighborhood>(
         };
 
         goal_data.insert(goal, Path::new(steps, cost));
-    };
+    }
 
     goal_data
 }
 
-pub fn dijkstra_graph (
+#[allow(dead_code)]
+pub fn dijkstra_graph(
     graph: &Graph,
     start: UVec3,
     goals: &[UVec3],
@@ -179,14 +187,14 @@ pub fn dijkstra_graph (
         };
 
         goal_data.insert(goal, Path::new(steps, cost));
-    };
+    }
 
     goal_data
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::chunk::Chunk;
+    use crate::{chunk::Chunk, neighbor::OrdinalNeighborhood3d};
 
     use super::*;
 
@@ -203,7 +211,7 @@ mod tests {
         ];
 
         let paths = dijkstra_grid(
-            neighbor::OrdinalNeighborhood3d,
+            OrdinalNeighborhood3d,
             &grid.view(),
             start,
             &goals,
@@ -219,21 +227,52 @@ mod tests {
     fn test_dijkstra_graph() {
         let mut graph = Graph::new();
 
-        let _ = graph.add_node(UVec3::new(0, 0, 0), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let _ = graph.add_node(UVec3::new(1, 1, 1), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let _ = graph.add_node(UVec3::new(2, 2, 2), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
+        let _ = graph.add_node(
+            UVec3::new(0, 0, 0),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let _ = graph.add_node(
+            UVec3::new(1, 1, 1),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let _ = graph.add_node(
+            UVec3::new(2, 2, 2),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
 
-        graph.connect_node(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1), Path::new(vec![UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)], 1));
-        graph.connect_node(UVec3::new(1, 1, 1), UVec3::new(0, 0, 0), Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(0, 0, 0)], 1));
-        graph.connect_node(UVec3::new(1, 1, 1), UVec3::new(2, 2, 2), Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)], 1));
-        graph.connect_node(UVec3::new(2, 2, 2), UVec3::new(1, 1, 1), Path::new(vec![UVec3::new(2, 2, 2), UVec3::new(1, 1, 1)], 1));
+        graph.connect_node(
+            UVec3::new(0, 0, 0),
+            UVec3::new(1, 1, 1),
+            Path::new(vec![UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(1, 1, 1),
+            UVec3::new(0, 0, 0),
+            Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(0, 0, 0)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(1, 1, 1),
+            UVec3::new(2, 2, 2),
+            Path::new(vec![UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)], 1),
+        );
+        graph.connect_node(
+            UVec3::new(2, 2, 2),
+            UVec3::new(1, 1, 1),
+            Path::new(vec![UVec3::new(2, 2, 2), UVec3::new(1, 1, 1)], 1),
+        );
 
-        let paths = dijkstra_graph(&graph, UVec3::new(0, 0, 0), &[UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)], false, 3);
+        let paths = dijkstra_graph(
+            &graph,
+            UVec3::new(0, 0, 0),
+            &[UVec3::new(1, 1, 1), UVec3::new(2, 2, 2)],
+            false,
+            3,
+        );
 
         assert_eq!(paths.len(), 2);
-
-        println!("{:?}", paths);
-
         assert_eq!(paths[&UVec3::new(1, 1, 1)].len(), 2);
     }
 }

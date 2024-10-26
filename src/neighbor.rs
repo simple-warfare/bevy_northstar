@@ -14,9 +14,10 @@ pub trait Neighborhood: Clone + Debug {
 pub struct CardinalNeighborhood;
 
 impl Neighborhood for CardinalNeighborhood {
+    #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
-        let x = pos.x;
-        let y = pos.y;
+        let x = pos.x as i32;
+        let y = pos.y as i32;
 
         let directions = [
             (-1, 0),
@@ -25,48 +26,39 @@ impl Neighborhood for CardinalNeighborhood {
             (0, 1),
         ];
 
-        for (dx, dy) in directions.iter() {
-            let x = x as i32 + dx;
-            let y = y as i32 + dy;
+        for &(dx, dy) in &directions {
+            let nx = x + dx;
+            let ny = y + dy;
 
-            if x < 0 || y < 0 {
-                continue;
+            if nx >= 0 && ny >= 0 {
+                let nx = nx as u32;
+                let ny = ny as u32;
+
+                if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 {
+                    let neighbor = UVec3::new(nx, ny, pos.z);
+                    if !grid[[nx as usize, ny as usize, pos.z as usize]].wall {
+                        target.push(neighbor);
+                    }
+                }
             }
-
-            let x = x as u32;
-            let y = y as u32;
-
-            if x >= grid.shape()[0] as u32 || y >= grid.shape()[1] as u32 {
-                continue;
-            }
-
-            let neighbor = UVec3::new(x, y, 0);
-            let point = &grid[[x as usize, y as usize, 0]];
-
-            if point.wall {
-                continue;
-            }
-
-            target.push(neighbor);
         }
     }
 
+    #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = if pos.x > target.x { pos.x - target.x } else { target.x - pos.x };
-        let dy = if pos.y > target.y { pos.y - target.y } else { target.y - pos.y };
-
-        dx + dy
+        ((pos.x as i32 - target.x as i32).abs() + (pos.y as i32 - target.y as i32).abs()) as u32
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct CardinalNeighboorhood3d;
+pub struct CardinalNeighborhood3d;
 
-impl Neighborhood for CardinalNeighboorhood3d {
+impl Neighborhood for CardinalNeighborhood3d {
+    #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
-        let x = pos.x;
-        let y = pos.y;
-        let z = pos.z;
+        let x = pos.x as i32;
+        let y = pos.y as i32;
+        let z = pos.z as i32;
 
         let directions = [
             (-1, 0, 0),
@@ -77,39 +69,31 @@ impl Neighborhood for CardinalNeighboorhood3d {
             (0, 0, 1),
         ];
 
-        for (dx, dy, dz) in directions.iter() {
-            let x = x as i32 + dx;
-            let y = y as i32 + dy;
-            let z = z as i32 + dz;
+        for &(dx, dy, dz) in &directions {
+            let nx = x + dx;
+            let ny = y + dy;
+            let nz = z + dz;
 
-            if x < 0 || y < 0 || z < 0 {
-                continue;
+            if nx >= 0 && ny >= 0 && nz >= 0 {
+                let nx = nx as u32;
+                let ny = ny as u32;
+                let nz = nz as u32;
+
+                if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 && nz < grid.shape()[2] as u32 {
+                    let neighbor = UVec3::new(nx, ny, nz);
+                    if !grid[[nx as usize, ny as usize, nz as usize]].wall {
+                        target.push(neighbor);
+                    }
+                }
             }
-
-            let x = x as u32;
-            let y = y as u32;
-            let z = z as u32;
-
-            if x >= grid.shape()[0] as u32 || y >= grid.shape()[1] as u32 || z >= grid.shape()[2] as u32 {
-                continue;
-            }
-
-            let neighbor = UVec3::new(x, y, z);
-            let point = &grid[[x as usize, y as usize, z as usize]];
-
-            if point.wall {
-                continue;
-            }
-
-            target.push(neighbor);
         }
     }
 
+    #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
         let dx = pos.x.max(target.x) - pos.x.min(target.x);
         let dy = pos.y.max(target.y) - pos.y.min(target.y);
         let dz = pos.z.max(target.z) - pos.z.min(target.z);
-
         dx + dy + dz
     }
 }
@@ -117,10 +101,54 @@ impl Neighborhood for CardinalNeighboorhood3d {
 #[derive(Clone, Copy, Debug)]
 pub struct OrdinalNeighborhood;
 
+impl Neighborhood for OrdinalNeighborhood {
+    #[inline(always)]
+    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
+        let x = pos.x as i32;
+        let y = pos.y as i32;
+
+        let directions = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ];
+
+        for &(dx, dy) in &directions {
+            let nx = x + dx;
+            let ny = y + dy;
+
+            if nx >= 0 && ny >= 0 {
+                let nx = nx as u32;
+                let ny = ny as u32;
+
+                if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 {
+                    let neighbor = UVec3::new(nx, ny, pos.z);
+                    if !grid[[nx as usize, ny as usize, pos.z as usize]].wall {
+                        target.push(neighbor);
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
+        let dx = pos.x.max(target.x) - pos.x.min(target.x);
+        let dy = pos.y.max(target.y) - pos.y.min(target.y);
+        dx.max(dy)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct OrdinalNeighborhood3d;
 
 impl Neighborhood for OrdinalNeighborhood3d {
+    #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
         let x = pos.x as i32;
         let y = pos.y as i32;
@@ -137,37 +165,29 @@ impl Neighborhood for OrdinalNeighborhood3d {
                     let ny = y + j;
                     let nz = z + k;
 
-                    if nx < 0 || ny < 0 || nz < 0 {
-                        continue;
+                    if nx >= 0 && ny >= 0 && nz >= 0 {
+                        let nx = nx as u32;
+                        let ny = ny as u32;
+                        let nz = nz as u32;
+
+                        if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 && nz < grid.shape()[2] as u32 {
+                            let neighbor = UVec3::new(nx, ny, nz);
+                            if !grid[[nx as usize, ny as usize, nz as usize]].wall {
+                                target.push(neighbor);
+                            }
+                        }
                     }
-
-                    let nx = nx as usize;
-                    let ny = ny as usize;
-                    let nz = nz as usize;
-
-                    if nx >= grid.shape()[0] || ny >= grid.shape()[1] || nz >= grid.shape()[2] {
-                        continue;
-                    }
-
-                    let neighbor = UVec3::new(nx as u32, ny as u32, nz as u32);
-                    let point = &grid[[nx, ny, nz]];
-
-                    if point.wall {
-                        continue;
-                    }
-
-                    target.push(neighbor);
                 }
             }
         }
     }
 
+    #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = pos.x.max(target.x) - pos.x.min(target.x);
-        let dy = pos.y.max(target.y) - pos.y.min(target.y);
-        let dz = pos.z.max(target.z) - pos.z.min(target.z);
-
-        dx + dy + dz
+        let dx = (pos.x as i32 - target.x as i32).abs() as u32;
+        let dy = (pos.y as i32 - target.y as i32).abs() as u32;
+        let dz = (pos.z as i32 - target.z as i32).abs() as u32;
+        dx.max(dy).max(dz)
     }
 }
 
@@ -189,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_cardinal_neighbors_3d() {
-        let neighborhood = CardinalNeighboorhood3d;
+        let neighborhood = CardinalNeighborhood3d;
         let points = [Point::default(); 27];
         let grid = ArrayView3::from_shape((3, 3, 3), &points).unwrap();
         let mut target = Vec::new();
@@ -281,10 +301,10 @@ mod tests {
     fn test_ordinal_heuristic() {
         let neighborhood = OrdinalNeighborhood3d;
 
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(7, 7, 1)), 15);
-        assert_eq!(neighborhood.heuristic(UVec3::new(1, 0, 0), UVec3::new(7, 7, 1)), 14);
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 1, 0), UVec3::new(7, 7, 1)), 14);
-        assert_eq!(neighborhood.heuristic(UVec3::new(1, 1, 0), UVec3::new(7, 7, 1)), 13);
-        assert_eq!(neighborhood.heuristic(UVec3::new(1, 1, 1), UVec3::new(7, 7, 1)), 12);
+        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)), 1);
+        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 0, 0)), 1);
+        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(0, 0, 0)), 0);
+        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(2, 2, 2)), 2);
+        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(7, 7, 7)), 7);
     }
 }

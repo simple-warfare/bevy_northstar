@@ -1,16 +1,9 @@
 use bevy::{math::UVec3, utils::hashbrown::HashMap};
 use std::hash::{Hash, Hasher};
 
+use crate::chunk::Chunk;
 use crate::dir::Dir;
 use crate::path::Path;
-use crate::chunk::Chunk;
-use crate::NodeId;
-
-#[derive(Debug)]
-pub struct NodeList {
-    nodes: slab::Slab<Node>,
-    node_ids: HashMap<UVec3, NodeId>,
-}
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -55,16 +48,32 @@ mod tests {
 
     #[test]
     fn test_node_eq() {
-        let node1 = Node::new(UVec3::new(1, 2, 3), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let node2 = Node::new(UVec3::new(1, 2, 3), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
+        let node1 = Node::new(
+            UVec3::new(1, 2, 3),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let node2 = Node::new(
+            UVec3::new(1, 2, 3),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
 
         assert_eq!(node1, node2);
     }
 
     #[test]
     fn test_node_hash() {
-        let node1 = Node::new(UVec3::new(1, 2, 3), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
-        let node2 = Node::new(UVec3::new(1, 2, 3), Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)), None);
+        let node1 = Node::new(
+            UVec3::new(1, 2, 3),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
+        let node2 = Node::new(
+            UVec3::new(1, 2, 3),
+            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            None,
+        );
 
         let mut hasher1 = std::collections::hash_map::DefaultHasher::new();
         let mut hasher2 = std::collections::hash_map::DefaultHasher::new();

@@ -1,15 +1,12 @@
-
-use bevy::{math::UVec3, utils::HashMap};
+use bevy::math::UVec3;
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
 use crate::{dir::Dir, Point};
-
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub min: UVec3,
     pub max: UVec3,
-
     //pub nodes: Vec<Node>,
 }
 
@@ -23,10 +20,7 @@ impl Eq for Chunk {}
 
 impl Chunk {
     pub fn new(min: UVec3, max: UVec3) -> Self {
-        Chunk {
-            min,
-            max,
-        }
+        Chunk { min, max }
     }
 
     pub fn view<'a>(&self, grid: &'a Array3<Point>) -> ArrayView3<'a, Point> {
@@ -36,39 +30,39 @@ impl Chunk {
             self.min.z as usize..self.max.z as usize
         ])
     }
-    
+
     pub fn edge<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> ArrayView2<'a, Point> {
         match dir {
             Dir::NORTH => grid.slice(s![
-                self.min.x as usize .. self.max.x as usize,
+                self.min.x as usize..self.max.x as usize,
                 self.max.y as usize,
-                self.min.z as usize .. self.max.z as usize,
+                self.min.z as usize..self.max.z as usize,
             ]),
             Dir::EAST => grid.slice(s![
                 self.max.x as usize,
-                self.min.y as usize .. self.max.y as usize,
-                self.min.z as usize .. self.max.z as usize,
+                self.min.y as usize..self.max.y as usize,
+                self.min.z as usize..self.max.z as usize,
             ]),
             Dir::SOUTH => grid.slice(s![
-                self.min.x as usize .. self.max.x as usize,
+                self.min.x as usize..self.max.x as usize,
                 self.min.y as usize,
-                self.min.z as usize .. self.max.z as usize,
+                self.min.z as usize..self.max.z as usize,
             ]),
             Dir::WEST => grid.slice(s![
                 self.min.x as usize,
-                self.min.y as usize .. self.max.y as usize,
-                self.min.z as usize .. self.max.z as usize,
+                self.min.y as usize..self.max.y as usize,
+                self.min.z as usize..self.max.z as usize,
             ]),
             Dir::UP => grid.slice(s![
-                self.min.x as usize .. self.max.x as usize,
-                self.min.y as usize .. self.max.y as usize,
+                self.min.x as usize..self.max.x as usize,
+                self.min.y as usize..self.max.y as usize,
                 self.max.z as usize,
             ]),
             Dir::DOWN => grid.slice(s![
-                self.min.x as usize .. self.max.x as usize,
-                self.min.y as usize .. self.max.y as usize,
+                self.min.x as usize..self.max.x as usize,
+                self.min.y as usize..self.max.y as usize,
                 self.min.z as usize,
-            ])
+            ]),
         }
     }
 }
