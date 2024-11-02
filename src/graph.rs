@@ -176,11 +176,6 @@ mod tests {
         let pos = UVec3::new(0, 1, 0);
         let node = graph.get_closest_node_in_chunk(pos, chunk).unwrap();
         assert_eq!(node.pos, pos1);
-
-        // (2 * 1) * 4 = 8
-        // (3 * 2) * 4 = 24
-        // (4 * 3) * 1 = 12
-        // 8 + 24 + 12 = 44
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use bevy::math::UVec3;
+use bevy::{math::UVec3, prelude::Resource};
 use ndarray::{Array3, ArrayView2};
 
 use crate::{
@@ -27,6 +27,7 @@ pub struct GridSettings {
     pub jump_height: u32,
 }
 
+#[derive(Resource)]
 pub struct Grid {
     width: u32,
     height: u32,
@@ -83,6 +84,10 @@ impl Grid {
             }),
             graph: Graph::new(),
         }
+    }
+
+    pub fn set_point(&mut self, pos: UVec3, point: Point) {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = point;
     }
 
     pub fn build(&mut self) {
@@ -553,6 +558,32 @@ mod tests {
     pub fn test_new() {
         let grid = Grid::new(&GRID_SETTINGS);
         assert_eq!(grid.grid.shape(), [12, 12, 1]);
+    }
+
+    #[test]
+    pub fn test_calculate_edge_nodes_3d() {
+        let grid = Grid::new(&GridSettings {
+            width: 8,
+            height: 8,
+            depth: 8,
+            chunk_size: 4,
+            chunk_depth: 4,
+            default_cost: 1,
+            default_wall: false,
+            jump_height: 1,
+        });
+
+        let chunk = grid.chunks.iter().next().unwrap().clone();
+        let neighbor_chunk = grid.chunks.iter().nth(1).unwrap().clone();
+
+        let edges = grid.calculate_edge_nodes(
+            chunk.edge(&grid.grid, Dir::NORTH),
+            neighbor_chunk.edge(&grid.grid, Dir::SOUTH),
+            chunk.clone(),
+            Dir::NORTH,
+        );
+
+        assert_eq!(edges.len(), 4);
     }
 
     #[test]

@@ -15,12 +15,43 @@ pub mod grid;
 mod neighbor;
 mod node;
 pub mod path;
+pub mod plugin;
 
-pub struct NorthstarPlugin;
+pub mod prelude {
+    pub use crate::grid::{Grid, GridSettings};
+    pub use crate::Point;
+    pub use crate::plugin::NorthstarPlugin;
+}
 
 pub type NodeId = usize;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
+
+#[derive(Debug, Clone)]
+pub struct GridCoords {
+    pub x: usize,
+    pub y: usize,
+    pub z: usize,
+}
+
+impl GridCoords {
+    pub fn new(x: usize, y: usize, z: usize) -> Self {
+        GridCoords { x, y, z }
+    }
+
+    pub fn from_uvec3(uvec3: UVec3) -> Self {
+        GridCoords {
+            x: uvec3.x as usize,
+            y: uvec3.y as usize,
+            z: uvec3.z as usize,
+        }
+    }
+
+    pub fn to_uvec3(&self) -> UVec3 {
+        UVec3::new(self.x as u32, self.y as u32, self.z as u32)
+    }
+}
+
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
