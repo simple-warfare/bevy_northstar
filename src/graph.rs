@@ -128,6 +128,17 @@ impl Graph {
 
         nodes
     }
+
+    pub fn get_all_paths(&self) -> Vec<Path> {
+        let mut paths = Vec::new();
+        for node in self.nodes.iter().map(|(_, node)| node) {
+            for path in node.edges.values() {
+                paths.push(path.clone());
+            }
+        }
+
+        paths
+    }
 }
 
 #[cfg(test)]

@@ -90,6 +90,26 @@ impl Grid {
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = point;
     }
 
+    pub fn get_point(&self, pos: UVec3) -> Point {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]]
+    }
+
+    pub fn get_width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn get_height(&self) -> u32 {
+        self.height
+    }
+    
+    pub fn get_depth(&self) -> u32 {
+        self.depth
+    }
+
+    pub fn get_chunk_size(&self) -> u32 {
+        self.chunk_size
+    }
+
     pub fn build(&mut self) {
         self.build_nodes();
         self.connect_internal_chunk_nodes();
@@ -429,6 +449,16 @@ impl Grid {
 
         let start_chunk = self.get_chunk_for_position(start)?;
         let goal_chunk = self.get_chunk_for_position(goal)?;
+
+        if start_chunk == goal_chunk {
+            return astar_grid(
+                OrdinalNeighborhood3d,
+                &self.grid.view(),
+                start,
+                goal,
+                100,
+            );
+        }
 
         // Get all nodes in the start chunk
         let start_nodes = self.graph.get_all_nodes_in_chunk(start_chunk.clone());

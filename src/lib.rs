@@ -16,11 +16,13 @@ mod neighbor;
 mod node;
 pub mod path;
 pub mod plugin;
+pub mod debug;
 
 pub mod prelude {
     pub use crate::grid::{Grid, GridSettings};
     pub use crate::Point;
     pub use crate::plugin::NorthstarPlugin;
+    pub use crate::debug::{MapType, NorthstarDebugConfig, NorthstarDebugPlugin};
 }
 
 pub type NodeId = usize;
