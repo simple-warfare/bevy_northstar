@@ -5,28 +5,37 @@ use std::fmt::Debug;
 
 use crate::Point;
 
-pub trait Neighborhood: Clone + Debug {
+pub trait Neighborhood: Clone + Debug + Default + Sync + Send {
+    fn directions(&self) -> Vec<(i32, i32, i32)>;
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>);
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32;
+    fn is_ordinal(&self) -> bool {
+        false
+    }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CardinalNeighborhood;
 
 impl Neighborhood for CardinalNeighborhood {
+    #[inline(always)]
+    fn directions(&self) -> Vec<(i32, i32, i32)> {
+        vec![
+            (-1, 0, 0),
+            (1, 0, 0),
+            (0, -1, 0),
+            (0, 1, 0),
+        ]
+    }
+
     #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
         let x = pos.x as i32;
         let y = pos.y as i32;
 
-        let directions = [
-            (-1, 0),
-            (1, 0),
-            (0, -1),
-            (0, 1),
-        ];
+        let directions = self.directions();
 
-        for &(dx, dy) in &directions {
+        for &(dx, dy, _) in &directions {
             let nx = x + dx;
             let ny = y + dy;
 
@@ -50,10 +59,21 @@ impl Neighborhood for CardinalNeighborhood {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CardinalNeighborhood3d;
 
 impl Neighborhood for CardinalNeighborhood3d {
+    #[inline(always)]
+    fn directions(&self) -> Vec<(i32, i32, i32)> {
+        vec![
+            (-1, 0, 0),
+            (1, 0, 0),
+            (0, -1, 0),
+            (0, 1, 0),
+            (0, 0, -1),
+            (0, 0, 1),
+        ]
+    }
     #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
         let x = pos.x as i32;
@@ -98,27 +118,30 @@ impl Neighborhood for CardinalNeighborhood3d {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct OrdinalNeighborhood;
 
 impl Neighborhood for OrdinalNeighborhood {
+    #[inline(always)]
+    fn directions(&self) -> Vec<(i32, i32, i32)> {
+        vec![
+            (-1, -1, 0),
+            (-1, 0, 0),
+            (-1, 1, 0),
+            (0, -1, 0),
+            (0, 1, 0),
+            (1, -1, 0),
+            (1, 0, 0),
+            (1, 1, 0),
+        ]
+    }
+
     #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
         let x = pos.x as i32;
         let y = pos.y as i32;
 
-        let directions = [
-            (-1, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, -1),
-            (0, 1),
-            (1, -1),
-            (1, 0),
-            (1, 1),
-        ];
-
-        for &(dx, dy) in &directions {
+        for &(dx, dy, _) in &self.directions() {
             let nx = x + dx;
             let ny = y + dy;
 
@@ -140,14 +163,51 @@ impl Neighborhood for OrdinalNeighborhood {
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
         let dx = pos.x.max(target.x) - pos.x.min(target.x);
         let dy = pos.y.max(target.y) - pos.y.min(target.y);
-        dx.max(dy)
+        dx + dy
+    }
+
+    #[inline(always)]
+    fn is_ordinal(&self) -> bool {
+        true
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct OrdinalNeighborhood3d;
 
 impl Neighborhood for OrdinalNeighborhood3d {
+    #[inline(always)]
+    fn directions(&self) -> Vec<(i32, i32, i32)> {
+        vec![
+            (-1, -1, -1),
+            (-1, -1, 0),
+            (-1, -1, 1),
+            (-1, 0, -1),
+            (-1, 0, 0),
+            (-1, 0, 1),
+            (-1, 1, -1),
+            (-1, 1, 0),
+            (-1, 1, 1),
+            (0, -1, -1),
+            (0, -1, 0),
+            (0, -1, 1),
+            (0, 0, -1),
+            (0, 0, 1),
+            (0, 1, -1),
+            (0, 1, 0),
+            (0, 1, 1),
+            (1, -1, -1),
+            (1, -1, 0),
+            (1, -1, 1),
+            (1, 0, -1),
+            (1, 0, 0),
+            (1, 0, 1),
+            (1, 1, -1),
+            (1, 1, 0),
+            (1, 1, 1),
+        ]
+    }
+
     #[inline(always)]
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>) {
         let x = pos.x as i32;
@@ -188,6 +248,11 @@ impl Neighborhood for OrdinalNeighborhood3d {
         let dy = (pos.y as i32 - target.y as i32).abs() as u32;
         let dz = (pos.z as i32 - target.z as i32).abs() as u32;
         dx.max(dy).max(dz)
+    }
+
+    #[inline(always)]
+    fn is_ordinal(&self) -> bool {
+        true
     }
 }
 

@@ -1,6 +1,7 @@
 use bevy::math::UVec3;
+use bevy::prelude::Component;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component)]
 pub struct Path {
     path: Vec<UVec3>,
     cost: u32,

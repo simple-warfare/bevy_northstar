@@ -23,6 +23,8 @@ pub mod prelude {
     pub use crate::Point;
     pub use crate::plugin::NorthstarPlugin;
     pub use crate::debug::{MapType, NorthstarDebugConfig, NorthstarDebugPlugin};
+    pub use crate::path::Path;
+    pub use crate::neighbor::*;
 }
 
 pub type NodeId = usize;

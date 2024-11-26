@@ -8,7 +8,7 @@ use crate::graph::Graph;
 use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
 pub fn astar_grid<N: Neighborhood>(
-    neighborhood: N,
+    neighborhood: &N,
     grid: &ArrayView3<Point>,
     start: UVec3,
     goal: UVec3,
@@ -92,7 +92,7 @@ pub fn astar_grid<N: Neighborhood>(
 }
 
 pub fn astar_graph<N: Neighborhood>(
-    neighborhood: N,
+    neighborhood: &N,
     graph: &Graph,
     start: UVec3,
     goal: UVec3,
@@ -109,7 +109,7 @@ pub fn astar_graph<N: Neighborhood>(
     visited.insert(start, (usize::MAX, 0));
 
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
-        let neighbors = {
+        let (neighbors, current_pos) = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
             if *current_pos == goal {
                 let mut current = index;
@@ -132,7 +132,7 @@ pub fn astar_graph<N: Neighborhood>(
             let node = graph.get_node(*current_pos).unwrap();
             let neighbors = node.get_edges();
 
-            neighbors
+            (neighbors, current_pos.clone())
         };
 
         for neighbor in neighbors.iter() {
@@ -141,7 +141,7 @@ pub fn astar_graph<N: Neighborhood>(
                 continue;
             }
 
-            let new_cost = cost + 1;
+            let new_cost = cost + graph.get_edge_cost(current_pos, *neighbor).unwrap();
 
             let h;
             let n;
@@ -187,7 +187,7 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
+        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
 
         assert_eq!(path.cost(), 2);
         assert_eq!(path.len(), 3);
@@ -204,7 +204,7 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
+        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
 
         assert_eq!(path.cost(), 3);
         assert_eq!(path.len(), 4);
@@ -220,7 +220,7 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(7, 7, 7);
 
-        let path = astar_grid(OrdinalNeighborhood3d, &grid.view(), start, goal, 16).unwrap();
+        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 16).unwrap();
 
         assert_eq!(path.len(), 8);
     }
@@ -267,7 +267,7 @@ mod tests {
         );
 
         let path = astar_graph(
-            OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d,
             &graph,
             UVec3::new(0, 0, 0),
             UVec3::new(2, 2, 2),

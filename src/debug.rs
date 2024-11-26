@@ -1,12 +1,15 @@
 //! This module contains some tools to help you debug your application.
 //!
 use bevy::{color::palettes::css, prelude::*};
-use bevy::math::{Mat2, Vec2};
+use bevy::math::Vec2;
 
 use crate::grid::Grid;
+use crate::neighbor::Neighborhood;
+use crate::path::Path;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum MapType {
+    #[default]
     Square,
     Isometric,
 }
@@ -17,6 +20,7 @@ pub struct NorthstarDebugConfig {
     pub grid_width: u32,
     pub grid_height: u32,
     pub map_type: MapType,
+    pub draw_path: bool,
     pub draw_chunks: bool,
     pub draw_entrances: bool,
     pub draw_points: bool,
@@ -31,6 +35,7 @@ impl Default for NorthstarDebugConfig {
             grid_width: 16,
             grid_height: 16,
             map_type: MapType::Square,
+            draw_path: true,
             draw_chunks: true,
             draw_entrances: true,
             draw_points: false,
@@ -40,22 +45,88 @@ impl Default for NorthstarDebugConfig {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct NorthstarDebugPlugin {
+#[derive(Clone)]
+pub struct NorthstarDebugPlugin<N: Neighborhood + 'static> {
     /// Debug gizmos configuration
     pub config: NorthstarDebugConfig,
+    pub _marker: std::marker::PhantomData<N>,
 }
 
-impl Plugin for NorthstarDebugPlugin {
-    fn build(&self, app: &mut bevy::prelude::App) {
-        app.insert_resource(self.config.clone())
-            .add_systems(Update, draw_debug_grid);
+impl<N: Neighborhood + 'static> Default for NorthstarDebugPlugin<N> {
+    fn default() -> Self {
+        NorthstarDebugPlugin {
+            config: Default::default(),
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
-fn draw_debug_grid(
+impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.insert_resource(self.config.clone())
+            .add_systems(Update, (draw_debug_grid::<N>, draw_debug_paths));
+    }
+}
+
+fn draw_debug_paths(
+    query: Query<&Path>,
     config: Res<NorthstarDebugConfig>,
-    grid: Res<Grid>,
+    mut gizmos: Gizmos,
+) {
+    let offset = Vec2::new(config.grid_width as f32 * 0.5, 0.0); //, config.grid_height as f32 * 0.5);
+
+    let mut color_index = 0;
+
+    for path in query.iter() {
+        let path_colors = [
+            css::RED,
+            css::PURPLE,
+            css::YELLOW,
+            css::PINK,
+            css::DARK_CYAN,
+            css::MAGENTA,
+            css::GREY,
+            css::GREEN,
+            css::ORANGE,
+            css::NAVY,
+        ];
+
+        // Draw paths
+        // Iterate over path.path() drawing a line from one point to the next point until completed
+        let mut iter = path.path().iter();
+        let mut prev = iter.next().unwrap();
+
+        for next in iter {
+            let prev_position = match config.map_type {
+                MapType::Square => Vec2::new((prev.x * config.grid_width) as f32, (prev.y * config.grid_height) as f32),
+                MapType::Isometric => Vec2::new(
+                    (prev.y as f32 + prev.x as f32) * (config.grid_width as f32 * 0.5),
+                    (prev.y as f32 - prev.x as f32) * (config.grid_height as f32 * 0.5),
+                ),
+            };
+
+            let next_position = match config.map_type {
+                MapType::Square => Vec2::new((next.x * config.grid_width) as f32, (next.y * config.grid_height) as f32),
+                MapType::Isometric => Vec2::new(
+                    (next.y as f32 + next.x as f32) * (config.grid_width as f32 * 0.5),
+                    (next.y as f32 - next.x as f32) * (config.grid_height as f32 * 0.5),
+                ),
+            };
+
+            let color = path_colors[color_index % path_colors.len()];
+
+            gizmos.line_2d(prev_position + offset, next_position + offset, color);
+
+            prev = next;
+        }
+
+        color_index += 1;
+    }
+}
+
+fn draw_debug_grid<N: Neighborhood + 'static> (
+    config: Res<NorthstarDebugConfig>,
+    grid: Res<Grid<N>>,
     mut gizmos: Gizmos,
 ) {
     if config.draw_points { 

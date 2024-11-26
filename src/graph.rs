@@ -118,6 +118,13 @@ impl Graph {
         }
     }
 
+    pub fn get_edge_cost(&self, from: UVec3, to: UVec3) -> Option<u32> {
+        self.node_ids
+            .get(&from)
+            .and_then(|&from_id| self.nodes.get(from_id))
+            .and_then(|node| node.edges.get(&to).map(|path| path.cost()))
+    }
+
     pub fn get_all_nodes_in_chunk(&self, chunk: Chunk) -> Vec<&Node> {
         let nodes = self
             .nodes

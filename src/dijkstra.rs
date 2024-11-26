@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub fn dijkstra_grid<N: Neighborhood>(
-    neighborhood: N,
+    neighborhood: &N,
     grid: &ArrayView3<Point>,
     start: UVec3,
     goals: &[UVec3],
@@ -211,7 +211,7 @@ mod tests {
         ];
 
         let paths = dijkstra_grid(
-            OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d,
             &grid.view(),
             start,
             &goals,

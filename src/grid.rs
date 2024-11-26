@@ -1,4 +1,7 @@
-use bevy::{math::UVec3, prelude::Resource};
+use bevy::{
+    math::UVec3,
+    prelude::Resource,
+};
 use ndarray::{Array3, ArrayView2};
 
 use crate::{
@@ -7,7 +10,7 @@ use crate::{
     dijkstra::dijkstra_grid,
     dir::Dir,
     graph::Graph,
-    neighbor::OrdinalNeighborhood3d,
+    neighbor::Neighborhood,
     node::Node,
     path::Path,
     Point,
@@ -28,7 +31,9 @@ pub struct GridSettings {
 }
 
 #[derive(Resource)]
-pub struct Grid {
+pub struct Grid<N: Neighborhood> {
+    neighborhood: N,
+
     width: u32,
     height: u32,
     depth: u32,
@@ -47,13 +52,14 @@ pub struct Grid {
     pub graph: Graph,
 }
 
-impl Grid {
+impl<N: Neighborhood + Default> Grid<N> {
     pub fn new(settings: &GridSettings) -> Self {
         let x_chunks = settings.width as usize / settings.chunk_size as usize;
         let y_chunks = settings.height as usize / settings.chunk_size as usize;
         let z_chunks = settings.depth as usize / settings.chunk_depth as usize;
 
         Grid {
+            neighborhood: N::default(),
             width: settings.width,
             height: settings.height,
             depth: settings.depth,
@@ -101,7 +107,7 @@ impl Grid {
     pub fn get_height(&self) -> u32 {
         self.height
     }
-    
+
     pub fn get_depth(&self) -> u32 {
         self.depth
     }
@@ -270,7 +276,7 @@ impl Grid {
                 final_nodes.push(group.first().unwrap().clone());
                 final_nodes.push(group.last().unwrap().clone());
             } else {*/
-                
+
             let middle = group.len() / 2;
             final_nodes.push(group[middle].clone());
             //}
@@ -316,7 +322,7 @@ impl Grid {
                             .collect::<Vec<_>>();
 
                         let paths = dijkstra_grid(
-                            OrdinalNeighborhood3d,
+                            &self.neighborhood,
                             &chunk_grid,
                             start_pos,
                             &goals,
@@ -330,9 +336,17 @@ impl Grid {
                             let goal = goal_pos + chunk.min;
 
                             // Readjust path to world space
-                            let path_vec = path.path().iter().map(|pos| *pos + chunk.min).collect::<Vec<_>>();
+                            let path_vec = path
+                                .path()
+                                .iter()
+                                .map(|pos| *pos + chunk.min)
+                                .collect::<Vec<_>>();
 
-                            connections.push((start, goal, Path::new(path_vec.clone(), path_vec.len() as u32)));
+                            connections.push((
+                                start,
+                                goal,
+                                Path::new(path_vec.clone(), path_vec.len() as u32),
+                            ));
                         }
                     }
 
@@ -386,7 +400,22 @@ impl Grid {
                                 direction.opposite(),
                             );
 
-                            for neighbor_node in neighbor_nodes {
+                            // Only connect nodes directly adjacent to each other
+                            let adjacent_node = neighbor_nodes.iter().find(|neighbor_node| {
+                                let dx = (node.pos.x as i32 - neighbor_node.pos.x as i32).abs();
+                                let dy = (node.pos.y as i32 - neighbor_node.pos.y as i32).abs();
+                                let dz = (node.pos.z as i32 - neighbor_node.pos.z as i32).abs();
+
+                                (dx + dy + dz) as u32 == 1
+                            });
+
+                            connections.push((
+                                node.pos,
+                                adjacent_node.unwrap().pos,
+                                Path::new(vec![node.pos, adjacent_node.unwrap().pos], 1),
+                            ));
+
+                            /*for neighbor_node in neighbor_nodes {
                                 let path = astar_grid(
                                     OrdinalNeighborhood3d,
                                     &self.grid.view(),
@@ -398,7 +427,7 @@ impl Grid {
                                 if let Some(path) = path {
                                     connections.push((node.pos, neighbor_node.pos, path));
                                 }
-                            }
+                            }*/
                         }
                     }
 
@@ -440,6 +469,49 @@ impl Grid {
         None
     }
 
+    pub fn refine_path(&self, path: Path) -> Path {
+        let mut refined_path = Vec::new();
+
+        // Iterate over the path, try a bresenham path between the point and the final point
+        // if not bresenham_path exists, try the second to last point and so on.
+        // Do this until the path is fully refined.
+
+        let mut refined_up_to = 0;
+
+        for (i, point) in path.path().iter().enumerate() {
+            if i <= refined_up_to {
+                continue;
+            }   
+
+            let mut refined = false;
+
+            for j in (i + 1..path.len()).rev() {
+                let bresenham = self.bresenham_path(*point, path.path()[j]);
+
+                if bresenham.is_some() {
+                    refined_path.extend(bresenham.unwrap().path());
+                    refined = true;
+                    refined_up_to = j;
+                    break;
+                }
+            }
+
+            if !refined {
+                refined_path.push(*point);
+            }
+        }
+
+        // Iterate through the refined path and recalculate the cost
+        let mut cost = 0;
+
+        for pos in refined_path.iter() {
+            cost += self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
+        }
+
+        Path::new(refined_path, cost)
+        
+    }
+
     pub fn get_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
         if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
             || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
@@ -451,13 +523,7 @@ impl Grid {
         let goal_chunk = self.get_chunk_for_position(goal)?;
 
         if start_chunk == goal_chunk {
-            return astar_grid(
-                OrdinalNeighborhood3d,
-                &self.grid.view(),
-                start,
-                goal,
-                100,
-            );
+            return astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 100);
         }
 
         // Get all nodes in the start chunk
@@ -481,13 +547,14 @@ impl Grid {
         // Starting with the node shortest to the goal, find a path to the goal
         start_nodes.sort_by_key(|(_, distance)| *distance);
 
-        // Sort goal nodes by distance to the goal
+        // Sort goal nodes by distance to the start
         let mut goal_nodes = goal_nodes
             .iter()
             .map(|node| {
-                let distance = (node.pos.x as i32 - goal.x as i32).abs()
-                    + (node.pos.y as i32 - goal.y as i32).abs()
-                    + (node.pos.z as i32 - goal.z as i32).abs();
+                // Ensure this node isn't farther than the goal node from the start point
+                let distance = (node.pos.x as i32 - start.x as i32).abs()
+                    + (node.pos.y as i32 - start.y as i32).abs()
+                    + (node.pos.z as i32 - start.z as i32).abs();
 
                 (node, distance)
             })
@@ -500,7 +567,7 @@ impl Grid {
         for (start_node, _) in start_nodes {
             for (goal_node, _) in goal_nodes.clone() {
                 node_path = astar_graph(
-                    OrdinalNeighborhood3d,
+                    &self.neighborhood,
                     &self.graph,
                     start_node.pos,
                     goal_node.pos,
@@ -511,6 +578,10 @@ impl Grid {
                     break;
                 }
             }
+
+            if node_path.is_some() {
+                break;
+            }
         }
 
         let mut path: Vec<UVec3> = Vec::new();
@@ -518,21 +589,42 @@ impl Grid {
 
         // If the node_path is found, find the path from the start to the first ppint in the node_path, then use the node cached paths to build the rest, finally find path from last node to goal
         if let Some(node_path) = node_path {
+            // Offset start position by the chunk offset
+            let start_position = start - start_chunk.min;
+            let destination = node_path.path().first().unwrap().clone() - start_chunk.min;
+
             let start_path = astar_grid(
-                OrdinalNeighborhood3d,
-                &self.grid.view(),
-                start,
-                node_path.path().first().unwrap().clone(),
+                &self.neighborhood,
+                &start_chunk.view(&self.grid),
+                start_position,
+                destination,
                 100,
             );
 
+            // Offset the path by the chunk offset and extend the path
             if let Some(start_path) = start_path {
-                path.extend(start_path.path());
+                let adjusted_path: Vec<UVec3> = start_path
+                    .path()
+                    .iter()
+                    .map(|pos| *pos + start_chunk.min)
+                    .collect();
+                path.extend(adjusted_path);
                 cost += start_path.cost();
             }
 
+            /*if let Some(start_path) = start_path {
+                path.extend(start_path.path());
+                cost += start_path.cost();
+            }*/
+
             // Find the path between all nodes in the node path
             for (node, next_node) in node_path.path().iter().zip(node_path.path().iter().skip(1)) {
+                // Get the cached edge path between node and next node
+                let cached_path = self.graph.get_node(*node).unwrap().edges[next_node].clone();
+                path.extend(cached_path.path().iter().skip(1));
+            }
+
+            /*for (node, next_node) in node_path.path().iter().zip(node_path.path().iter().skip(1)) {
                 let current_path = astar_grid(
                     OrdinalNeighborhood3d,
                     &self.grid.view(),
@@ -545,22 +637,96 @@ impl Grid {
                     path.extend(current_path.path().into_iter().skip(1));
                     cost += current_path.cost();
                 }
-            }
+            }*/
+
+            // Offset start position by the chunk offset
+            let goal_position = goal - goal_chunk.min;
+            let destination = node_path.path().last().unwrap().clone() - goal_chunk.min;
 
             let end_path = astar_grid(
-                OrdinalNeighborhood3d,
-                &self.grid.view(),
-                node_path.path().last().unwrap().clone(),
-                goal,
+                &self.neighborhood,
+                &goal_chunk.view(&self.grid),
+                destination,
+                goal_position,
                 100,
             );
 
+            // Offset the path by the chunk offset and extend the path
+
             if let Some(end_path) = end_path {
-                path.extend(end_path.path().into_iter().skip(1));
+                let adjusted_path: Vec<UVec3> = end_path
+                    .path()
+                    .iter()
+                    .map(|pos| *pos + goal_chunk.min)
+                    .collect();
+                path.extend(adjusted_path.into_iter().skip(1));
                 cost += end_path.cost();
             }
         }
 
+        Some(self.refine_path(Path::new(path, cost)))
+    }
+
+    // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
+    // This should take into account the Neighborhood and the grid
+    pub fn bresenham_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
+        let mut path = Vec::new();
+        let mut cost = 0;
+
+        let mut current = start;
+        let mut err = (goal.x as i32 - start.x as i32).abs()
+            - (goal.y as i32 - start.y as i32).abs()
+            - (goal.z as i32 - start.z as i32).abs();
+
+        while current != goal {
+            path.push(current);
+            cost += self.grid[[current.x as usize, current.y as usize, current.z as usize]].cost;
+
+            if self.grid[[current.x as usize, current.y as usize, current.z as usize]].wall {
+                return None;
+            }
+
+            let e2 = 2 * err;
+
+            if self.neighborhood.is_ordinal() {
+                if e2 > -(goal.y as i32 - start.y as i32).abs() {
+                    err -= (goal.y as i32 - start.y as i32).abs();
+                    current.x = (current.x as i32 + if start.x < goal.x { 1 } else { -1 }) as u32;
+                }
+
+                if e2 < (goal.x as i32 - start.x as i32).abs() {
+                    err += (goal.x as i32 - start.x as i32).abs();
+                    current.y = (current.y as i32 + if start.y < goal.y { 1 } else { -1 }) as u32;
+                }
+
+                if e2 < (goal.z as i32 - start.z as i32).abs() {
+                    err += (goal.z as i32 - start.z as i32).abs();
+                    current.z = (current.z as i32 + if start.z < goal.z { 1 } else { -1 }) as u32;
+                }
+            } else {
+                if e2
+                    >= -(goal.y as i32 - start.y as i32).abs()
+                        + (goal.z as i32 - start.z as i32).abs()
+                {
+                    err -= (goal.y as i32 - start.y as i32).abs()
+                        + (goal.z as i32 - start.z as i32).abs();
+                    current.x = (current.x as i32 + if start.x < goal.x { 1 } else { -1 }) as u32;
+                } else if e2
+                    <= (goal.x as i32 - start.x as i32).abs()
+                        - (goal.z as i32 - start.z as i32).abs()
+                {
+                    err += (goal.x as i32 - start.x as i32).abs()
+                        - (goal.z as i32 - start.z as i32).abs();
+                    current.y = (current.y as i32 + if start.y < goal.y { 1 } else { -1 }) as u32;
+                } else {
+                    err += (goal.x as i32 - start.x as i32).abs()
+                        - (goal.y as i32 - start.y as i32).abs();
+                    current.z = (current.z as i32 + if start.z < goal.z { 1 } else { -1 }) as u32;
+                }
+            }
+        }
+
+        path.push(goal);
         Some(Path::new(path, cost))
     }
 }
@@ -570,7 +736,11 @@ mod tests {
     use bevy::math::UVec3;
 
     use crate::{
-        dir::Dir, grid::{Grid, GridSettings}, Point
+        dir::Dir,
+        grid::{Grid, GridSettings},
+        neighbor::OrdinalNeighborhood3d,
+        prelude::CardinalNeighborhood3d,
+        Point,
     };
 
     const GRID_SETTINGS: GridSettings = GridSettings {
@@ -586,13 +756,13 @@ mod tests {
 
     #[test]
     pub fn test_new() {
-        let grid = Grid::new(&GRID_SETTINGS);
+        let grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
         assert_eq!(grid.grid.shape(), [12, 12, 1]);
     }
 
     #[test]
     pub fn test_calculate_edge_nodes_3d() {
-        let grid = Grid::new(&GridSettings {
+        let grid = Grid::<OrdinalNeighborhood3d>::new(&GridSettings {
             width: 8,
             height: 8,
             depth: 8,
@@ -618,7 +788,7 @@ mod tests {
 
     #[test]
     pub fn test_build_nodes() {
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
         grid.build_nodes();
 
@@ -630,13 +800,13 @@ mod tests {
         assert_eq!(nodes[2].pos, UVec3::new(2, 7, 0));
         assert_eq!(nodes[3].pos, UVec3::new(3, 6, 0));
         assert_eq!(nodes[4].pos, UVec3::new(2, 4, 0));
-        
+
         assert_eq!(nodes[5].pos, UVec3::new(3, 10, 0));
-        assert_eq!(nodes[6].pos, UVec3::new(2, 8, 0));    
+        assert_eq!(nodes[6].pos, UVec3::new(2, 8, 0));
 
         assert_eq!(grid.graph.node_count(), 24);
 
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
         let chunk_size = GRID_SETTINGS.chunk_size as usize;
         let half_chunk_size = chunk_size / 2;
@@ -660,7 +830,7 @@ mod tests {
 
     #[test]
     pub fn test_connect_internal_nodes() {
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
         grid.build_nodes();
         grid.connect_internal_chunk_nodes();
@@ -671,12 +841,17 @@ mod tests {
 
     #[test]
     pub fn test_connect_adjacent_nodes() {
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
         grid.build_nodes();
         grid.connect_adjacent_chunk_nodes();
 
-        let edges = grid.graph.get_node(UVec3::new(2, 3, 0)).unwrap().edges.clone();
+        let edges = grid
+            .graph
+            .get_node(UVec3::new(2, 3, 0))
+            .unwrap()
+            .edges
+            .clone();
 
         assert_eq!(edges.contains_key(&UVec3::new(2, 4, 0)), true);
 
@@ -688,16 +863,23 @@ mod tests {
 
     #[test]
     pub fn test_get_chunk_for_position() {
-        let grid = Grid::new(&GRID_SETTINGS);
+        let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
         let chunk = grid.get_chunk_for_position(UVec3::new(0, 0, 0)).unwrap();
 
         assert_eq!(chunk.min, UVec3::new(0, 0, 0));
-        assert_eq!(chunk.max, UVec3::new(GRID_SETTINGS.chunk_size, GRID_SETTINGS.chunk_size, GRID_SETTINGS.chunk_depth));
+        assert_eq!(
+            chunk.max,
+            UVec3::new(
+                GRID_SETTINGS.chunk_size,
+                GRID_SETTINGS.chunk_size,
+                GRID_SETTINGS.chunk_depth
+            )
+        );
     }
 
     #[test]
     pub fn test_get_all_nodes_in_chunk() {
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
         grid.build_nodes();
 
         let nodes = grid
@@ -709,7 +891,7 @@ mod tests {
 
     #[test]
     pub fn test_get_path() {
-        let mut grid = Grid::new(&GRID_SETTINGS);
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
         grid.build();
 
@@ -721,7 +903,7 @@ mod tests {
 
     #[test]
     fn test_calculate_edge_nodes_returns_center() {
-        let grid = Grid::new(&GridSettings {
+        let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GridSettings {
             width: 64,
             height: 64,
             depth: 1,
@@ -735,12 +917,17 @@ mod tests {
         let start_edge = grid.chunks[[0, 0, 0]].edge(&grid.grid, Dir::NORTH);
         let end_edge = grid.chunks[[0, 1, 0]].edge(&grid.grid, Dir::SOUTH);
 
-        let nodes = grid.calculate_edge_nodes(start_edge, end_edge, grid.chunks[[0, 0, 0]].clone(), Dir::NORTH);
+        let nodes = grid.calculate_edge_nodes(
+            start_edge,
+            end_edge,
+            grid.chunks[[0, 0, 0]].clone(),
+            Dir::NORTH,
+        );
 
         assert_eq!(nodes.len(), 1);
         assert_eq!(nodes[0].pos, UVec3::new(16, 0, 0));
     }
-    
+
     #[test]
     fn test_random_grid_path() {
         // Test a grid with randomized walls, the grid must be solvable
@@ -750,7 +937,7 @@ mod tests {
         let chunk_size = 32;
         let chunk_depth = 1;
 
-        let mut grid = Grid::new(&GridSettings {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GridSettings {
             width,
             height,
             depth,
@@ -763,11 +950,15 @@ mod tests {
 
         for x in 0..width {
             for y in 0..height {
-                if (x % 4 == 0) && (y % chunk_size == 0 || y / chunk_size + chunk_size == chunk_size) {
+                if (x % 4 == 0)
+                    && (y % chunk_size == 0 || y / chunk_size + chunk_size == chunk_size)
+                {
                     grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
                 }
 
-                if (y % 4 == 0) && (x % chunk_size == 0 || x & chunk_size + chunk_size == chunk_size) {
+                if (y % 4 == 0)
+                    && (x % chunk_size == 0 || x & chunk_size + chunk_size == chunk_size)
+                {
                     grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
                 }
             }
@@ -779,5 +970,35 @@ mod tests {
 
         assert!(path.is_some());
         assert!(path.unwrap().len() > 0);
+    }
+
+    #[test]
+    fn test_bresenhan_path() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        grid.build();
+
+        let path = grid.bresenham_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
+
+        assert!(path.is_some());
+        assert_eq!(path.unwrap().len(), 11);
+
+        let mut grid: Grid<CardinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        grid.build();
+
+        let path = grid.bresenham_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
+
+        assert!(path.is_some());
+        assert_eq!(path.unwrap().len(), 21);
+
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+        
+        grid.set_point(UVec3::new(5, 5, 0), Point::new(1, true));
+        grid.build();
+
+        let path = grid.bresenham_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
+
+        assert!(path.is_none());
     }
 }
