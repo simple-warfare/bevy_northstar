@@ -1,7 +1,7 @@
 use bevy::math::UVec3;
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use bevy_northstar::grid::{Grid, GridSettings};
+use bevy_northstar::{grid::{Grid, GridSettings}, prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d}};
 
 mod profiler;
 
@@ -20,7 +20,7 @@ fn benchmarks(c: &mut Criterion) {
         jump_height: 1,
     };
 
-    let mut grid = Grid::new(&grid_settings);
+    let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
     group.sample_size(10);
     
@@ -43,7 +43,7 @@ fn benchmarks(c: &mut Criterion) {
         jump_height: 1,
     };
 
-    let mut grid = Grid::new(&grid_settings);
+    let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
     group.bench_function("build_grid_512x512", |b| b.iter(|| 
         grid.build()
@@ -65,7 +65,7 @@ fn benchmarks(c: &mut Criterion) {
         jump_height: 1,
     };
 
-    let mut grid = Grid::new(&grid_settings);
+    let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
 
     group.bench_function("build_grid_128x128x4", |b| b.iter(|| 
         grid.build()

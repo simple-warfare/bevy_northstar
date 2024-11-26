@@ -672,63 +672,81 @@ impl<N: Neighborhood + Default> Grid<N> {
     pub fn bresenham_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
         let mut path = Vec::new();
         let mut cost = 0;
-
+    
         let mut current = start;
-        let mut err = (goal.x as i32 - start.x as i32).abs()
-            - (goal.y as i32 - start.y as i32).abs()
-            - (goal.z as i32 - start.z as i32).abs();
-
+    
+        // Differences in each dimension
+        let dx = (goal.x as i32 - start.x as i32).abs();
+        let dy = (goal.y as i32 - start.y as i32).abs();
+        let dz = if self.depth > 1 {
+            (goal.z as i32 - start.z as i32).abs()
+        } else {
+            0 // Ignore z axis if grid depth is 1
+        };
+    
+        let sx: i32 = if start.x < goal.x { 1 } else { -1 };
+        let sy: i32 = if start.y < goal.y { 1 } else { -1 };
+        let sz: i32 = if self.depth > 1 && start.z < goal.z { 1 } else { -1 };
+    
+        let mut err_xy = dx - dy;
+        let mut err_xz = dx - dz;
+    
         while current != goal {
+            // Bounds check
+            if current.x >= self.width || current.y >= self.height || current.z >= self.depth {
+                return None;
+            }
+    
             path.push(current);
             cost += self.grid[[current.x as usize, current.y as usize, current.z as usize]].cost;
-
+    
             if self.grid[[current.x as usize, current.y as usize, current.z as usize]].wall {
                 return None;
             }
+    
+            // Error-based stepping
+            let double_err_xy = 2 * err_xy;
+            let double_err_xz = 2 * err_xz;
 
-            let e2 = 2 * err;
-
+    
             if self.neighborhood.is_ordinal() {
-                if e2 > -(goal.y as i32 - start.y as i32).abs() {
-                    err -= (goal.y as i32 - start.y as i32).abs();
-                    current.x = (current.x as i32 + if start.x < goal.x { 1 } else { -1 }) as u32;
+                if double_err_xy >= -dy && double_err_xz >= -dz {
+                    // Move along x-axis
+                    err_xy -= dy;
+                    err_xz -= dz;
+                    current.x = current.x.saturating_add_signed(sx);
                 }
-
-                if e2 < (goal.x as i32 - start.x as i32).abs() {
-                    err += (goal.x as i32 - start.x as i32).abs();
-                    current.y = (current.y as i32 + if start.y < goal.y { 1 } else { -1 }) as u32;
+                if double_err_xy < dx {
+                    // Move along y-axis
+                    err_xy += dx;
+                    current.y = current.y.saturating_add_signed(sy);
                 }
-
-                if e2 < (goal.z as i32 - start.z as i32).abs() {
-                    err += (goal.z as i32 - start.z as i32).abs();
-                    current.z = (current.z as i32 + if start.z < goal.z { 1 } else { -1 }) as u32;
+                if self.depth > 1 && double_err_xz < dx {
+                    // Move along z-axis (if applicable)
+                    err_xz += dx;
+                    current.z = current.z.saturating_add_signed(sz);
                 }
             } else {
-                if e2
-                    >= -(goal.y as i32 - start.y as i32).abs()
-                        + (goal.z as i32 - start.z as i32).abs()
-                {
-                    err -= (goal.y as i32 - start.y as i32).abs()
-                        + (goal.z as i32 - start.z as i32).abs();
-                    current.x = (current.x as i32 + if start.x < goal.x { 1 } else { -1 }) as u32;
-                } else if e2
-                    <= (goal.x as i32 - start.x as i32).abs()
-                        - (goal.z as i32 - start.z as i32).abs()
-                {
-                    err += (goal.x as i32 - start.x as i32).abs()
-                        - (goal.z as i32 - start.z as i32).abs();
-                    current.y = (current.y as i32 + if start.y < goal.y { 1 } else { -1 }) as u32;
-                } else {
-                    err += (goal.x as i32 - start.x as i32).abs()
-                        - (goal.y as i32 - start.y as i32).abs();
-                    current.z = (current.z as i32 + if start.z < goal.z { 1 } else { -1 }) as u32;
+                if double_err_xy >= -dy && double_err_xz >= -dz {
+                    // Move along x-axis
+                    err_xy -= dy;
+                    err_xz -= dz;
+                    current.x = current.x.saturating_add_signed(sx);
+                } else if double_err_xy < dx {
+                    // Move along y-axis
+                    err_xy += dx;
+                    current.y = current.y.saturating_add_signed(sy);
+                } else if self.depth > 1 && double_err_xz < dx {
+                    // Move along z-axis (if applicable)
+                    err_xz += dx;
+                    current.z = current.z.saturating_add_signed(sz);
                 }
             }
         }
-
+    
         path.push(goal);
         Some(Path::new(path, cost))
-    }
+    }    
 }
 
 #[cfg(test)]
@@ -898,7 +916,7 @@ mod tests {
         let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
 
         assert!(path.is_some());
-        assert_eq!(path.unwrap().len(), 16);
+        assert_eq!(path.unwrap().len(), 10);
     }
 
     #[test]
@@ -970,6 +988,27 @@ mod tests {
 
         assert!(path.is_some());
         assert!(path.unwrap().len() > 0);
+    }
+
+    #[test]
+    fn test_large_3d_path() {
+        let grid_settings = GridSettings {
+            width: 128,
+            height: 128,
+            depth: 4,
+            chunk_depth: 1,
+            chunk_size: 16,
+            default_cost: 1,
+            default_wall: false,
+            jump_height: 1,
+        };
+    
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
+    
+        grid.build();
+        let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(31, 31, 3));
+    
+        assert!(path.is_some());
     }
 
     #[test]
