@@ -4,15 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hashbrown = { version = "0.14.5", features= ["ahash", "allocator-api2", "inline-more", "rayon"] }
 thiserror = "1.0.63"
+indexmap = "2.6.0"
+ndarray = { version = "0.16.1", features=["rayon"] }
+rustc-hash = "2.0.0"
+strum = "0.26.3"
+slab = "0.4.9"
 
 [dependencies.bevy]
 version = "0.14"
 default-features = false
+features=["bevy_render", "bevy_gizmos"]
 
 [dev-dependencies]
 criterion = {version = "0.5.1", features = ["html_reports"]}
+pprof = {version = "0.13.0", features = ["flamegraph"]}
+rand = "0.8.5"
 
 [[bench]]
 name = "benches"
