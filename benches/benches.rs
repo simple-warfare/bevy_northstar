@@ -32,6 +32,10 @@ fn benchmarks(c: &mut Criterion) {
         grid.get_path(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0))
     ));
 
+    group.bench_function("raw_pathfind_64x64", |b| b.iter(|| 
+        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0))
+    ));
+
     let grid_settings = GridSettings {
         width: 512,
         height: 512,
@@ -51,6 +55,10 @@ fn benchmarks(c: &mut Criterion) {
 
     group.bench_function("pathfind_512x512", |b| b.iter(|| 
         grid.get_path(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0))
+    ));
+
+    group.bench_function("raw_pathfind_512x512", |b| b.iter(|| 
+        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0))
     ));
 
 
@@ -73,6 +81,10 @@ fn benchmarks(c: &mut Criterion) {
 
     group.bench_function("pathfind_128x128x4", |b| b.iter(|| 
         grid.get_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3))
+    ));
+
+    group.bench_function("raw_pathfind_128x128x4", |b| b.iter(|| 
+        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3))
     ));
     
     group.finish();

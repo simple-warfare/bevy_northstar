@@ -676,6 +676,16 @@ impl<N: Neighborhood + Default> Grid<N> {
         //Some(self.refine_path(Path::new(path, cost)))
     }
 
+    pub fn get_astar_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
+        if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
+            || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
+        {
+            return None;
+        }
+
+        astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 1024)
+    }
+
     // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
     // This should take into account the Neighborhood and the grid
     pub fn bresenham_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
@@ -961,8 +971,10 @@ mod tests {
         grid.build();
 
         let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
+        let raw_path = grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
 
         assert!(path.is_some());
+        assert_eq!(path.clone().unwrap().len(), raw_path.unwrap().len());
         assert_eq!(path.unwrap().len(), 10);
     }
 
@@ -1086,5 +1098,17 @@ mod tests {
         let path = grid.bresenham_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
 
         assert!(path.is_none());
+    }
+
+    #[test]
+    pub fn test_get_astar_path() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        grid.build();
+
+        let path = grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0));
+
+        assert!(path.is_some());
+        assert_eq!(path.unwrap().len(), 11);
     }
 }
