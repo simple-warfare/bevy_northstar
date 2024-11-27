@@ -472,6 +472,9 @@ impl<N: Neighborhood + Default> Grid<N> {
     pub fn refine_path(&self, path: Path) -> Path {
         let mut refined_path = Vec::new();
 
+        // Insert the starting point
+        refined_path.push(path.path()[0]);
+
         // Iterate over the path, try a bresenham path between the point and the final point
         // if not bresenham_path exists, try the second to last point and so on.
         // Do this until the path is fully refined.
@@ -587,12 +590,13 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut path: Vec<UVec3> = Vec::new();
         let mut cost = 0;
 
-        // If the node_path is found, find the path from the start to the first ppint in the node_path, then use the node cached paths to build the rest, finally find path from last node to goal
+        // If the node_path is found, find the path from the start to the first point in the node_path, then use the node cached paths to build the rest, finally find path from last node to goal
         if let Some(node_path) = node_path {
             // Offset start position by the chunk offset
             let start_position = start - start_chunk.min;
             let destination = node_path.path().first().unwrap().clone() - start_chunk.min;
 
+            // Find the path from start to the first node in the node path
             let start_path = astar_grid(
                 &self.neighborhood,
                 &start_chunk.view(&self.grid),
@@ -664,7 +668,12 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
-        Some(self.refine_path(Path::new(path, cost)))
+        let raw_path = Path::new(path, cost);
+        let refined_path = self.refine_path(raw_path);
+
+        Some(refined_path)
+
+        //Some(self.refine_path(Path::new(path, cost)))
     }
 
     // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
@@ -776,6 +785,44 @@ mod tests {
     pub fn test_new() {
         let grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
         assert_eq!(grid.grid.shape(), [12, 12, 1]);
+    }
+
+    #[test]
+    pub fn test_edges() {
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&GridSettings{
+            width: 4,
+            height: 4,
+            depth: 1,
+            chunk_size: 4,
+            chunk_depth: 1,
+            default_cost: 1,
+            default_wall: false,
+            jump_height: 1,
+        });
+
+        // Fill grid edges with walls
+        for x in 0..4 {
+            for y in 0..4 {
+                if x == 0 || x == 3 || y == 0 || y == 3 {
+                    grid.grid[[x, y, 0]] = Point::new(1, true);
+                }
+            }
+        }
+
+        let chunk = grid.chunks[[0, 0, 0]].clone();
+
+        let mut edges = Vec::new();
+
+        edges.push(chunk.edge(&grid.grid, Dir::NORTH));
+        edges.push(chunk.edge(&grid.grid, Dir::EAST));
+        edges.push(chunk.edge(&grid.grid, Dir::SOUTH));
+        edges.push(chunk.edge(&grid.grid, Dir::WEST));
+
+        for edge in edges {
+            for point in edge.iter() {
+                assert_eq!(point.wall, true);
+            }
+        }
     }
 
     #[test]

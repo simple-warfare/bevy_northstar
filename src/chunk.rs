@@ -35,11 +35,11 @@ impl Chunk {
         match dir {
             Dir::NORTH => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
-                self.max.y as usize,
+                self.max.y as usize - 1,
                 self.min.z as usize..self.max.z as usize,
             ]),
             Dir::EAST => grid.slice(s![
-                self.max.x as usize,
+                self.max.x as usize - 1,
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize..self.max.z as usize,
             ]),
@@ -56,7 +56,7 @@ impl Chunk {
             Dir::UP => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize..self.max.y as usize,
-                self.max.z as usize,
+                self.max.z as usize - 1,
             ]),
             Dir::DOWN => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
