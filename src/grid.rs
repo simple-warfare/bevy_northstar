@@ -617,20 +617,36 @@ impl<N: Neighborhood + Default> Grid<N> {
         // Starting with the node shortest to the goal, find a path to the goal
         start_nodes.sort_by_key(|(_, distance)| *distance);
 
-        // Sort goal nodes by distance to the start
         let mut goal_nodes = goal_nodes
             .iter()
             .map(|node| {
                 // Ensure this node isn't farther than the goal node from the start point
-                let distance = (node.pos.x as i32 - start.x as i32).abs()
-                    + (node.pos.y as i32 - start.y as i32).abs()
-                    + (node.pos.z as i32 - start.z as i32).abs();
+                let distance = (node.pos.x as i32 - goal.x as i32).abs()
+                    + (node.pos.y as i32 - goal.y as i32).abs()
+                    + (node.pos.z as i32 - goal.z as i32).abs();
 
                 (node, distance)
             })
             .collect::<Vec<_>>();
 
         goal_nodes.sort_by_key(|(_, distance)| *distance);
+
+        // Calculate the distance from the start to the goal
+        let start_distance = (start.x as i32 - goal.x as i32).abs()
+            + (start.y as i32 - goal.y as i32).abs()
+            + (start.z as i32 - goal.z as i32).abs();
+
+        // Push back goal_nodes that are farther from the goal in the direction of the starting vector
+        goal_nodes = goal_nodes
+            .into_iter()
+            .filter(|(node, _)| {
+                let distance = (node.pos.x as i32 - start.x as i32).abs()
+                    + (node.pos.y as i32 - start.y as i32).abs()
+                    + (node.pos.z as i32 - start.z as i32).abs();
+
+                distance <= start_distance
+            })
+            .collect::<Vec<_>>();
 
         let mut node_path: Option<Path> = None;
 
@@ -735,14 +751,8 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
-        Some(Path::new(path, cost))
-
-        //let raw_path = Path::new(path, cost);
-        //let refined_path = self.refine_path(raw_path);
-
-        //Some(refined_path)
-
-        //Some(self.refine_path(Path::new(path, cost)))
+        //Some(Path::new(path, cost))
+        Some(self.refine_path(Path::new(path, cost)))
     }
 
     pub fn get_astar_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {

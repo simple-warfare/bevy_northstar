@@ -147,13 +147,13 @@ pub fn astar_graph<N: Neighborhood>(
             let n;
             match visited.entry(neighbor_node.pos) {
                 Vacant(e) => {
-                    h = neighborhood.heuristic(neighbor_node.pos, goal);
+                    h =  new_cost; //neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
                     n = e.index();
                     e.insert((index, new_cost));
                 }
                 Occupied(mut e) => {
                     if e.get().1 > new_cost {
-                        h = neighborhood.heuristic(neighbor_node.pos, goal);
+                        h = new_cost; //neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
                         n = e.index();
                         e.insert((index, new_cost));
                     } else {
