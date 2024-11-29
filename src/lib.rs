@@ -8,15 +8,17 @@ use rustc_hash::FxHasher;
 
 mod astar;
 mod chunk;
+pub mod debug;
 mod dijkstra;
 mod dir;
 mod graph;
 pub mod grid;
+pub mod los;
 mod neighbor;
 mod node;
 pub mod path;
 pub mod plugin;
-pub mod debug;
+mod theta;
 
 pub mod prelude {
     pub use crate::grid::{Grid, GridSettings};

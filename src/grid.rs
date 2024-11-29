@@ -2,18 +2,10 @@ use bevy::{
     math::UVec3,
     prelude::Resource,
 };
-use ndarray::{Array3, ArrayView2};
+use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    astar::{astar_graph, astar_grid},
-    chunk::Chunk,
-    dijkstra::dijkstra_grid,
-    dir::Dir,
-    graph::Graph,
-    neighbor::Neighborhood,
-    node::Node,
-    path::Path,
-    Point,
+    astar::{astar_graph, astar_grid}, chunk::Chunk, dijkstra::dijkstra_grid, dir::Dir, graph::Graph, neighbor::Neighborhood, node::Node, path::Path, theta::{theta_graph, theta_grid}, Point
 };
 
 pub struct GridSettings {
@@ -77,11 +69,11 @@ impl<N: Neighborhood + Default> Grid<N> {
             ),
             chunks: Array3::from_shape_fn((x_chunks, y_chunks, z_chunks), |(x, y, z)| {
                 let min_x = x as u32 * settings.chunk_size;
-                let max_x = min_x + settings.chunk_size;
+                let max_x = min_x + settings.chunk_size - 1;
                 let min_y = y as u32 * settings.chunk_size;
-                let max_y = min_y + settings.chunk_size;
+                let max_y = min_y + settings.chunk_size - 1;
                 let min_z = z as u32 * settings.chunk_depth;
-                let max_z = min_z + settings.chunk_depth;
+                let max_z = min_z + settings.chunk_depth - 1;
 
                 Chunk::new(
                     UVec3::new(min_x, min_y, min_z),
@@ -90,6 +82,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             }),
             graph: Graph::new(),
         }
+    }
+
+    pub fn get_view(&self) -> ArrayView3<Point> {
+        self.grid.view()
     }
 
     pub fn set_point(&mut self, pos: UVec3, point: Point) {
@@ -170,11 +166,11 @@ impl<N: Neighborhood + Default> Grid<N> {
                                 node.pos = match dir {
                                     Dir::NORTH => UVec3::new(
                                         node.pos.x + current_chunk.min.x,
-                                        node.pos.y + current_chunk.max.y - 1,
+                                        node.pos.y + current_chunk.max.y,
                                         node.pos.z + current_chunk.min.z,
                                     ),
                                     Dir::EAST => UVec3::new(
-                                        node.pos.y + current_chunk.max.x - 1,
+                                        node.pos.y + current_chunk.max.x,
                                         node.pos.x + current_chunk.min.y,
                                         node.pos.z + current_chunk.min.z,
                                     ),
@@ -192,7 +188,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                                     Dir::UP => UVec3::new(
                                         node.pos.x + current_chunk.min.x,
                                         node.pos.y + current_chunk.min.y,
-                                        node.pos.z + current_chunk.max.z - 1,
+                                        node.pos.z + current_chunk.max.z,
                                     ),
                                     Dir::DOWN => UVec3::new(
                                         node.pos.x + current_chunk.min.x,
@@ -222,6 +218,7 @@ impl<N: Neighborhood + Default> Grid<N> {
     ) -> Vec<Node> {
         let mut nodes = Vec::new();
 
+        // Iterate over the start edge and find the nodes that are walkable
         for ((start_x, start_y), start_point) in start_edge.indexed_iter() {
             if start_point.wall {
                 continue;
@@ -233,14 +230,35 @@ impl<N: Neighborhood + Default> Grid<N> {
             if start_point.ramp {
                 end_y = start_y + 1;
             }
-
+ 
             let end_point = end_edge[[end_x, end_y]];
 
+            // If the end point is a wall, we can't connect the nodes
             if !end_point.wall {
                 let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
                 let node = Node::new(pos, chunk.clone(), Some(dir));
                 nodes.push(node);
+            } else if self.neighborhood.is_ordinal() {
+                if end_x > 0 {
+                    let left = end_edge[[end_x - 1, end_y]];
+                    if !left.wall {
+                        let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+
+                        let node = Node::new(pos, chunk.clone(), Some(dir));
+                        nodes.push(node);
+                    }
+                }
+
+                if end_x < end_edge.shape()[0] - 1 {
+                    let right = end_edge[[end_x + 1, end_y]];
+                    if !right.wall {
+                        let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+
+                        let node = Node::new(pos, chunk.clone(), Some(dir));
+                        nodes.push(node);
+                    }
+                } 
             }
         }
 
@@ -400,14 +418,18 @@ impl<N: Neighborhood + Default> Grid<N> {
                                 direction.opposite(),
                             );
 
-                            // Only connect nodes directly adjacent to each other
+                            // Connect nodes directly adjacent to each other, including diagonals
                             let adjacent_node = neighbor_nodes.iter().find(|neighbor_node| {
                                 let dx = (node.pos.x as i32 - neighbor_node.pos.x as i32).abs();
                                 let dy = (node.pos.y as i32 - neighbor_node.pos.y as i32).abs();
                                 let dz = (node.pos.z as i32 - neighbor_node.pos.z as i32).abs();
 
-                                (dx + dy + dz) as u32 == 1
+                                dx <= 1 && dy <= 1 && dz <= 1 && (dx + dy + dz) > 0
                             });
+
+                            if adjacent_node.is_none() {
+                                continue;
+                            }
 
                             connections.push((
                                 node.pos,
@@ -456,11 +478,11 @@ impl<N: Neighborhood + Default> Grid<N> {
     pub fn get_chunk_for_position(&self, pos: UVec3) -> Option<&Chunk> {
         for chunk in self.chunks.iter() {
             if pos.x >= chunk.min.x
-                && pos.x < chunk.max.x
+                && pos.x <= chunk.max.x
                 && pos.y >= chunk.min.y
-                && pos.y < chunk.max.y
+                && pos.y <= chunk.max.y
                 && pos.z >= chunk.min.z
-                && pos.z < chunk.max.z
+                && pos.z <= chunk.max.z
             {
                 return Some(chunk);
             }
@@ -482,7 +504,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut refined_up_to = 0;
 
         for (i, point) in path.path().iter().enumerate() {
-            if i <= refined_up_to {
+            if i <= refined_up_to && refined_up_to != 0 {
                 continue;
             }   
 
@@ -668,10 +690,12 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
-        let raw_path = Path::new(path, cost);
-        let refined_path = self.refine_path(raw_path);
+        Some(Path::new(path, cost))
 
-        Some(refined_path)
+        //let raw_path = Path::new(path, cost);
+        //let refined_path = self.refine_path(raw_path);
+
+        //Some(refined_path)
 
         //Some(self.refine_path(Path::new(path, cost)))
     }
@@ -836,6 +860,23 @@ mod tests {
     }
 
     #[test]
+    pub fn test_calculate_edge_nodes() {
+        let grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
+
+        let chunk = grid.chunks.iter().next().unwrap().clone();
+        let neighbor_chunk = grid.chunks.iter().nth(1).unwrap().clone();
+
+        let edges = grid.calculate_edge_nodes(
+            chunk.edge(&grid.grid, Dir::NORTH),
+            neighbor_chunk.edge(&grid.grid, Dir::SOUTH),
+            chunk.clone(),
+            Dir::NORTH,
+        );
+
+        assert_eq!(edges.len(), 1);
+    }
+
+    #[test]
     pub fn test_calculate_edge_nodes_3d() {
         let grid = Grid::<OrdinalNeighborhood3d>::new(&GridSettings {
             width: 8,
@@ -900,7 +941,7 @@ mod tests {
 
         grid.build_nodes();
 
-        assert_eq!(grid.graph.node_count(), 48);
+        assert_eq!(grid.graph.node_count(), 36);
     }
 
     #[test]
@@ -945,9 +986,9 @@ mod tests {
         assert_eq!(
             chunk.max,
             UVec3::new(
-                GRID_SETTINGS.chunk_size,
-                GRID_SETTINGS.chunk_size,
-                GRID_SETTINGS.chunk_depth
+                GRID_SETTINGS.chunk_size - 1,
+                GRID_SETTINGS.chunk_size - 1,
+                GRID_SETTINGS.chunk_depth - 1
             )
         );
     }

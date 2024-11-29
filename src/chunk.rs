@@ -25,42 +25,42 @@ impl Chunk {
 
     pub fn view<'a>(&self, grid: &'a Array3<Point>) -> ArrayView3<'a, Point> {
         grid.slice(s![
-            self.min.x as usize..self.max.x as usize,
-            self.min.y as usize..self.max.y as usize,
-            self.min.z as usize..self.max.z as usize
+            self.min.x as usize..self.max.x as usize + 1,
+            self.min.y as usize..self.max.y as usize + 1,
+            self.min.z as usize..self.max.z as usize + 1
         ])
     }
 
     pub fn edge<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> ArrayView2<'a, Point> {
         match dir {
             Dir::NORTH => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.max.y as usize - 1,
-                self.min.z as usize..self.max.z as usize,
+                self.min.x as usize..self.max.x as usize + 1,
+                self.max.y as usize,
+                self.min.z as usize..self.max.z as usize + 1,
             ]),
             Dir::EAST => grid.slice(s![
-                self.max.x as usize - 1,
-                self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize,
+                self.max.x as usize,
+                self.min.y as usize..self.max.y as usize + 1,
+                self.min.z as usize..self.max.z as usize + 1,
             ]),
             Dir::SOUTH => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
+                self.min.x as usize..self.max.x as usize + 1,
                 self.min.y as usize,
-                self.min.z as usize..self.max.z as usize,
+                self.min.z as usize..self.max.z as usize + 1,
             ]),
             Dir::WEST => grid.slice(s![
                 self.min.x as usize,
-                self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize,
+                self.min.y as usize..self.max.y as usize + 1,
+                self.min.z as usize..self.max.z as usize + 1,
             ]),
             Dir::UP => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.min.y as usize..self.max.y as usize,
-                self.max.z as usize - 1,
+                self.min.x as usize..self.max.x as usize + 1,
+                self.min.y as usize..self.max.y as usize + 1,
+                self.max.z as usize + 1,
             ]),
             Dir::DOWN => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.min.y as usize..self.max.y as usize,
+                self.min.x as usize..self.max.x as usize + 1,
+                self.min.y as usize..self.max.y as usize + 1,
                 self.min.z as usize,
             ]),
         }
@@ -74,7 +74,7 @@ mod test {
     #[test]
     fn test_chunk_view() {
         let grid = Array3::from_elem((10, 10, 10), Point::default());
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(5, 5, 5));
+        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
         let view = chunk.view(&grid);
 
         assert_eq!(view.shape(), [5, 5, 5]);
@@ -83,7 +83,7 @@ mod test {
     #[test]
     fn test_chunk_edge() {
         let grid = Array3::from_elem((10, 10, 10), Point::default());
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(5, 5, 5));
+        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
         let edge = chunk.edge(&grid, Dir::NORTH);
 
         assert_eq!(edge.shape(), [5, 5]);
