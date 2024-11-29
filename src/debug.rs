@@ -203,7 +203,7 @@ fn draw_debug_grid<N: Neighborhood + 'static> (
         }
     }
 
-    if config.draw_cached_paths {
+    if config.draw_cached_paths || config.draw_entrances {
         let offset = Vec2::new(grid.get_width() as f32 / 4.0, 0.0);
 
         let path_colors = [
@@ -223,6 +223,12 @@ fn draw_debug_grid<N: Neighborhood + 'static> (
 
         // Draw cached paths
         for path in grid.graph.get_all_paths() {
+            if config.draw_entrances && !config.draw_cached_paths {
+                if path.len() > 2 {
+                    continue;
+                }
+            }
+
             // Iterate over path.path() drawing a line from one point to the next point until completed
             let mut iter = path.path().iter();
             let mut prev = iter.next().unwrap();
@@ -244,7 +250,11 @@ fn draw_debug_grid<N: Neighborhood + 'static> (
                     ),
                 };
 
-                let color = path_colors[color_index % path_colors.len()];
+                let mut color = css::BLUE;
+
+                if config.draw_entrances && config.draw_cached_paths {
+                    color = path_colors[color_index % path_colors.len()];
+                }
 
                 gizmos.line_2d(prev_position + offset, next_position + offset, color);
 

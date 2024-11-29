@@ -218,7 +218,7 @@ impl<N: Neighborhood + Default> Grid<N> {
     ) -> Vec<Node> {
         let mut nodes = Vec::new();
 
-        // Iterate over the start edge and find the nodes that are walkable
+        // Iterate over the start edge and find connections that are walkable
         for ((start_x, start_y), start_point) in start_edge.indexed_iter() {
             if start_point.wall {
                 continue;
@@ -239,7 +239,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                 let node = Node::new(pos, chunk.clone(), Some(dir));
                 nodes.push(node);
-            } else if self.neighborhood.is_ordinal() {
+            } /* I THINK THIS IS ACTUALLY A MISTAKE else if self.neighborhood.is_ordinal() {
                 if end_x > 0 {
                     let left = end_edge[[end_x - 1, end_y]];
                     if !left.wall {
@@ -259,9 +259,10 @@ impl<N: Neighborhood + Default> Grid<N> {
                         nodes.push(node);
                     }
                 } 
-            }
+            } */
         }
 
+        // Split nodes into groups of continous nodes
         let continous_with = |start: UVec3, end: UVec3| {
             let x_diff = (start.x as i32 - end.x as i32).abs();
             let y_diff = (start.y as i32 - end.y as i32).abs();
@@ -300,7 +301,51 @@ impl<N: Neighborhood + Default> Grid<N> {
             //}
         }
 
-        final_nodes
+        if !final_nodes.is_empty() {
+            return final_nodes;
+        }
+        
+        if !self.neighborhood.is_ordinal() {
+            return final_nodes;
+        }
+
+        let mut ordinal_nodes = Vec::new();
+
+        // If we made it here that means no connection nodes were found, but we allow ordinal connections so let's build those if possible
+        for ((start_x, start_y), start_point) in start_edge.indexed_iter() {
+            if start_point.wall {
+                continue;
+            }
+
+            let end_x = start_x;
+            let mut end_y = start_y;
+
+            if start_point.ramp {
+                end_y = start_y + 1;
+            }
+
+            if end_x > 0 {
+                let left = end_edge[[end_x - 1, end_y]];
+                if !left.wall {
+                    let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+
+                    let node = Node::new(pos, chunk.clone(), Some(dir));
+                    ordinal_nodes.push(node);
+                }
+            }
+
+            if end_x < end_edge.shape()[0] - 1 {
+                let right = end_edge[[end_x + 1, end_y]];
+                if !right.wall {
+                    let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+
+                    let node = Node::new(pos, chunk.clone(), Some(dir));
+                    ordinal_nodes.push(node);
+                }
+            }
+        }
+
+        ordinal_nodes 
     }
 
     pub fn connect_internal_chunk_nodes(&mut self) {
