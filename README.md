@@ -13,7 +13,6 @@ The crate is currently opinionated in the sense that it's not bring-your-own-gri
 * Gizmo debug view for Bevy
 
 ## TODO:
-* Fix bugs found in some instances with bad edges
 * Add dynamic "colliders" to factor into path finding, there's currently no avoidance for other npcs etc
 * Add better integration with Bevy, event/time triggers and systems for dynamic refining paths will allow for greater performance
 * Add functions for modifying/rebuilding tiles after they've been built
@@ -23,9 +22,12 @@ The crate is currently opinionated in the sense that it's not bring-your-own-gri
 * Parallelize the Bevy systems mentioned above
 * Add 2d and 3d examples
 
+## Assets credits
+- [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 
-### Credits
-Credit to the following crates and blogs that have been used as references
+
+## Thanks
+Thanks to the following crates and blogs that have been used as references
 * https://github.com/evenfurther/pathfinding
 * https://github.com/mich101mich/hierarchical_pathfinding
 * https://alexmelenchon.github.io/Hierarchial-Pathfinding-Research/

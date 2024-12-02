@@ -1,15 +1,19 @@
+use std::collections::VecDeque;
+
 use bevy::math::UVec3;
 use bevy::prelude::Component;
 
 #[derive(Debug, Clone, Component)]
 pub struct Path {
-    path: Vec<UVec3>,
+    path: VecDeque<UVec3>,
     cost: u32,
     is_reversed: bool,
 }
 
 impl Path {
     pub fn new(path: Vec<UVec3>, cost: u32) -> Self {
+        let path = path.into_iter().collect();
+
         Path {
             path,
             cost,
@@ -18,8 +22,10 @@ impl Path {
     }
 
     pub fn from_slice(path: &[UVec3], cost: u32) -> Self {
+        let path = path.iter().cloned().collect();
+
         Path {
-            path: path.into(),
+            path: path,
             cost,
             is_reversed: false,
         }
@@ -30,7 +36,7 @@ impl Path {
     }
 
     pub fn path(&self) -> &[UVec3] {
-        &self.path
+        &self.path.as_slices().0
     }
 
     pub fn cost(&self) -> u32 {
@@ -46,8 +52,13 @@ impl Path {
     }
 
     pub fn reverse(&mut self) {
-        self.path.reverse();
+        self.path.make_contiguous().reverse();
         self.is_reversed = !self.is_reversed;
+    }
+
+    pub fn pop(&mut self) -> Option<UVec3> {
+        // Remove the first element of the path
+        self.path.pop_front()
     }
 }
 
@@ -63,7 +74,7 @@ impl Eq for Path {}
 // Implement iter for Path
 impl IntoIterator for Path {
     type Item = UVec3;
-    type IntoIter = std::vec::IntoIter<UVec3>;
+    type IntoIter = std::collections::vec_deque::IntoIter<UVec3>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.path.into_iter()

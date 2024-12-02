@@ -751,6 +751,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
+        if path.len() == 0 {
+            return None;
+        }
+
         //Some(Path::new(path, cost))
         Some(self.refine_path(Path::new(path, cost)))
     }
