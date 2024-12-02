@@ -3,9 +3,12 @@
 
 `bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal point it's refined to get a more accurate path.
 
-### This crate is still a work in progress. Most of the base functionality is still there but has a few bugs in it.
+### This crate is still a work in progress. The base functionality is in place, there's still a bug I'm hunting down in the demo with some npcs having issues pathfinding.
 
 The crate is currently opinionated in the sense that it's not bring-your-own-grid. That may change in the future.
+
+## Demo
+cargo run --example demo
 
 ## Current features
 * Works with 2d and 3d tilemaps
@@ -20,7 +23,7 @@ The crate is currently opinionated in the sense that it's not bring-your-own-gri
 * Add psuedo 3d support for tilemap layers (stairs, ramps) without relying on full 3d calculations
 * Parallel building of the grid/graph
 * Parallelize the Bevy systems mentioned above
-* Add 2d and 3d examples
+* Add 3d examples
 
 ## Assets credits
 - [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
