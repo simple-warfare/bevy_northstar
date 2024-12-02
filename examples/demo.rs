@@ -79,10 +79,10 @@ fn main() {
             config: NorthstarDebugConfig {
                 grid_width: 8,
                 grid_height: 8,
-                draw_entrances: false,
-                draw_chunks: false,
+                draw_entrances: true,
+                draw_chunks: true,
                 draw_cached_paths: false,
-                draw_path: false,
+                draw_path: true,
                 draw_points: false,
                 ..Default::default()
             },
@@ -358,7 +358,7 @@ fn spawn_minions(
 
     let mut count = 0;
 
-    while count <= 1000 {
+    while count <= 128 {
         let position = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
         let goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
