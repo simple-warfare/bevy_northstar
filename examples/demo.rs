@@ -181,7 +181,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     }).with_children(|c| {
         c.spawn((
             TextBundle::from_sections([
-                TextSection::new("Type: ", pathfinding_text_style.clone()),
+                TextSection::new("Key [P] Algorithm: ", pathfinding_text_style.clone()),
                 TextSection::from_style(pathfinding_text_style),
             ]),
             PathfindTypeText,
@@ -239,7 +239,7 @@ fn update_pathfind_type_test(
         text.sections[1].value = if config.use_astar {
             "A*".to_string()
         } else {
-            "HPA".to_string()
+            "HPA*".to_string()
         };
     }
 }
