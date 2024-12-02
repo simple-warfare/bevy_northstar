@@ -10,6 +10,8 @@ The crate is currently opinionated in the sense that it's not bring-your-own-gri
 ## Demo
 cargo run --example demo
 
+Press P to switch between HPA* and traditional A*
+
 ![2024-12-02_08-44](https://github.com/user-attachments/assets/18778c4e-43bf-4e4c-8031-8a5974610f9c)
 
 ## Current features
