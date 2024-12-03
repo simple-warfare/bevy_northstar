@@ -14,6 +14,7 @@ cargo run --example demo
 * Works with 2d and 3d tilemaps
 * Algorithms have been heavily benchmarked
 * Gizmo debug view for Bevy
+* 2D Demo
 
 ## TODO:
 * Add dynamic "colliders" to factor into path finding, there's currently no avoidance for other npcs etc
