@@ -3,16 +3,16 @@
         "height": 4300,
         "width": 2
     },
-    "activeFile": "demo_128.tmx",
+    "activeFile": "",
     "expandedProjectPaths": [
     ],
     "fileStates": {
         "demo.tmx": {
-            "scale": 0.1954,
+            "scale": 0.19,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 2047.0829068577282,
-                "y": 2047.0829068577275
+                "x": 2047.3684210526312,
+                "y": 2047.368421052632
             }
         },
         "demo.tsx": {
@@ -21,24 +21,26 @@
             "scaleInEditor": 5.78
         },
         "demo_128.tmx": {
-            "scale": 1.27,
+            "scale": 1.4861,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 476.3779527559054,
-                "y": 681.8897637795276
+                "x": 110.3559652782451,
+                "y": 275.8899131956127
             }
         }
     },
     "last.imagePath": "/Users/john/Projects/bevy_northstar/assets/tiles",
+    "last.worldFilePath": "/Users/john/Projects/bevy_northstar/assets",
+    "loadedWorlds": [
+        "/Users/john/Projects/bevy_northstar/assets/world.world"
+    ],
+    "map.fixedSize": false,
     "map.height": 128,
     "map.lastUsedFormat": "tmx",
     "map.tileHeight": 8,
     "map.tileWidth": 8,
     "map.width": 128,
     "openFiles": [
-        "demo.tsx",
-        "demo.tmx",
-        "demo_128.tmx"
     ],
     "project": "demo.tiled-project",
     "property.type": "TileInfos",
