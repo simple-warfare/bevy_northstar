@@ -94,6 +94,7 @@ fn main() {
             depth: 1,
             chunk_size: 16,
             chunk_depth: 1,
+            chunk_ordinal: true,
             default_cost: 1,
             default_wall: true,
             jump_height: 1,

@@ -1,11 +1,16 @@
-use bevy::{
-    math::UVec3,
-    prelude::Resource,
-};
+use bevy::{math::UVec3, prelude::Resource};
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    astar::{astar_graph, astar_grid}, chunk::Chunk, dijkstra::dijkstra_grid, dir::Dir, graph::Graph, neighbor::Neighborhood, node::Node, path::Path, theta::{theta_graph, theta_grid}, Point
+    astar::{astar_graph, astar_grid},
+    chunk::Chunk,
+    dijkstra::dijkstra_grid,
+    dir::Dir,
+    graph::Graph,
+    neighbor::Neighborhood,
+    node::Node,
+    path::Path,
+    Point,
 };
 
 pub struct GridSettings {
@@ -15,6 +20,8 @@ pub struct GridSettings {
 
     pub chunk_size: u32,
     pub chunk_depth: u32,
+
+    pub chunk_ordinal: bool,
 
     pub default_cost: u32,
     pub default_wall: bool,
@@ -32,6 +39,8 @@ pub struct Grid<N: Neighborhood> {
 
     chunk_size: u32,
     chunk_depth: u32,
+
+    chunk_ordinal: bool,
 
     #[allow(dead_code)]
     default_cost: u32,
@@ -57,6 +66,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             depth: settings.depth,
             chunk_size: settings.chunk_size,
             chunk_depth: settings.chunk_depth,
+            chunk_ordinal: settings.chunk_ordinal,
             default_cost: settings.default_cost,
             default_wall: settings.default_wall,
             grid: Array3::from_elem(
@@ -131,7 +141,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                 for z in 0..z_chunks {
                     let current_chunk = &self.chunks[[x, y, z]];
 
-                    let directions = Dir::all();
+                    let directions = Dir::cardinal();
 
                     for dir in directions {
                         let dir_vec = dir.vector();
@@ -195,10 +205,109 @@ impl<N: Neighborhood + Default> Grid<N> {
                                         node.pos.y + current_chunk.min.y,
                                         node.pos.z + current_chunk.min.z,
                                     ),
+                                    _ => panic!("Invalid direction"),
                                 }
                             }
 
                             self.graph.add_nodes(&nodes);
+                        }
+                    }
+
+                    if self.chunk_ordinal {
+                        let ordinal_directions = Dir::ordinal();
+
+                        for dir in ordinal_directions {
+                            let dir_vec = dir.vector();
+
+                            let nx = x as i32 + dir_vec.0;
+                            let ny = y as i32 + dir_vec.1;
+                            let nz = z as i32 + dir_vec.2;
+
+                            // Ensure neighbor is within bounds
+                            if nx >= 0
+                                && nx < x_chunks as i32
+                                && ny >= 0
+                                && ny < y_chunks as i32
+                                && nz >= 0
+                                && nz < z_chunks as i32
+                            {
+                                let neighbor_chunk =
+                                    &self.chunks[[nx as usize, ny as usize, nz as usize]];
+
+                                let current_corner = current_chunk.corner(&self.grid, dir);
+                                let neighbor_corner =
+                                    neighbor_chunk.corner(&self.grid, dir.opposite());
+
+                                if current_corner.wall || neighbor_corner.wall {
+                                    continue;
+                                }
+
+                                let pos = match dir {
+                                    Dir::NORTHEAST => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.max.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::SOUTHEAST => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.min.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::SOUTHWEST => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.min.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::NORTHWEST => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.max.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::NORTHEASTUP => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.max.y,
+                                        current_chunk.max.z,
+                                    ),
+                                    Dir::SOUTHEASTUP => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.min.y,
+                                        current_chunk.max.z,
+                                    ),
+                                    Dir::SOUTHWESTUP => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.min.y,
+                                        current_chunk.max.z,
+                                    ),
+                                    Dir::NORTHWESTUP => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.max.y,
+                                        current_chunk.max.z,
+                                    ),
+                                    Dir::NORTHEASTDOWN => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.max.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::SOUTHEASTDOWN => UVec3::new(
+                                        current_chunk.max.x,
+                                        current_chunk.min.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::SOUTHWESTDOWN => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.min.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    Dir::NORTHWESTDOWN => UVec3::new(
+                                        current_chunk.min.x,
+                                        current_chunk.max.y,
+                                        current_chunk.min.z,
+                                    ),
+                                    _ => panic!("Invalid direction"),
+                                };
+
+                                self.graph.add_node(pos, current_chunk.clone(), Some(dir));
+                            }
                         }
                     }
                 }
@@ -230,7 +339,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             if start_point.ramp {
                 end_y = start_y + 1;
             }
- 
+
             let end_point = end_edge[[end_x, end_y]];
 
             // If the end point is a wall, we can't connect the nodes
@@ -240,26 +349,26 @@ impl<N: Neighborhood + Default> Grid<N> {
                 let node = Node::new(pos, chunk.clone(), Some(dir));
                 nodes.push(node);
             } /* I THINK THIS IS ACTUALLY A MISTAKE else if self.neighborhood.is_ordinal() {
-                if end_x > 0 {
-                    let left = end_edge[[end_x - 1, end_y]];
-                    if !left.wall {
-                        let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+                  if end_x > 0 {
+                      let left = end_edge[[end_x - 1, end_y]];
+                      if !left.wall {
+                          let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
-                        let node = Node::new(pos, chunk.clone(), Some(dir));
-                        nodes.push(node);
-                    }
-                }
+                          let node = Node::new(pos, chunk.clone(), Some(dir));
+                          nodes.push(node);
+                      }
+                  }
 
-                if end_x < end_edge.shape()[0] - 1 {
-                    let right = end_edge[[end_x + 1, end_y]];
-                    if !right.wall {
-                        let pos = UVec3::new(start_x as u32, start_y as u32, 0);
+                  if end_x < end_edge.shape()[0] - 1 {
+                      let right = end_edge[[end_x + 1, end_y]];
+                      if !right.wall {
+                          let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
-                        let node = Node::new(pos, chunk.clone(), Some(dir));
-                        nodes.push(node);
-                    }
-                } 
-            } */
+                          let node = Node::new(pos, chunk.clone(), Some(dir));
+                          nodes.push(node);
+                      }
+                  }
+              } */
         }
 
         // Split nodes into groups of continous nodes
@@ -304,7 +413,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         if !final_nodes.is_empty() {
             return final_nodes;
         }
-        
+
         if !self.neighborhood.is_ordinal() {
             return final_nodes;
         }
@@ -345,7 +454,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
-        ordinal_nodes 
+        ordinal_nodes
     }
 
     pub fn connect_internal_chunk_nodes(&mut self) {
@@ -551,7 +660,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         for (i, point) in path.path().iter().enumerate() {
             if i <= refined_up_to && refined_up_to != 0 {
                 continue;
-            }   
+            }
 
             let mut refined = false;
 
@@ -579,7 +688,6 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
         Path::new(refined_path, cost)
-        
     }
 
     pub fn get_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
@@ -774,9 +882,9 @@ impl<N: Neighborhood + Default> Grid<N> {
     pub fn bresenham_path(&self, start: UVec3, goal: UVec3) -> Option<Path> {
         let mut path = Vec::new();
         let mut cost = 0;
-    
+
         let mut current = start;
-    
+
         // Differences in each dimension
         let dx = (goal.x as i32 - start.x as i32).abs();
         let dy = (goal.y as i32 - start.y as i32).abs();
@@ -785,32 +893,35 @@ impl<N: Neighborhood + Default> Grid<N> {
         } else {
             0 // Ignore z axis if grid depth is 1
         };
-    
+
         let sx: i32 = if start.x < goal.x { 1 } else { -1 };
         let sy: i32 = if start.y < goal.y { 1 } else { -1 };
-        let sz: i32 = if self.depth > 1 && start.z < goal.z { 1 } else { -1 };
-    
+        let sz: i32 = if self.depth > 1 && start.z < goal.z {
+            1
+        } else {
+            -1
+        };
+
         let mut err_xy = dx - dy;
         let mut err_xz = dx - dz;
-    
+
         while current != goal {
             // Bounds check
             if current.x >= self.width || current.y >= self.height || current.z >= self.depth {
                 return None;
             }
-    
+
             path.push(current);
             cost += self.grid[[current.x as usize, current.y as usize, current.z as usize]].cost;
-    
+
             if self.grid[[current.x as usize, current.y as usize, current.z as usize]].wall {
                 return None;
             }
-    
+
             // Error-based stepping
             let double_err_xy = 2 * err_xy;
             let double_err_xz = 2 * err_xz;
 
-    
             if self.neighborhood.is_ordinal() {
                 if double_err_xy >= -dy && double_err_xz >= -dz {
                     // Move along x-axis
@@ -845,10 +956,10 @@ impl<N: Neighborhood + Default> Grid<N> {
                 }
             }
         }
-    
+
         path.push(goal);
         Some(Path::new(path, cost))
-    }    
+    }
 }
 
 #[cfg(test)]
@@ -869,6 +980,7 @@ mod tests {
         depth: 1,
         chunk_size: 4,
         chunk_depth: 1,
+        chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
         jump_height: 1,
@@ -882,12 +994,13 @@ mod tests {
 
     #[test]
     pub fn test_edges() {
-        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&GridSettings{
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&GridSettings {
             width: 4,
             height: 4,
             depth: 1,
             chunk_size: 4,
             chunk_depth: 1,
+            chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
             jump_height: 1,
@@ -943,6 +1056,7 @@ mod tests {
             depth: 8,
             chunk_size: 4,
             chunk_depth: 4,
+            chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
             jump_height: 1,
@@ -1000,7 +1114,24 @@ mod tests {
 
         grid.build_nodes();
 
-        assert_eq!(grid.graph.node_count(), 36);
+        assert_eq!(grid.graph.node_count(), 48);
+
+        // Test ordinal
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GridSettings {
+            width: 12,
+            height: 12,
+            depth: 1,
+            chunk_size: 4,
+            chunk_depth: 1,
+            chunk_ordinal: true,
+            default_cost: 1,
+            default_wall: false,
+            jump_height: 1,
+        });
+
+        grid.build_nodes();
+
+        assert_eq!(grid.graph.node_count(), 40);
     }
 
     #[test]
@@ -1086,6 +1217,7 @@ mod tests {
             depth: 1,
             chunk_size: 32,
             chunk_depth: 1,
+            chunk_ordinal: false,
             default_cost: 0,
             default_wall: false,
             jump_height: 1,
@@ -1120,6 +1252,7 @@ mod tests {
             depth,
             chunk_size,
             chunk_depth,
+            chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
             jump_height: 1,
@@ -1157,16 +1290,17 @@ mod tests {
             depth: 4,
             chunk_depth: 1,
             chunk_size: 16,
+            chunk_ordinal: false,
             default_cost: 1,
             default_wall: false,
             jump_height: 1,
         };
-    
+
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
-    
+
         grid.build();
         let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(31, 31, 3));
-    
+
         assert!(path.is_some());
     }
 
@@ -1191,7 +1325,7 @@ mod tests {
         assert_eq!(path.unwrap().len(), 21);
 
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
-        
+
         grid.set_point(UVec3::new(5, 5, 0), Point::new(1, true));
         grid.build();
 

@@ -264,6 +264,7 @@ mod tests {
             depth: 1,
             chunk_depth: 1,
             chunk_size: 4,
+            chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
             jump_height: 1,
