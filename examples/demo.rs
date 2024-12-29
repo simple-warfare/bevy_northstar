@@ -94,7 +94,7 @@ fn main() {
             depth: 1,
             chunk_size: 16,
             chunk_depth: 1,
-            chunk_ordinal: true,
+            chunk_ordinal: false,
             default_cost: 1,
             default_wall: true,
             jump_height: 1,
@@ -295,7 +295,6 @@ fn pathfind_minions(
         let goal = goal.position;
 
         let now = std::time::Instant::now();
-        //info!("Pathfinding {:?} from {:?} to {:?}", entity, start, goal);
         
         let path = if config.use_astar {
             grid.get_astar_path(start, goal)
@@ -306,7 +305,12 @@ fn pathfind_minions(
         let elapsed = now.elapsed().as_secs_f64();
 
         if path.is_none() {
-            //info!("No path found for {:?} from {:?} to {:?}", entity, start, goal);
+            info!("No path found for {:?} from {:?} to {:?}", entity, start, goal);
+            let path = if config.use_astar {
+                grid.get_astar_path(start, goal)
+            } else { 
+                grid.get_path(start, goal)
+            };
             continue;
         }
 

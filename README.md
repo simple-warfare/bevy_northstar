@@ -3,7 +3,7 @@
 
 `bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal point it's refined to get a more accurate path.
 
-### This crate is still a work in progress. The base functionality is in place, there's still a bug I'm hunting down in the demo with some npcs having issues pathfinding.
+### This crate is still a work in progress.
 
 The crate is currently opinionated in the sense that it's not bring-your-own-grid. That may change in the future.
 

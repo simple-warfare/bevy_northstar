@@ -744,17 +744,15 @@ impl<N: Neighborhood + Default> Grid<N> {
             + (start.y as i32 - goal.y as i32).abs()
             + (start.z as i32 - goal.z as i32).abs();
 
-        // Push back goal_nodes that are farther from the goal in the direction of the starting vector
-        goal_nodes = goal_nodes
-            .into_iter()
-            .filter(|(node, _)| {
-                let distance = (node.pos.x as i32 - start.x as i32).abs()
-                    + (node.pos.y as i32 - start.y as i32).abs()
-                    + (node.pos.z as i32 - start.z as i32).abs();
-
-                distance <= start_distance
-            })
-            .collect::<Vec<_>>();
+        // Move goal_nodes that are farther from the goal in the direction of the starting point to the end of the list
+        goal_nodes.sort_by_key(|(_, distance)| {
+            let distance = *distance as i32 - start_distance;
+            if distance < 0 {
+                distance.abs()
+            } else {
+                distance
+            }
+        });
 
         let mut node_path: Option<Path> = None;
 
