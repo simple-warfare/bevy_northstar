@@ -4,7 +4,7 @@ use bevy::{
     text::FontSmoothing,
 };
 
-use bevy_northstar::prelude::*;
+use bevy_northstar::{prelude::*, GridPosition};
 
 use bevy_ecs_tiled::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
@@ -76,7 +76,7 @@ fn main() {
         .add_plugins(TilemapPlugin)
         .add_plugins(TiledMapPlugin::default())
         // bevy_northstar plugins
-        .add_plugins(NorthstarPlugin)
+        .add_plugins(NorthstarPlugin::<OrdinalNeighborhood>::default())
         .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood> {
             config: NorthstarDebugConfig {
                 grid_width: 8,
@@ -355,6 +355,7 @@ fn spawn_minions(
                 image: asset_server.load("tile_0018.png"),
                 ..Default::default()
             })
+            .insert(PathBlocking)
             .insert(Transform::from_translation(transform))
             .insert(Minion {
                 position: UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0),

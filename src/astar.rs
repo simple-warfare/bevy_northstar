@@ -147,7 +147,7 @@ pub fn astar_graph<N: Neighborhood>(
             let n;
             match visited.entry(neighbor_node.pos) {
                 Vacant(e) => {
-                    h =  neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
+                    h = neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
                     n = e.index();
                     e.insert((index, new_cost));
                 }

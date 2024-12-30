@@ -63,25 +63,97 @@ impl Chunk {
                 self.min.y as usize..self.max.y as usize + 1,
                 self.min.z as usize,
             ]),
-            _ => panic!("Ordinal directions are not an edge")
+            _ => panic!("Ordinal directions are not an edge"),
         }
     }
 
     pub fn corner<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> Point {
         match dir {
-            Dir::NORTHEAST => grid[[self.max.x as usize, self.max.y as usize, self.min.z as usize]],
-            Dir::SOUTHEAST => grid[[self.max.x as usize, self.min.y as usize, self.min.z as usize]],
-            Dir::SOUTHWEST => grid[[self.min.x as usize, self.min.y as usize, self.min.z as usize]],
-            Dir::NORTHWEST => grid[[self.min.x as usize, self.max.y as usize, self.min.z as usize]],
-            Dir::NORTHEASTUP => grid[[self.max.x as usize, self.max.y as usize, self.max.z as usize]],
-            Dir::SOUTHEASTUP => grid[[self.max.x as usize, self.min.y as usize, self.max.z as usize]],
-            Dir::SOUTHWESTUP => grid[[self.min.x as usize, self.min.y as usize, self.max.z as usize]],
-            Dir::NORTHWESTUP => grid[[self.min.x as usize, self.max.y as usize, self.max.z as usize]],
-            Dir::NORTHEASTDOWN => grid[[self.max.x as usize, self.max.y as usize, self.min.z as usize]],
-            Dir::SOUTHEASTDOWN => grid[[self.max.x as usize, self.min.y as usize, self.min.z as usize]],
-            Dir::SOUTHWESTDOWN => grid[[self.min.x as usize, self.min.y as usize, self.min.z as usize]],
-            Dir::NORTHWESTDOWN => grid[[self.min.x as usize, self.max.y as usize, self.min.z as usize]],
-            _ => panic!("Diagonal directions are not a corner")
+            Dir::NORTHEAST => {
+                grid[[
+                    self.max.x as usize,
+                    self.max.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::SOUTHEAST => {
+                grid[[
+                    self.max.x as usize,
+                    self.min.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::SOUTHWEST => {
+                grid[[
+                    self.min.x as usize,
+                    self.min.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::NORTHWEST => {
+                grid[[
+                    self.min.x as usize,
+                    self.max.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::NORTHEASTUP => {
+                grid[[
+                    self.max.x as usize,
+                    self.max.y as usize,
+                    self.max.z as usize,
+                ]]
+            }
+            Dir::SOUTHEASTUP => {
+                grid[[
+                    self.max.x as usize,
+                    self.min.y as usize,
+                    self.max.z as usize,
+                ]]
+            }
+            Dir::SOUTHWESTUP => {
+                grid[[
+                    self.min.x as usize,
+                    self.min.y as usize,
+                    self.max.z as usize,
+                ]]
+            }
+            Dir::NORTHWESTUP => {
+                grid[[
+                    self.min.x as usize,
+                    self.max.y as usize,
+                    self.max.z as usize,
+                ]]
+            }
+            Dir::NORTHEASTDOWN => {
+                grid[[
+                    self.max.x as usize,
+                    self.max.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::SOUTHEASTDOWN => {
+                grid[[
+                    self.max.x as usize,
+                    self.min.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::SOUTHWESTDOWN => {
+                grid[[
+                    self.min.x as usize,
+                    self.min.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            Dir::NORTHWESTDOWN => {
+                grid[[
+                    self.min.x as usize,
+                    self.max.y as usize,
+                    self.min.z as usize,
+                ]]
+            }
+            _ => panic!("Diagonal directions are not a corner"),
         }
     }
 }

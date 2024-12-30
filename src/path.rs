@@ -8,6 +8,7 @@ pub struct Path {
     path: VecDeque<UVec3>,
     cost: u32,
     is_reversed: bool,
+
 }
 
 impl Path {
@@ -69,7 +70,6 @@ impl PartialEq for Path {
 }
 
 impl Eq for Path {}
-
 
 // Implement iter for Path
 impl IntoIterator for Path {

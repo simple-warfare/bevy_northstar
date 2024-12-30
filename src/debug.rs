@@ -67,18 +67,21 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
     }
 }
 
-fn draw_debug_paths<N: Neighborhood + 'static>(query: Query<&Path>, config: Res<NorthstarDebugConfig>, grid: Res<Grid<N>>, mut gizmos: Gizmos) {
+fn draw_debug_paths<N: Neighborhood + 'static>(
+    query: Query<&Path>,
+    config: Res<NorthstarDebugConfig>,
+    grid: Res<Grid<N>>,
+    mut gizmos: Gizmos,
+) {
     if !config.draw_path {
         return;
     }
 
     let offset = match config.map_type {
-        MapType::Square => {
-            Vec2::new(
-                ((grid.get_width() * config.grid_width) as f32 / 2.0) - config.grid_width as f32,
-                ((grid.get_height() * config.grid_height) as f32 / 2.0) - config.grid_height as f32,
-            )
-        }
+        MapType::Square => Vec2::new(
+            ((grid.get_width() * config.grid_width) as f32 / 2.0) - config.grid_width as f32,
+            ((grid.get_height() * config.grid_height) as f32 / 2.0) - config.grid_height as f32,
+        ),
         MapType::Isometric => Vec2::new(grid.get_width() as f32 / 4.0, 0.0),
     };
 
@@ -147,12 +150,10 @@ fn draw_debug_grid<N: Neighborhood + 'static>(
     mut gizmos: Gizmos,
 ) {
     let offset = match config.map_type {
-        MapType::Square => {
-            Vec2::new(
-                ((grid.get_width() * config.grid_width) as f32 / 2.0) - config.grid_width as f32,
-                ((grid.get_height() * config.grid_height) as f32 / 2.0) - config.grid_height as f32,
-            )
-        }
+        MapType::Square => Vec2::new(
+            ((grid.get_width() * config.grid_width) as f32 / 2.0) - config.grid_width as f32,
+            ((grid.get_height() * config.grid_height) as f32 / 2.0) - config.grid_height as f32,
+        ),
         MapType::Isometric => Vec2::new(grid.get_width() as f32 / 4.0, 0.0),
     };
 

@@ -66,16 +66,10 @@ pub fn theta_grid<N: Neighborhood>(
 
             let (new_cost, parent) = if line_of_sight(grid, *parent_pos, neighbor) {
                 // Line of sight exists between grandparent and neighbor
-                (
-                    parent_cost + neighbor_point.cost,
-                    *parent_index,
-                )
+                (parent_cost + neighbor_point.cost, *parent_index)
             } else {
                 // No line of sight; use current node as parent
-                (
-                    cost + neighbor_point.cost,
-                    index,
-                )
+                (cost + neighbor_point.cost, index)
             };
 
             let h;
@@ -165,15 +159,9 @@ pub fn theta_graph<N: Neighborhood>(
             let neighbor_cost = neighborhood.heuristic(neighbor, goal);
 
             let (new_cost, parent) = if line_of_sight(grid, *parent_pos, neighbor) {
-                (
-                    parent_cost + neighbor_cost,
-                    *parent_index,
-                )
+                (parent_cost + neighbor_cost, *parent_index)
             } else {
-                (
-                    cost + neighbor_cost,
-                    index,
-                )
+                (cost + neighbor_cost, index)
             };
 
             let h;
@@ -206,11 +194,13 @@ pub fn theta_graph<N: Neighborhood>(
     None
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{grid::{Grid, GridSettings}, neighbor::OrdinalNeighborhood3d};
+    use crate::{
+        grid::{Grid, GridSettings},
+        neighbor::OrdinalNeighborhood3d,
+    };
 
     #[test]
     fn test_theta_grid() {
@@ -275,8 +265,16 @@ mod tests {
         let start = UVec3::new(2, 3, 0);
         let goal = UVec3::new(8, 10, 0);
 
-        let path = theta_graph(&OrdinalNeighborhood3d, &grid.graph, &grid.get_view(), start, goal, 64).unwrap();
-    
+        let path = theta_graph(
+            &OrdinalNeighborhood3d,
+            &grid.graph,
+            &grid.get_view(),
+            start,
+            goal,
+            64,
+        )
+        .unwrap();
+
         assert_eq!(path.cost(), 21);
         assert_eq!(path.len(), 6);
     }

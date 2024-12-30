@@ -20,12 +20,7 @@ pub struct CardinalNeighborhood;
 impl Neighborhood for CardinalNeighborhood {
     #[inline(always)]
     fn directions(&self) -> Vec<(i32, i32, i32)> {
-        vec![
-            (-1, 0, 0),
-            (1, 0, 0),
-            (0, -1, 0),
-            (0, 1, 0),
-        ]
+        vec![(-1, 0, 0), (1, 0, 0), (0, -1, 0), (0, 1, 0)]
     }
 
     #[inline(always)]
@@ -99,7 +94,10 @@ impl Neighborhood for CardinalNeighborhood3d {
                 let ny = ny as u32;
                 let nz = nz as u32;
 
-                if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 && nz < grid.shape()[2] as u32 {
+                if nx < grid.shape()[0] as u32
+                    && ny < grid.shape()[1] as u32
+                    && nz < grid.shape()[2] as u32
+                {
                     let neighbor = UVec3::new(nx, ny, nz);
                     if !grid[[nx as usize, ny as usize, nz as usize]].wall {
                         target.push(neighbor);
@@ -230,7 +228,10 @@ impl Neighborhood for OrdinalNeighborhood3d {
                         let ny = ny as u32;
                         let nz = nz as u32;
 
-                        if nx < grid.shape()[0] as u32 && ny < grid.shape()[1] as u32 && nz < grid.shape()[2] as u32 {
+                        if nx < grid.shape()[0] as u32
+                            && ny < grid.shape()[1] as u32
+                            && nz < grid.shape()[2] as u32
+                        {
                             let neighbor = UVec3::new(nx, ny, nz);
                             if !grid[[nx as usize, ny as usize, nz as usize]].wall {
                                 target.push(neighbor);
@@ -366,10 +367,25 @@ mod tests {
     fn test_ordinal_heuristic() {
         let neighborhood = OrdinalNeighborhood3d;
 
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)), 1);
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 0, 0)), 1);
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(0, 0, 0)), 0);
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(2, 2, 2)), 2);
-        assert_eq!(neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(7, 7, 7)), 7);
+        assert_eq!(
+            neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)),
+            1
+        );
+        assert_eq!(
+            neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 0, 0)),
+            1
+        );
+        assert_eq!(
+            neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(0, 0, 0)),
+            0
+        );
+        assert_eq!(
+            neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(2, 2, 2)),
+            2
+        );
+        assert_eq!(
+            neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(7, 7, 7)),
+            7
+        );
     }
 }
