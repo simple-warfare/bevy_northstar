@@ -6,6 +6,7 @@ use bevy::{color::palettes::css, prelude::*};
 use crate::grid::Grid;
 use crate::neighbor::Neighborhood;
 use crate::path::Path;
+use crate::prelude::{DebugColor, Goal};
 
 #[derive(Debug, Clone, Default)]
 pub enum MapType {
@@ -25,6 +26,7 @@ pub struct NorthstarDebugConfig {
     pub draw_entrances: bool,
     pub draw_points: bool,
     pub draw_cached_paths: bool,
+    pub draw_goals: bool,
     pub color: Color,
 }
 
@@ -39,6 +41,7 @@ impl Default for NorthstarDebugConfig {
             draw_entrances: true,
             draw_points: false,
             draw_cached_paths: false,
+            draw_goals: false,
             color: bevy::prelude::Color::Srgba(css::RED),
         }
     }
@@ -63,12 +66,12 @@ impl<N: Neighborhood + 'static> Default for NorthstarDebugPlugin<N> {
 impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.insert_resource(self.config.clone())
-            .add_systems(Update, (draw_debug_grid::<N>, draw_debug_paths::<N>));
+            .add_systems(Update, (draw_debug_grid::<N>, draw_debug_paths::<N>, draw_goals::<N>));
     }
 }
 
 fn draw_debug_paths<N: Neighborhood + 'static>(
-    query: Query<&Path>,
+    query: Query<(&Path, &DebugColor)>,
     config: Res<NorthstarDebugConfig>,
     grid: Res<Grid<N>>,
     mut gizmos: Gizmos,
@@ -85,25 +88,10 @@ fn draw_debug_paths<N: Neighborhood + 'static>(
         MapType::Isometric => Vec2::new(grid.get_width() as f32 / 4.0, 0.0),
     };
 
-    let mut color_index = 0;
-
-    for path in query.iter() {
+    for (path, color) in query.iter() {
         if path.is_empty() {
             continue;
         }
-
-        let path_colors = [
-            css::RED,
-            css::PURPLE,
-            css::YELLOW,
-            css::PINK,
-            css::DARK_CYAN,
-            css::MAGENTA,
-            css::GREY,
-            css::GREEN,
-            css::ORANGE,
-            css::NAVY,
-        ];
 
         // Draw paths
         // Iterate over path.path() drawing a line from one point to the next point until completed
@@ -133,14 +121,46 @@ fn draw_debug_paths<N: Neighborhood + 'static>(
                 ),
             };
 
-            let color = path_colors[color_index % path_colors.len()];
+            //let color = path_colors[color_index % path_colors.len()];
 
-            gizmos.line_2d(prev_position - offset, next_position - offset, color);
+            gizmos.line_2d(prev_position - offset, next_position - offset, color.0);
 
             prev = next;
         }
+    }
+}
 
-        color_index += 1;
+fn draw_goals<N: Neighborhood + 'static>(
+    config: Res<NorthstarDebugConfig>,
+    query: Query<(&Goal, &DebugColor)>,
+    grid: Res<Grid<N>>,
+    mut gizmos: Gizmos,
+) {
+    if !config.draw_goals {
+        return;
+    }
+
+    let offset = match config.map_type {
+        MapType::Square => Vec2::new(
+            ((grid.get_width() * config.grid_width) as f32 / 2.0) - config.grid_width as f32,
+            ((grid.get_height() * config.grid_height) as f32 / 2.0) - config.grid_height as f32,
+        ),
+        MapType::Isometric => Vec2::new(grid.get_width() as f32 / 4.0, 0.0),
+    };
+
+    for (goal, color) in query.iter() {
+        let position = match config.map_type {
+            MapType::Square => Vec2::new(
+                (goal.0.x * config.grid_width) as f32,
+                (goal.0.y * config.grid_height) as f32,
+            ),
+            MapType::Isometric => Vec2::new(
+                (goal.0.y as f32 + goal.0.x as f32) * (config.grid_width as f32 * 0.5),
+                (goal.0.y as f32 - goal.0.x as f32) * (config.grid_height as f32 * 0.5),
+            ),
+        };
+
+        gizmos.circle_2d(position - offset, 2.0, color.0);
     }
 }
 

@@ -1,7 +1,5 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-    prelude::*,
-    text::FontSmoothing,
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, log, prelude::*, text::FontSmoothing, utils::HashMap
 };
 
 use bevy_northstar::prelude::*;
@@ -81,20 +79,21 @@ fn main() {
             config: NorthstarDebugConfig {
                 grid_width: 8,
                 grid_height: 8,
-                draw_entrances: true,
-                draw_chunks: true,
+                draw_entrances: false,
+                draw_chunks: false,
                 draw_cached_paths: false,
                 draw_path: true,
                 draw_points: false,
+                draw_goals: true,
                 ..Default::default()
             },
             ..Default::default()
         })
         .insert_resource(Grid::<OrdinalNeighborhood>::new(&GridSettings {
-            width: 128,
-            height: 128,
+            width: 16,
+            height: 16,
             depth: 1,
-            chunk_size: 16,
+            chunk_size: 8,
             chunk_depth: 1,
             chunk_ordinal: false,
             default_cost: 1,
@@ -107,7 +106,7 @@ fn main() {
         .add_systems(Startup, startup)
         .add_systems(OnEnter(State::Playing), spawn_minions)
         .add_systems(Update, input)
-        .add_systems(Update, move_pathfinders.before(PathingSet))
+        .add_systems(Update, move_pathfinders.after(PathingSet))
         .add_systems(Update, tick.run_if(in_state(State::Playing)))
         //.add_systems(Update, pathfind_minions.run_if(in_state(State::Playing)))
         .add_systems(Update, set_new_goal.run_if(in_state(State::Playing)))
@@ -125,6 +124,7 @@ fn main() {
             collision: true,
             avoidance_distance: 4,
         })
+        .add_systems(Update, debug_bad_positions)
         .run();
 }
 
@@ -149,7 +149,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
     // Load the map ...
-    let map_handle: Handle<TiledMap> = asset_server.load("demo_128.tmx");
+    let map_handle: Handle<TiledMap> = asset_server.load("demo_16.tmx");
 
     // ... then spawn it !
     let mut map_entity = commands.spawn(TiledMapHandle(map_handle));
@@ -232,6 +232,21 @@ fn update_pathfind_type_test(
     }
 }
 
+fn debug_bad_positions(
+    query: Query<(Entity, &Position, &Path)>,
+) {
+    let mut positions = HashMap::new();
+
+    for (entity, position, path) in query.iter() {        
+        if positions.contains_key(&position.0) {
+            //log::error!("{:?}", positions);
+            log::error!("Entity {:?} has the same position as another entity: {:?}", entity, path);
+        } else {
+            positions.insert(position.0, (entity, path));
+        }
+    }
+}
+
 fn move_pathfinders(
     mut commands: Commands,
     mut query: Query<(Entity, &mut Position, &Next)>,
@@ -284,9 +299,9 @@ fn spawn_minions(
 
     let mut count = 0;
 
-    while count < 128 {
+    while count < 6 {
         let position = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
-        let goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
+        //let goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
         let transform = Vec3::new(position.x + 4.0, position.y + 4.0, 4.0);
 
@@ -308,7 +323,7 @@ fn spawn_minions(
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
             .insert(Position(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
-            .insert(Goal(UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0)))
+            //.insert(Goal(UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0)))
             .set_parent(layer_entity);
 
         count += 1;
@@ -400,8 +415,8 @@ pub fn input(
             stats.reset();
         }
 
-        if ortho.scale < 0.5 {
-            ortho.scale = 0.5;
+        if ortho.scale < 0.25 {
+            ortho.scale = 0.25;
         }
 
         let z = transform.translation.z;

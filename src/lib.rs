@@ -21,8 +21,6 @@ pub mod path;
 pub mod plugin;
 mod theta;
 
-use bevy::prelude::Component;
-
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{MapType, NorthstarDebugConfig, NorthstarDebugPlugin};
@@ -30,37 +28,14 @@ pub mod prelude {
     pub use crate::neighbor::*;
     pub use crate::path::Path;
     pub use crate::plugin::NorthstarPlugin;
+    pub use crate::plugin::NorthstarSettings;
+    pub use crate::plugin::PathingSet;
     pub use crate::Point;
 }
 
 pub type NodeId = usize;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
-
-#[derive(Component, Default, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct GridPosition {
-    pub x: usize,
-    pub y: usize,
-    pub z: usize,
-}
-
-impl GridPosition {
-    pub fn new(x: usize, y: usize, z: usize) -> Self {
-        GridPosition { x, y, z }
-    }
-
-    pub fn from_uvec3(uvec3: UVec3) -> Self {
-        GridPosition {
-            x: uvec3.x as usize,
-            y: uvec3.y as usize,
-            z: uvec3.z as usize,
-        }
-    }
-
-    pub fn to_uvec3(&self) -> UVec3 {
-        UVec3::new(self.x as u32, self.y as u32, self.z as u32)
-    }
-}
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {

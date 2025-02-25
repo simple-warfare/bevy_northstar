@@ -20,6 +20,8 @@ pub enum Dir {
     NORTHWESTDOWN = 17,
 }
 
+use bevy::math::Vec3;
+
 pub use self::Dir::*;
 
 impl Dir {
@@ -91,6 +93,30 @@ impl Dir {
             SOUTHEASTDOWN => (1, -1, -1),
             SOUTHWESTDOWN => (-1, -1, -1),
             NORTHWESTDOWN => (-1, 1, -1),
+        }
+    }
+
+    pub fn from_vec3(vec: &Vec3) -> Self {
+        match vec {
+            Vec3 { x: 0.0, y: 1.0, z: 0.0 } => NORTH,
+            Vec3 { x: 1.0, y: 0.0, z: 0.0 } => EAST,
+            Vec3 { x: 0.0, y: -1.0, z: 0.0 } => SOUTH,
+            Vec3 { x: -1.0, y: 0.0, z: 0.0 } => WEST,
+            Vec3 { x: 0.0, y: 0.0, z: 1.0 } => UP,
+            Vec3 { x: 0.0, y: 0.0, z: -1.0 } => DOWN,
+            Vec3 { x: 1.0, y: 1.0, z: 0.0 } => NORTHEAST,
+            Vec3 { x: 1.0, y: -1.0, z: 0.0 } => SOUTHEAST,
+            Vec3 { x: -1.0, y: -1.0, z: 0.0 } => SOUTHWEST,
+            Vec3 { x: -1.0, y: 1.0, z: 0.0 } => NORTHWEST,
+            Vec3 { x: 1.0, y: 1.0, z: 1.0 } => NORTHEASTUP,
+            Vec3 { x: 1.0, y: -1.0, z: 1.0 } => SOUTHEASTUP,
+            Vec3 { x: -1.0, y: -1.0, z: 1.0 } => SOUTHWESTUP,
+            Vec3 { x: -1.0, y: 1.0, z: 1.0 } => NORTHWESTUP,
+            Vec3 { x: 1.0, y: 1.0, z: -1.0 } => NORTHEASTDOWN,
+            Vec3 { x: 1.0, y: -1.0, z: -1.0 } => SOUTHEASTDOWN,
+            Vec3 { x: -1.0, y: -1.0, z: -1.0 } => SOUTHWESTDOWN,
+            Vec3 { x: -1.0, y: 1.0, z: -1.0 } => NORTHWESTDOWN,
+            _ => panic!("Not a valid direction"),
         }
     }
 

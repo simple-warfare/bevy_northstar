@@ -36,7 +36,26 @@
             },
             "args": [],
             "env": {
-                "CARGO_MANIFEST_DIR": "${workspaceFolder}"
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug collision example",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "collision"
+                ]
+            },
+            "args": [],
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
             },
             "cwd": "${workspaceFolder}"
         }

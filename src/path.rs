@@ -5,10 +5,9 @@ use bevy::prelude::Component;
 
 #[derive(Debug, Clone, Component)]
 pub struct Path {
-    path: VecDeque<UVec3>,
+    pub(crate) path: VecDeque<UVec3>,
     cost: u32,
     is_reversed: bool,
-
 }
 
 impl Path {
@@ -27,6 +26,7 @@ impl Path {
 
         Path {
             path: path,
+            //avoiding: VecDeque::new(),
             cost,
             is_reversed: false,
         }

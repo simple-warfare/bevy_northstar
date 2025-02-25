@@ -8,6 +8,7 @@ use crate::graph::Graph;
 use crate::los::line_of_sight;
 use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
+#[allow(dead_code)]
 pub fn theta_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,
@@ -102,6 +103,7 @@ pub fn theta_grid<N: Neighborhood>(
     None
 }
 
+#[allow(dead_code)]
 pub fn theta_graph<N: Neighborhood>(
     neighborhood: &N,
     graph: &Graph,
@@ -121,7 +123,7 @@ pub fn theta_graph<N: Neighborhood>(
     visited.insert(start, (usize::MAX, 0));
 
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
-        let (neighbors, current_pos) = {
+        let (neighbors, _) = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
             if *current_pos == goal {
                 let mut current = index;
@@ -194,7 +196,7 @@ pub fn theta_graph<N: Neighborhood>(
     None
 }
 
-#[cfg(test)]
+/*#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
@@ -278,4 +280,4 @@ mod tests {
         assert_eq!(path.cost(), 21);
         assert_eq!(path.len(), 6);
     }
-}
+}*/

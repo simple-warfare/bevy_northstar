@@ -1,8 +1,7 @@
 use std::collections::BinaryHeap;
 
 use bevy::{
-    math::UVec3,
-    utils::hashbrown::{HashMap, HashSet},
+    log, math::UVec3, prelude::Entity, utils::hashbrown::{HashMap, HashSet}
 };
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
@@ -18,6 +17,7 @@ pub fn dijkstra_grid<N: Neighborhood>(
     goals: &[UVec3],
     only_closest_goal: bool,
     size_hint: usize,
+    blocking: &HashMap<UVec3, Entity>,
 ) -> HashMap<UVec3, Path> {
     let mut to_visit = BinaryHeap::with_capacity(size_hint / 2);
     to_visit.push(SmallestCostHolder {
@@ -56,6 +56,10 @@ pub fn dijkstra_grid<N: Neighborhood>(
             ]];
 
             if neighbor_point.wall || neighbor_point.cost == 0 {
+                continue;
+            }
+
+            if blocking.contains_key(&neighbor) {
                 continue;
             }
 
@@ -217,6 +221,7 @@ mod tests {
             &goals,
             false,
             8 * 8 * 8,
+            &HashMap::new(),
         );
 
         assert_eq!(paths.len(), 4);

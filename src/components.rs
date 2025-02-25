@@ -1,15 +1,17 @@
-use std::collections::VecDeque;
 
-use bevy::{prelude::*, utils::hashbrown::HashSet};
+use bevy::{math::UVec3, prelude::Component, prelude::Color};
 
-use crate::{path::Path, GridPosition};
-
-#[derive(Component, Default)]
-pub struct PathFind {
-    pub start: GridPosition,
-    pub end: GridPosition,
-    pub path: Option<Path>,
-}
+#[derive(Component, Default, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct Position(pub UVec3);
 
 #[derive(Component, Default)]
-pub struct PathBlocking;
+pub struct Blocking;
+
+#[derive(Component)]
+pub struct Goal(pub UVec3);
+
+#[derive(Component, Default)]
+pub struct Next(pub UVec3);
+
+#[derive(Component, Default)]
+pub struct DebugColor(pub Color);
