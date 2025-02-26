@@ -124,7 +124,7 @@ fn main() {
             collision: true,
             avoidance_distance: 4,
         })
-        .add_systems(Update, debug_bad_positions)
+        .add_systems(Update, debug_bad_positions.after(move_pathfinders))
         .run();
 }
 

@@ -190,26 +190,26 @@ fn next_position<N: Neighborhood>(
                         *path = Path::from_slice(&combined_path, new_path.cost());
                     } else {
                         // If we can't avoid locally we need to repath the whole thing
-                        //log::info!("Can't find a path to the avoidance goal, trying to repath the whole thing...");
+                        //log::info!("Can't find a path to the avoidance goal, trying to astar repath the whole thing...");
 
                         let new_path = grid.get_astar_path(position.0, goal.0, &blocking.0, true);
                         if let Some(new_path) = new_path {
-                            //log::info!("We found a new full path!");
+                            //log::info!("We found a new full Astar full path!");
                             *path = new_path;
                         }  else {
-                            //log::error!("SECOND repathing failed for {:?}: no path found, avoidance_goal: {:?}", name, avoidance_goal);
+                            log::error!("SECOND repathing failed for {:?}: no path found, avoidance_goal: {:?}", name, avoidance_goal);
                             continue;
                         }
                     }
                 } else {
                     // ummm.. try to astar path to goal?
-                    //log::info!("No avoidance goal found, trying to repath the whole thing...");
+                    //log::info!("No avoidance goal found? trying to repath the whole thing...");
                     let new_path = grid.get_astar_path(position.0, goal.0, &blocking.0, true);
                     if let Some(new_path) = new_path {
-                        //log::info!("We found a new full path!");
+                        //log::info!("We found a new full astar path!");
                         *path = new_path;
                     } else {
-                        //log::error!("Full Repathing failed for {:?}: no path found, goal: {:?}", name, goal.0);
+                        log::error!("Full ASTAR Repathing failed for {:?}: no path found, goal: {:?}", name, goal.0);
                         continue;
                     }
                 }
@@ -221,6 +221,14 @@ fn next_position<N: Neighborhood>(
 
         // We must have gotten to this point because of partial paths
         if path.path.is_empty() {
+            //log::info!("Final path is empty, doing ONE MORE FINAL PATH");
+
+            // if goal is in blocking
+            if blocking.0.contains_key(&goal.0) {
+                //log::error!("FINAL FINAL pathing failed for {:?}: goal is blocked, goal: {:?}", name, goal.0);
+                continue;
+            }
+
             let new_path = grid.get_path(position.0, goal.0, &blocking.0, false);
             if let Some(new_path) = new_path {
                 *path = new_path;
@@ -230,12 +238,12 @@ fn next_position<N: Neighborhood>(
             }
         }
 
-        /*let potential_next = path.path.front().unwrap();
+        let potential_next = path.path.front().unwrap();
 
         if blocking.0.contains_key(potential_next) {
             log::error!("THE NEXT FUCKING POSITION IS BLOCKED, WHY???? {:?}", potential_next);
             continue;
-        }*/
+        }
 
         let next = path.pop();
 

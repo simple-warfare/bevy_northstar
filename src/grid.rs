@@ -706,7 +706,14 @@ impl<N: Neighborhood + Default> Grid<N> {
         let goal_chunk = self.get_chunk_for_position(goal)?;
 
         if start_chunk == goal_chunk {
-            return astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 100, partial, blocking);
+            let path = astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 100, partial, blocking);
+            
+            if let Some(mut path) = path {
+                path.path.pop_front();
+                return Some(path);
+            } else {
+                return None;
+            }
         }
 
         // Get all nodes in the start chunk
