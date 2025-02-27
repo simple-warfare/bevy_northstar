@@ -1,4 +1,4 @@
-use crate::{dir::Dir, prelude::*};
+use crate::prelude::*;
 use bevy::{log, prelude::*, utils::hashbrown::HashMap};
 
 #[derive(Default)]
@@ -18,7 +18,6 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
             Update,
             (
                 update_blocking_map,
-                clear_goals,
                 pathfind::<N>,
                 next_position::<N>,
             )
@@ -39,70 +38,27 @@ pub struct BlockingMap(pub HashMap<UVec3, Entity>);
 fn pathfind<N: Neighborhood>(
     grid: Res<Grid<N>>,
     mut commands: Commands,
-    mut query: Query<(Entity, &Name, &Position, &Goal), Changed<Goal>>,
+    mut query: Query<(Entity, &Position, &Goal), Changed<Goal>>,
     blocking: Res<BlockingMap>,
 ) where
     N: 'static + Neighborhood,
 {
-    query.iter_mut().for_each(|(entity, name, start, goal)| {
+    query.iter_mut().for_each(|(entity, start, goal)| {
         if start.0 == goal.0 {
             return;
         }
 
-        let path = grid.get_path(start.0, goal.0, &blocking.0, false);
+        log::debug!("Pathfinding for entity: {:?}", entity);
 
-        //log::info!("Pathfinding for entity: {:?}", name);
+        let path = grid.get_path(start.0, goal.0, &blocking.0, false);
 
         if let Some(path) = path {
             commands.entity(entity).insert(path);
         } else {
-            //log::error!("Pathfinding failed for {:?}: no path found, goal: {:?}, blocking: {:?}", name, goal.0, blocking.0);
             commands.entity(entity).remove::<Next>(); // Just to be safe
             commands.entity(entity).insert(Goal(goal.0)); // Don't let anyone get stuck try again next frame
         }
     });
-}
-
-/*fn planning(
-    mut commands: Commands,
-    mut query: Query<(Entity, &Path, &Position), Without<Next>>,
-) {
-    for (entity, path, position) in query.iter_mut() {
-        if path.is_empty() {
-            commands.entity(entity).remove::<Path>();
-            continue;
-        }
-
-        let next = path.path.front().unwrap().clone();
-
-        // Determine the direction based on the current position to next
-        let difference = next.as_vec3() - position.0.as_vec3();
-        let normalized = difference.signum();
-
-        if normalized == Vec3::ZERO {
-            //log::error!("Normalized vector is zero");
-            continue;
-        }
-
-        let dir = Dir::from_vec3(&normalized);
-
-        commands.entity(entity).insert(Planned {
-            next,
-            dir: Some(dir),
-        });
-    }
-}*/
-
-fn clear_goals(
-    mut commands: Commands,
-    query: Query<(Entity, &Position, &Goal)>,
-) {
-    for (entity, position, goal) in query.iter() {
-        if position.0 == goal.0 {
-            commands.entity(entity).remove::<Path>();
-            commands.entity(entity).remove::<Goal>();
-        }
-    }
 }
 
 fn next_position<N: Neighborhood>(
@@ -241,77 +197,7 @@ fn next_position<N: Neighborhood>(
         let potential_next = path.path.front().unwrap();
 
         if blocking.0.contains_key(potential_next) {
-            log::error!("THE NEXT FUCKING POSITION IS BLOCKED, WHY???? {:?}", potential_next);
-            continue;
-        }
-
-        let next = path.pop();
-
-        if let Some(next) = next {
-            blocking.0.remove(&position.0);
-            blocking.0.insert(next, entity);
-            commands.entity(entity).insert(Next(next));
-        } else {
-            log::error!("No next position found for entity: {:?}", name);
-        }
-    }
-}
-
-fn next_position_2<N: Neighborhood>(
-    mut commands: Commands,
-    grid: Res<Grid<N>>,
-    mut query: Query<(Entity, &Name, &mut Path, &Position, &Goal), Without<Next>>,
-    mut blocking: ResMut<BlockingMap>,
-) where
-    N: 'static + Neighborhood,
-{
-    for (entity, name, mut path, position, goal) in query.iter_mut() {
-        if position.0 == goal.0 {
-            commands.entity(entity).remove::<Position>();
-            commands.entity(entity).remove::<Goal>();
-            continue;
-        }
-
-        let count = if path.path().len() > 4 {
-            4
-        } else {
-            path.path().len()
-        };
-
-        let unblocked_pos: Vec<UVec3> = path
-            .path
-            .iter()
-            .take(count)
-            .filter(|pos| blocking.0.contains_key(&**pos) == false)
-            .cloned()
-            .collect();
-
-        if unblocked_pos.len() < count {
-            // We have a blocking entity in the path
-            log::info!("Repathing...");
-            let new_path = grid.get_path(position.0, goal.0, &blocking.0, false);
-            if let Some(new_path) = new_path {
-                // Print which path is blocked
-                /*let blocked_pos: Vec<UVec3> = path
-                    .path
-                    .iter()
-                    .take(count)
-                    .filter(|pos| blocking.0.contains_key(&**pos))
-                    .cloned()
-                    .collect();
-
-                log::info!("Blocked path: {:?}", blocked_pos);*/
-                *path = new_path
-            } else {
-                //log::error!("Repathing failed for {:?}: no path found, goal: {:?}, blocking: {:?}", name, goal.0, blocking.0);
-                continue;
-            };
-        }
-
-        let potential_next = path.path.front().unwrap();
-
-        if blocking.0.contains_key(potential_next) {
-            log::error!("THE NEXT FUCKING POSITION IS BLOCKED, WHY???? {:?}", potential_next);
+            log::error!("The next position is in the blocking map, we shouldn't get to here. Next position {:?}", potential_next);
             continue;
         }
 
