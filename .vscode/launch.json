@@ -31,7 +31,9 @@
                 "args": [
                     "build",
                     "--example",
-                    "demo"
+                    "demo",
+                    "--features",
+                    "stats"
                 ]
             },
             "args": [],
@@ -49,7 +51,9 @@
                 "args": [
                     "build",
                     "--example",
-                    "collision"
+                    "collision",
+                    "--features",
+                    "stats"
                 ]
             },
             "args": [],

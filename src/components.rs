@@ -7,8 +7,11 @@ pub struct Position(pub UVec3);
 #[derive(Component, Default)]
 pub struct Blocking;
 
-#[derive(Component)]
-pub struct Goal(pub UVec3);
+#[derive(Component, Default)]
+pub struct Pathfind {
+    pub goal: UVec3,
+    pub use_astar: bool,
+}
 
 #[derive(Component, Default)]
 pub struct Next(pub UVec3);

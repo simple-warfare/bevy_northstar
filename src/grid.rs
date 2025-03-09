@@ -1,4 +1,4 @@
-use bevy::{log, math::UVec3, prelude::{Entity, Resource}, utils::hashbrown::HashMap};
+use bevy::{math::UVec3, prelude::{Entity, Resource}, utils::hashbrown::HashMap};
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{

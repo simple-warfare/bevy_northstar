@@ -75,20 +75,7 @@ fn main() {
         .add_plugins(TiledMapPlugin::default())
         // bevy_northstar plugins
         .add_plugins(NorthstarPlugin::<OrdinalNeighborhood>::default())
-        .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood> {
-            config: NorthstarDebugConfig {
-                grid_width: 8,
-                grid_height: 8,
-                draw_entrances: false,
-                draw_chunks: false,
-                draw_cached_paths: false,
-                draw_path: true,
-                draw_points: false,
-                draw_goals: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
+        .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood>::default())
         .insert_resource(Grid::<OrdinalNeighborhood>::new(&GridSettings {
             width: 16,
             height: 16,
@@ -157,7 +144,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // You can eventually add some extra settings to your map
     map_entity.insert((
         TiledMapSettings {
-            layer_positioning: LayerPositioning::Centered,
+            //layer_positioning: LayerPositioning::Centered,
             ..default()
         },
         TilemapRenderSettings {
@@ -165,6 +152,16 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         },
     ));
+
+    map_entity.with_child(DebugMap {
+        tile_width: 8,
+        tile_height: 8,
+        map_type: MapType::Square,
+        draw_chunks: true,
+        draw_points: false,
+        draw_entrances: true,
+        draw_cached_paths: false,
+    });
 
     commands
         .spawn((
@@ -267,13 +264,13 @@ fn move_pathfinders(
 
 fn set_new_goal(
     mut commands: Commands,
-    mut minions: Query<Entity, (Without<Path>, Without<Goal>)>,
+    mut minions: Query<Entity, (Without<Path>, Without<Pathfind>)>,
     walkable: Res<Walkable>,
 ) {
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
-        commands.entity(entity).insert(Goal(UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0)));
+        commands.entity(entity).insert(Pathfind(UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0)));
     }
 }
 
@@ -319,7 +316,12 @@ fn spawn_minions(
                 ..Default::default()
             })
             .insert(Name::new(format!("{:?}", color)))
-            .insert(DebugColor(color))
+            .insert(DebugPath {
+                tile_width: 8,
+                tile_height: 8,
+                map_type: MapType::Square,
+                color: color,
+            })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
             .insert(Position(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))

@@ -11,38 +11,8 @@ use bevy_ecs_tilemap::prelude::*;
 use rand::seq::SliceRandom;
 
 #[derive(Resource, Debug, Default)]
-pub struct Stats {
-    average_time: f64,
-    average_length: f64,
-    pathfind_time: Vec<f64>,
-    pathfind_length: Vec<f64>,
-    count: u64,
-}
-
-#[derive(Resource, Debug, Default)]
 pub struct Config {
     use_astar: bool,
-}
-
-impl Stats {
-    pub fn add(&mut self, time: f64, length: f64) {
-        self.pathfind_time.push(time);
-        self.pathfind_length.push(length);
-
-        self.average_time =
-            self.pathfind_time.iter().sum::<f64>() / self.pathfind_time.len() as f64;
-        self.average_length =
-            self.pathfind_length.iter().sum::<f64>() / self.pathfind_length.len() as f64;
-        self.count += 1;
-    }
-
-    pub fn reset(&mut self) {
-        self.average_time = 0.0;
-        self.average_length = 0.0;
-        self.pathfind_time.clear();
-        self.pathfind_length.clear();
-        self.count = 0;
-    }
 }
 
 #[derive(Clone, Debug, Default, Hash, Eq, States, PartialEq)]
@@ -77,19 +47,7 @@ fn main() {
         .add_plugins(TiledMapPlugin::default())
         // bevy_northstar plugins
         .add_plugins(NorthstarPlugin::<OrdinalNeighborhood>::default())
-        .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood> {
-            config: NorthstarDebugConfig {
-                grid_width: 8,
-                grid_height: 8,
-                draw_entrances: true,
-                draw_chunks: true,
-                draw_cached_paths: false,
-                draw_path: true,
-                draw_points: false,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
+        .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood>::default())
         .insert_resource(Grid::<OrdinalNeighborhood>::new(&GridSettings {
             width: 128,
             height: 128,
@@ -112,6 +70,7 @@ fn main() {
         //.add_systems(Update, pathfind_minions.run_if(in_state(State::Playing)))
         .add_systems(Update, set_new_goal.run_if(in_state(State::Playing)))
         .add_systems(Update, update_stat_text.run_if(in_state(State::Playing)))
+        .add_systems(Update, update_collision_text.run_if(in_state(State::Playing)))
         .add_systems(
             Update,
             update_pathfind_type_test.run_if(in_state(State::Playing)),
@@ -119,10 +78,9 @@ fn main() {
         .add_event::<Tick>()
         .insert_state(State::Loading)
         .insert_resource(Walkable::default())
-        .insert_resource(Stats::default())
         .insert_resource(Config::default())
         .insert_resource(NorthstarSettings {
-            collision: true,
+            collision: false,
             avoidance_distance: 4,
         })
         .run();
@@ -140,6 +98,8 @@ fn tick(time: Res<Time>, mut tick_writer: EventWriter<Tick>) {
 
 #[derive(Component, Debug)]
 struct StatText;
+#[derive(Component, Debug)]
+struct CollisionText;
 
 #[derive(Component, Debug)]
 struct PathfindTypeText;
@@ -157,7 +117,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // You can eventually add some extra settings to your map
     map_entity.insert((
         TiledMapSettings {
-            layer_positioning: LayerPositioning::Centered,
+            //layer_positioning: LayerPositioning::Centered,
             ..default()
         },
         TilemapRenderSettings {
@@ -165,6 +125,16 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         },
     ));
+
+    map_entity.with_child(DebugMap {
+        tile_width: 8,
+        tile_height: 8,
+        map_type: MapType::Square,
+        draw_chunks: true,
+        draw_points: false,
+        draw_entrances: true,
+        draw_cached_paths: false,
+    });
 
     commands
         .spawn((
@@ -211,11 +181,48 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             StatText,
         ));
+
+    commands
+        .spawn((
+            Text::new("Key [c]| Collision: "),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(150.0),
+                left: Val::Px(0.0),
+                ..default()
+            },
+        ))
+        .with_child((
+            TextSpan::default(),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            CollisionText,
+        ));
 }
 
 fn update_stat_text(stats: Res<Stats>, mut query: Query<&mut TextSpan, With<StatText>>) {
     for mut span in &mut query {
-        **span = format!("{:.2}ms", stats.average_time * 1000.0);
+        **span = format!("{:.2}ms", stats.pathfinding.average_time * 1000.0);
+    }
+}
+
+fn update_collision_text(
+    stats: Res<Stats>, 
+    mut query: Query<&mut TextSpan, With<CollisionText>>, 
+    northstar_settings: Res<NorthstarSettings>
+) {
+    for mut span in &mut query {
+        if northstar_settings.collision {
+            **span = format!("{:.2}ms", stats.collision.average_time * 1000.0);
+        } else {
+            **span = "Off".to_string();
+        }        
     }
 }
 
@@ -252,13 +259,17 @@ fn move_pathfinders(
 
 fn set_new_goal(
     mut commands: Commands,
-    mut minions: Query<Entity, (Without<Path>, Without<Goal>)>,
+    mut minions: Query<Entity, (Without<Path>, Without<Pathfind>)>,
     walkable: Res<Walkable>,
+    config: Res<Config>,
 ) {
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
-        commands.entity(entity).insert(Goal(UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0)));
+        commands.entity(entity).insert(Pathfind { 
+            goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0),
+            use_astar: config.use_astar,
+        });
     }
 }
 
@@ -268,6 +279,7 @@ fn spawn_minions(
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<Walkable>,
+    config: Res<Config>,
 ) {
     let layer_entity = layer_entity.iter().next().unwrap();
 
@@ -304,11 +316,19 @@ fn spawn_minions(
                 ..Default::default()
             })
             .insert(Name::new(format!("{:?}", color)))
-            .insert(DebugColor(color))
+            .insert(DebugPath {
+                tile_width: 8,
+                tile_height: 8,
+                map_type: MapType::Square,
+                color: color,
+            })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
             .insert(Position(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
-            .insert(Goal(UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0)))
+            .insert(Pathfind {
+                goal: UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0),
+                use_astar: config.use_astar,
+            })
             .set_parent(layer_entity);
 
         count += 1;
@@ -365,8 +385,11 @@ pub fn input(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<(&mut Transform, &mut OrthographicProjection), With<Camera>>,
+    mut pathfinders: Query<(Entity, &Pathfind)>,
     mut config: ResMut<Config>,
     mut stats: ResMut<Stats>,
+    mut northstar_settings: ResMut<NorthstarSettings>,
+    mut commands: Commands,
 ) {
     for (mut transform, mut ortho) in query.iter_mut() {
         let mut direction = Vec3::ZERO;
@@ -397,7 +420,21 @@ pub fn input(
 
         if keyboard_input.just_pressed(KeyCode::KeyP) {
             config.use_astar = !config.use_astar;
-            stats.reset();
+            stats.reset_pathfinding();
+
+            // Remove pathfind from all pathfinders
+            for (entity, _) in pathfinders.iter_mut() {
+                commands.entity(entity).remove::<Pathfind>().remove::<Next>().remove::<Path>();
+            }
+        }
+
+        if keyboard_input.just_pressed(KeyCode::KeyC) {
+            northstar_settings.collision = !northstar_settings.collision;
+            stats.reset_collision();
+            // Remove pathfind from all pathfinders
+            for (entity, _) in pathfinders.iter_mut() {
+                commands.entity(entity).remove::<Pathfind>().remove::<Next>().remove::<Path>();
+            }
         }
 
         if ortho.scale < 0.5 {

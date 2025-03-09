@@ -1,7 +1,7 @@
 use std::collections::BinaryHeap;
 
 use bevy::{
-    log, math::UVec3, prelude::Entity, utils::hashbrown::{HashMap, HashSet}
+    math::UVec3, prelude::Entity, utils::hashbrown::{HashMap, HashSet}
 };
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
