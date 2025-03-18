@@ -24,6 +24,7 @@ mod theta;
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{MapType, DebugMap, DebugPath, NorthstarDebugPlugin};
+    pub use crate::dir::Dir;
     pub use crate::grid::{Grid, GridSettings};
     pub use crate::neighbor::*;
     pub use crate::path::Path;

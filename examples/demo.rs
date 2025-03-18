@@ -1,7 +1,5 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-    prelude::*,
-    text::FontSmoothing,
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, ecs::entity, prelude::*, text::FontSmoothing
 };
 
 use bevy_northstar::prelude::*;
@@ -13,6 +11,7 @@ use rand::seq::SliceRandom;
 #[derive(Resource, Debug, Default)]
 pub struct Config {
     use_astar: bool,
+    paused: bool,
 }
 
 #[derive(Clone, Debug, Default, Hash, Eq, States, PartialEq)]
@@ -75,6 +74,7 @@ fn main() {
             Update,
             update_pathfind_type_test.run_if(in_state(State::Playing)),
         )
+        .add_systems(Update, entity_under_cursor)
         .add_event::<Tick>()
         .insert_state(State::Loading)
         .insert_resource(Walkable::default())
@@ -90,7 +90,11 @@ fn main() {
 struct Tick;
 
 // Generate a tick event
-fn tick(time: Res<Time>, mut tick_writer: EventWriter<Tick>) {
+fn tick(time: Res<Time>, mut tick_writer: EventWriter<Tick>, config: Res<Config>) {
+    if config.paused {
+        return;
+    }
+
     if time.elapsed_secs() % 0.25 < time.delta_secs() {
         tick_writer.send_default();
     }
@@ -104,9 +108,16 @@ struct CollisionText;
 #[derive(Component, Debug)]
 struct PathfindTypeText;
 
+#[derive(Component, Debug)]
+struct EntityDebugText;
+
+
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn a 2D camera (required by Bevy)
-    commands.spawn(Camera2d);
+    commands.spawn(Camera2d).insert(Transform {
+        translation: Vec3::new(512.0, 512.0, 1.0),
+        ..Default::default()
+    });
 
     // Load the map ...
     let map_handle: Handle<TiledMap> = asset_server.load("demo_128.tmx");
@@ -204,6 +215,71 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             CollisionText,
         ));
+
+    commands
+        .spawn((
+            Text::new(""),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(200.0),
+                left: Val::Px(0.0),
+                ..default()
+            },
+        ))
+        .with_child((
+            TextSpan::default(),
+            TextFont {
+                font_size: 24.0,
+                ..default()
+            },
+            EntityDebugText,
+        ));
+}
+
+
+fn entity_under_cursor(
+    mut query: Query<&mut TextSpan, With<EntityDebugText>>,
+    windows: Query<&Window>,
+    camera: Query<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
+    minions: Query<(Entity, &GlobalTransform)>,
+    troubleshooting: Query<(Entity, &Position, Option<&Pathfind>, Option<&Path>, Option<&Next>, Option<&AvoidanceFailed>)>,
+) {
+    let window = windows.single();
+    let (camera, camera_transform, _) = camera.single();
+
+    if let Some(cursor_position) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
+    {
+        for mut span in &mut query {
+            let mut text = String::new();
+
+            for (entity, transform) in minions.iter() {
+                let distance = (transform.translation() - cursor_position.extend(0.0)).length();
+
+                if distance < 8.0 {
+                    text.push_str(&format!("{:?} ", entity));
+
+                    // print all the data in the troubleshooting query
+                    for (entity_other, position, pathfind, path, next, avoidance_failed) in troubleshooting.iter() {
+                        if entity == entity_other {
+                            text.push_str(&format!("{:?} ", position));
+                            text.push_str(&format!("{:?} ", pathfind));
+                            //text.push_str(&format!("{:?} ", path));
+                            text.push_str(&format!("{:?} ", next));
+                            text.push_str(&format!("{:?} ", avoidance_failed));
+                        }
+                    }
+                }
+            }
+
+            **span = text;
+        }
+    }
 }
 
 fn update_stat_text(stats: Res<Stats>, mut query: Query<&mut TextSpan, With<StatText>>) {
@@ -416,6 +492,10 @@ pub fn input(
 
         if keyboard_input.pressed(KeyCode::KeyX) {
             ortho.scale -= 0.1;
+        }
+
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            config.paused = !config.paused;
         }
 
         if keyboard_input.just_pressed(KeyCode::KeyP) {

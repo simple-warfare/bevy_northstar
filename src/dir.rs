@@ -96,7 +96,7 @@ impl Dir {
         }
     }
 
-    pub fn from_vec3(vec: &Vec3) -> Self {
+    pub fn from_axis(vec: &Vec3) -> Self {
         match vec {
             Vec3 { x: 0.0, y: 1.0, z: 0.0 } => NORTH,
             Vec3 { x: 1.0, y: 0.0, z: 0.0 } => EAST,
@@ -158,5 +158,25 @@ impl Dir {
             | SOUTHEASTDOWN | SOUTHWESTDOWN | NORTHWESTDOWN => true,
             _ => false,
         }
+    }
+
+    pub fn in_general_direction(self, other: &Dir) -> bool {
+        // Convert self to a Vec3
+        let self_vec = self.vector();
+        let self_vec = Vec3::new(self_vec.0 as f32, self_vec.1 as f32, self_vec.2 as f32);
+
+        // Convert other to a Vec3
+        let other = other.vector();
+        let other = Vec3::new(other.0 as f32, other.1 as f32, other.2 as f32);
+
+        // Normalize the vectors
+        let self_vec = self_vec.normalize();
+        let other = other.normalize();
+
+        // Get the dot product
+        let dot = self_vec.dot(other);
+
+        // If the dot product is greater than 0.5, then the vectors are in the same general direction
+        dot > 0.5
     }
 }

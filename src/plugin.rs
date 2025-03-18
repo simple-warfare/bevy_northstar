@@ -80,6 +80,7 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
                 update_blocking_map,
                 pathfind::<N>,
                 next_position::<N>,
+                reroute_path::<N>,
             )
             .chain()
             .in_set(PathingSet),
@@ -87,6 +88,7 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
         .insert_resource(BlockingMap::default());
 
         app.insert_resource(Stats::default());
+        app.insert_resource(DirectionMap::default());
     }
 }
 
@@ -96,6 +98,8 @@ pub struct PathingSet;
 #[derive(Resource, Default)]
 pub struct BlockingMap(pub HashMap<UVec3, Entity>);
 
+#[derive(Resource, Default)]
+pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 
 fn pathfind<N: Neighborhood>(
     grid: Option<Res<Grid<N>>>,
@@ -114,6 +118,7 @@ fn pathfind<N: Neighborhood>(
 
     query.iter_mut().for_each(|(entity, start, pathfind)| {
         if start.0 == pathfind.goal {
+            commands.entity(entity).remove::<Pathfind>();
             return;
         }
 
@@ -154,9 +159,10 @@ fn pathfind<N: Neighborhood>(
 }
 
 fn next_position<N: Neighborhood>(
-    mut query: Query<(Entity, &mut Path, &Position, &Pathfind), Without<Next>>,
+    mut query: Query<(Entity, &mut Path, &Position, &Pathfind), (Without<Next>, Without<AvoidanceFailed>, Without<RerouteFailed>)>,
     grid: Option<Res<Grid<N>>>,
     mut blocking: ResMut<BlockingMap>,
+    mut direction: ResMut<DirectionMap>,
     settings: Res<NorthstarSettings>,
     mut stats: ResMut<Stats>,
     mut commands: Commands,
@@ -179,12 +185,25 @@ fn next_position<N: Neighborhood>(
             #[cfg(feature = "stats")]
             let start = Instant::now();
 
-            avoidance(&grid, entity, &mut path, pathfind, position.0, &blocking.0, settings.avoidance_distance);
+            let success = avoidance(&grid, entity, &mut path, pathfind, position.0, &blocking.0, &direction.0, settings.avoidance_distance);
+
+            if !success {
+                commands.entity(entity).insert(AvoidanceFailed);
+                continue;
+            }
 
             #[cfg(feature = "stats")]
             let elapsed = start.elapsed().as_secs_f64();
             #[cfg(feature = "stats")]
             stats.add_collision(elapsed, path.cost() as f64);
+
+            let potential_next = path.path.front().unwrap();
+
+
+            if blocking.0.contains_key(potential_next) && blocking.0[potential_next] != entity {
+                log::info!("Blocking: {:?}", blocking.0);
+                log::error!("Next position is blocked for entity: {:?}, other entity: {:?}", entity, blocking.0[potential_next]);
+            }
 
             path.pop()
         } else {
@@ -192,6 +211,9 @@ fn next_position<N: Neighborhood>(
         };
         
         if let Some(next) = next {
+            // Calculate the dot product direction
+            direction.0.insert(entity, next.as_vec3() - position.0.as_vec3());
+
             blocking.0.remove(&position.0);
             blocking.0.insert(next, entity);
             commands.entity(entity).insert(Next(next));
@@ -208,11 +230,17 @@ fn avoidance<N: Neighborhood>(
     pathfind: &Pathfind,
     position: UVec3,
     blocking: &HashMap<UVec3, Entity>,
+    direction: &HashMap<Entity, Vec3>,
     avoidance_distance: usize,
-) 
+) -> bool
 where
     N: 'static + Neighborhood,
 {
+    if path.is_empty() {
+        log::error!("Path is empty for entity: {:?}", entity);
+        return false;
+    }
+
     // Check if the next few positions are blocked
     let count = if path.path().len() > avoidance_distance {
         avoidance_distance
@@ -220,27 +248,57 @@ where
         path.path().len()
     };
 
+    // Precompute the dot product for the current position
+    let next_position = path.path.front().unwrap();
+
+    if path.path.len() == 1 && blocking.contains_key(next_position) {
+        info!("The next position is the goal and is blocked, all we can do is wait");
+        return false;
+    }
+
+    let difference = next_position.as_vec3() - position.as_vec3();
+
+
     let unblocked_pos: Vec<UVec3> = path
         .path
         .iter()
         .take(count)
-        .filter(|pos| blocking.contains_key(&**pos) == false)
+        .filter(|pos| {
+            if let Some(blocking_entity) = blocking.get(*pos) {
+                // Too risky to move to the next position regardless of the direction
+                if *pos == next_position {
+                    return false;
+                }
+
+                if let Some(blocking_dir) = direction.get(blocking_entity) {
+                    let dot = difference.dot(*blocking_dir);
+                    if dot <= 0.0 {
+                        return false;
+                    }
+                } else {
+                    // They have no direction
+                    return false;
+                }
+            }
+            true
+        })
         .cloned()
         .collect();
 
     // If we have a blocked position in the path, repath
     if unblocked_pos.len() < count {
-        // Get the first unlocked position AFTER skipping the count
-        let avoidance_goal = path
-            .path
-            .iter()
-            .skip(count)
-            .find(|pos| blocking.contains_key(&**pos) == false)
-            .cloned();
-    
+        let avoidance_goal = {
+            let _ = info_span!("avoidance_goal", name = "avoidance_goal").entered();
+         
+            // Get the first unlocked position AFTER skipping the count, we don't care about the direction
+            path.path.iter()
+                .skip(count)
+                .find(|pos| blocking.contains_key(&**pos) == false)
+        };
+        
         // If we have an avoidance goal, astar path to that
         if let Some(avoidance_goal) = avoidance_goal {
-            let new_path = grid.get_astar_path(position, avoidance_goal, &blocking, false);
+            let new_path = grid.get_astar_path(position, *avoidance_goal, &blocking, false);
 
             // Replace the first few positions of path until the avoidance goal
             if let Some(new_path) = new_path {
@@ -248,7 +306,7 @@ where
                 let old_path = path
                     .path
                     .iter()
-                    .skip_while(|pos| *pos != &avoidance_goal)
+                    .skip_while(|pos| *pos != avoidance_goal)
                     .cloned()
                     .collect::<Vec<UVec3>>();
 
@@ -258,220 +316,89 @@ where
 
                 if combined_path.len() == 0 {
                     log::error!("Combined path is empty for entity: {:?}", entity);
-                    return;
+                    return false;
                 }
+
+                let graph_path = path.graph_path.clone();
 
                 // Replace the path with the combined path
                 *path = Path::from_slice(&combined_path, new_path.cost());
+                path.graph_path = graph_path;
             } else {
-                // If we can't avoid locally we need to repath the whole thing
-                let new_path = grid.get_astar_path(position, pathfind.goal, &blocking, true);
-                if let Some(new_path) = new_path {
-                    *path = new_path;
-                }  else {
-                    log::error!("SECOND repathing failed for {:?}: no path found, avoidance_goal: {:?}", entity, avoidance_goal);
-                    return;
-                }
+                return false;
             }
         } else {
-            // ummm.. try to astar path to goal?
-            let new_path = grid.get_astar_path(position, pathfind.goal, &blocking, true);
-            if let Some(new_path) = new_path {
-                *path = new_path;
-            } else {
-                log::error!("Full ASTAR Repathing failed for {:?}: no path found, goal: {:?}", entity, pathfind.goal);
-                return;
-            }
+            // No easy avoidance astar path to the next entrance
+            return false;
         }
     }
 
+    // DELETE THIS
     // We must have gotten to this point because of partial paths
     if path.path.is_empty() {
         // if goal is in blocking
         if blocking.contains_key(&pathfind.goal) {
-            return;
+            return false;
         }
 
         let new_path = grid.get_path(position, pathfind.goal, &blocking, false);
 
         if let Some(new_path) = new_path {
             *path = new_path;
+            return true;
         } else {
-            return;
+            return false;
+        }
+    }
+
+    true
+}
+
+fn reroute_path<N: Neighborhood>(
+    mut query: Query<(Entity, &Position, &Pathfind, &Path), With<AvoidanceFailed>>,
+    grid: Res<Grid<N>>,
+    blocking: Res<BlockingMap>,
+    mut commands: Commands,
+    #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
+) 
+where 
+    N: 'static + Neighborhood,
+{
+    for (entity, position, pathfind, path) in query.iter_mut() {
+        #[cfg(feature = "stats")]
+        let start = Instant::now();
+
+        // Let's just try a repath
+        //let new_path = grid.get_path(position.0, pathfind.goal, &blocking.0, true);
+
+        // Let's reroute the path
+        let new_path = grid.reroute_path(path, position.0, pathfind.goal, &blocking.0);
+
+        if let Some(new_path) = new_path {
+
+            // if the last point in the path is not the goal...
+            if new_path.path().last().unwrap() != &pathfind.goal {
+                log::error!("WE HAVE A PARTIAL ROUTE ISSUE: {:?}", entity);
+            }
+
+            #[cfg(feature = "stats")]
+            let elapsed = start.elapsed().as_secs_f64();
+            #[cfg(feature = "stats")]
+            stats.add_collision(elapsed, new_path.cost() as f64);
+
+            commands.entity(entity).insert(new_path);
+            commands.entity(entity).remove::<AvoidanceFailed>();
+        } else {
+            commands.entity(entity).insert(RerouteFailed);
+            commands.entity(entity).remove::<AvoidanceFailed>(); // Try again next frame
+
+            #[cfg(feature = "stats")]
+            let elapsed = start.elapsed().as_secs_f64();
+            #[cfg(feature = "stats")]
+            stats.add_collision(elapsed, 0.0);
         }
     }
 }
-
-
-/*fn next_position_call<N: Neighborhood>(
-    mut commands: Commands,
-    grid: Option<Res<Grid<N>>>,
-    mut query: Query<(Entity, &mut Path, &Position, &Pathfind), Without<Next>>,
-    mut blocking: ResMut<BlockingMap>,
-    settings: Res<NorthstarSettings>,
-    mut stats: ResMut<Stats>,
-) where
-    N: 'static + Neighborhood,
-{
-    let grid = match grid {
-        Some(grid) => grid,
-        None => return,
-    };
-
-    for (entity, mut path, position, pathfind) in query.iter_mut() {
-        // If we're at the goal, we're done
-        if position.0 == pathfind.goal {
-            commands.entity(entity).remove::<Path>();
-            commands.entity(entity).remove::<Pathfind>();
-            continue;
-        }
-
-        let start_time = Instant::now();
-
-        // Handle avoidance if we have collision enabled
-        if settings.collision {
-            // Check if the next few positions are blocked
-            let count = if path.path().len() > settings.avoidance_distance {
-                settings.avoidance_distance
-            } else {
-                path.path().len()
-            };
-
-            let unblocked_pos: Vec<UVec3> = path
-                .path
-                .iter()
-                .take(count)
-                .filter(|pos| blocking.0.contains_key(&**pos) == false)
-                .cloned()
-                .collect();
-
-            // If we have a blocked position in the path, repath
-            if unblocked_pos.len() < count {
-                // Get the first unlocked position AFTER skipping the count
-                let avoidance_goal = path
-                    .path
-                    .iter()
-                    .skip(count)
-                    .find(|pos| blocking.0.contains_key(&**pos) == false)
-                    .cloned();
-            
-                // If we have an avoidance goal, astar path to that
-                if let Some(avoidance_goal) = avoidance_goal {
-                    let new_path = grid.get_astar_path(position.0, avoidance_goal, &blocking.0, false);
-
-                    // Replace the first few positions of path until the avoidance goal
-                    if let Some(new_path) = new_path {
-                        // Debug, check if any positions in the new path are blocked
-                        /*let blocked_pos: Vec<UVec3> = new_path
-                            .path
-                            .iter()
-                            .filter(|pos| blocking.0.contains_key(&**pos))
-                            .cloned()
-                            .collect();
-
-                        if blocked_pos.len() > 0 {
-                            log::error!("Blocked path: {:?}", blocked_pos);
-                        }*/
-
-                        //log::info!("We found a SHORT avoidance path!");
-
-                        // Get every position AFTER the avoidance goal in the old path
-                        let old_path = path
-                            .path
-                            .iter()
-                            .skip_while(|pos| *pos != &avoidance_goal)
-                            .cloned()
-                            .collect::<Vec<UVec3>>();
-
-                        // Combine the new path with the old path
-                        let mut combined_path = new_path.path().to_vec();
-                        combined_path.extend(old_path);
-
-                        if combined_path.len() == 0 {
-                            log::error!("Combined path is empty for entity: {:?}", entity);
-                            continue;
-                        }
-
-                        // Replace the path with the combined path
-                        *path = Path::from_slice(&combined_path, new_path.cost());
-                    } else {
-                        // If we can't avoid locally we need to repath the whole thing
-                        //log::info!("Can't find a path to the avoidance goal, trying to astar repath the whole thing...");
-
-                        let new_path = grid.get_astar_path(position.0, pathfind.goal, &blocking.0, true);
-                        if let Some(new_path) = new_path {
-                            //log::info!("We found a new full Astar full path!");
-                            *path = new_path;
-                        }  else {
-                            let elapsed_time = start_time.elapsed().as_secs_f64();
-                            stats.add_collision(elapsed_time, path.cost() as f64);
-                            log::error!("SECOND repathing failed for {:?}: no path found, avoidance_goal: {:?}", entity, avoidance_goal);
-                            continue;
-                        }
-                    }
-                } else {
-                    // ummm.. try to astar path to goal?
-                    //log::info!("No avoidance goal found? trying to repath the whole thing...");
-                    let new_path = grid.get_astar_path(position.0, pathfind.goal, &blocking.0, true);
-                    if let Some(new_path) = new_path {
-                        //log::info!("We found a new full astar path!");
-                        *path = new_path;
-                    } else {
-                        let elapsed_time = start_time.elapsed().as_secs_f64();
-                        stats.add_collision(elapsed_time, path.cost() as f64);
-                        log::error!("Full ASTAR Repathing failed for {:?}: no path found, goal: {:?}", entity, pathfind.goal);
-                        continue;
-                    }
-                }
-            } 
-            /*else {
-                log::info!("Nothing blocked, just moving on!");
-            }*/
-        }
-
-        // We must have gotten to this point because of partial paths
-        if path.path.is_empty() {
-            //log::info!("Final path is empty, doing ONE MORE FINAL PATH");
-
-            // if goal is in blocking
-            if blocking.0.contains_key(&pathfind.goal) {
-                //log::error!("FINAL FINAL pathing failed for {:?}: goal is blocked, goal: {:?}", name, pathfind.goal);
-                continue;
-            }
-
-            let new_path = grid.get_path(position.0, pathfind.goal, &blocking.0, false);
-
-            if let Some(new_path) = new_path {
-                *path = new_path;
-            } else {
-                let elapsed_time = Instant::now().elapsed().as_secs_f64();
-                stats.add_collision(elapsed_time, path.cost() as f64);
-                //log::error!("FINAL FINAL pathing failed for {:?}: no path found, goal: {:?}", name, pathfind.goal);
-                continue;
-            }
-        }
-
-        let potential_next = path.path.front().unwrap();
-
-        if blocking.0.contains_key(potential_next) && settings.collision {
-            log::error!("The next position is in the blocking map, we shouldn't get to here. Next position {:?}", potential_next);
-            continue;
-        }
-
-        let elapsed_time = start_time.elapsed().as_secs_f64();
-        stats.add_collision(elapsed_time, path.cost() as f64);
-
-        let next = path.pop();
-
-        if let Some(next) = next {
-            blocking.0.remove(&position.0);
-            blocking.0.insert(next, entity);
-            commands.entity(entity).insert(Next(next));
-        } else {
-            log::error!("No next position found for entity: {:?}", entity);
-        }
-    }
-} */
 
 fn update_blocking_map(
     mut blocking_set: ResMut<BlockingMap>,

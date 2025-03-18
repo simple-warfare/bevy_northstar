@@ -8,27 +8,36 @@
 The crate is currently opinionated in the sense that it's not bring-your-own-grid. That may change in the future.
 
 ## Demo
-cargo run --example demo
+cargo run --example demo --features stats
 
 Press P to switch between HPA* and traditional A*
+Press C to enable collision
 
 ![2024-12-02_08-44](https://github.com/user-attachments/assets/18778c4e-43bf-4e4c-8031-8a5974610f9c)
 
-## Current features
-* Works with 2d and 3d tilemaps
-* Algorithms have been heavily benchmarked
-* Gizmo debug view for Bevy
-* 2D Demo
 
-## TODO:
-* Add dynamic "colliders" to factor into path finding, there's currently no avoidance for other npcs etc
-* Add better integration with Bevy, event/time triggers and systems for dynamic refining paths will allow for greater performance
-* Add functions for modifying/rebuilding tiles after they've been built
-* 3d performance has performance issues greater than expected
-* Add psuedo 3d support for tilemap layers (stairs, ramps) without relying on full 3d calculations
-* Parallel building of the grid/graph
-* Parallelize the Bevy systems mentioned above
-* Add 3d examples
+## Features  
+✅ **Supports 2D and 3D Tilemaps** – Works seamlessly with both 2D and 3D grids.  
+✅ **Optimized Performance** – Algorithms are heavily benchmarked for efficiency.  
+✅ **Gizmo Debug View** – Built-in visualization using Bevy's gizmo system.  
+✅ **2D Demo Included** – Working example with profiling stats and collision.  
+✅ **Dynamic Collision & Avoidance** – Uses a hashmap to efficiently update moving obstacles.  
+✅ **Bevy Systems Integration** – Bevy systems and components for pathfinding.
+
+## Roadmap / TODO  
+🚀 **Next Steps:**  
+- [ ] **Code & Documentation Cleanup** – Refine and document the API.  
+- [ ] **Initial Crate Release** – Publish the first version.  
+
+🔧 **Planned Features & Improvements:**  
+- [ ] **Modify & Rebuild Tiles Dynamically** – Support updates to the tilemap after it’s been built.  
+- [ ] **Async Pathfinding Support** – Enable async functions for avoidance cases where full path recalculations are needed for frame stability.  
+- [ ] **Hierarchical Pathfinding** – Implement multiple hierarchical levels for improved efficiency.  
+- [ ] **Optimize 3D Performance** – 3d grids appear to take a performance hit higher than expected currently.  
+- [ ] **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
+- [ ] **Parallelized Graph Building** – Speed up grid/graph construction using parallelism.  
+- [ ] **Parallel Bevy Systems** – Optimize pathfinding system execution where possible.  
+- [ ] **3D Examples & Demos** – Provide additional examples for 3D use cases.  
 
 ## Assets credits
 - [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)

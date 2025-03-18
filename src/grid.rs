@@ -695,6 +695,51 @@ impl<N: Neighborhood + Default> Grid<N> {
         Path::new(refined_path, cost)
     }
 
+    pub fn reroute_path(&self, path: &Path, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>) -> Option<Path> {
+        // When the starting chunks entrances are all blocked, this will try astar path to the NEXT chunk in the graph path
+        // recursively until it can find a path out.
+        // If it can't find a path out, it will return None.
+
+        if path.graph_path.is_empty() {
+            // Our only option here is to astar path to the goal
+            return self.get_astar_path(start, goal, blocking, false);
+        }
+
+        let new_path = path.graph_path.iter().find_map(|pos| {
+            let new_path = self.get_astar_path(start, *pos, blocking, false);
+            if new_path.is_some() && new_path.as_ref().unwrap().len() > 0 {
+                new_path
+            } else {
+                None
+            }
+        });
+
+        // HPA the rest of the way to the goal using get_path from the last position in the new path to the goal
+        if let Some(new_path) = new_path {
+            let mut hpa_path = Vec::new();
+
+            for pos in new_path.path() {
+                hpa_path.push(*pos);
+            }
+
+            let last_pos = *new_path.path().last().unwrap();
+
+            let hpa = self.get_path(last_pos, goal, blocking, false);
+
+            if let Some(hpa) = hpa {
+                for pos in hpa.path() {
+                    hpa_path.push(*pos);
+                }
+
+                let mut path = Path::new(hpa_path, new_path.cost() + hpa.cost());
+                path.graph_path = hpa.graph_path.clone();
+                return Some(path);
+            }
+        }
+
+        None
+    }
+
     pub fn get_path(&self, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>, partial: bool) -> Option<Path> {
         if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
             || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
@@ -749,6 +794,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             .filter(|node| start_paths.contains_key(&(node.pos - start_chunk.min)))
             .collect::<Vec<_>>();
 
+        if start_nodes.is_empty() {
+            return None;
+        }
+
 
         // Sort start nodes by distance to the goal
         let mut start_nodes = start_nodes
@@ -769,7 +818,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         let goal_nodes = self.graph.get_all_nodes_in_chunk(goal_chunk.clone());
 
         // Build a new blocking map that's adjusted for the goal chunk
-        let goal_blocking = blocking.clone()
+        /*let goal_blocking = blocking.clone()
             .iter()
             .map(|(pos, entity)| {
                 let adjusted_pos = UVec3::new(
@@ -779,7 +828,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                 );
                 (adjusted_pos, *entity)
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<HashMap<_, _>>();*/
 
         let goal_paths = dijkstra_grid(
             &self.neighborhood,
@@ -788,7 +837,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             &goal_nodes.iter().map(|node| node.pos - goal_chunk.min).collect::<Vec<_>>(),
             false,
             100,
-            &goal_blocking,
+            &HashMap::new()//&goal_blocking,
         );
 
         let goal_nodes = goal_nodes
@@ -869,12 +918,37 @@ impl<N: Neighborhood + Default> Grid<N> {
                     // remove the start point from the refined path
                     refined_path.path.pop_front();
 
+                    // add the graph path to the refined path
+                    refined_path.graph_path = node_path.path;
+
                     return Some(refined_path)
                 }
             }
         }
 
         None
+    }
+
+    pub fn repath_to_nearest_entrance(&self, path: &Path, blocking: &HashMap<UVec3, Entity>) -> Option<Path> {
+        let mut new_path = Vec::new();
+        let mut cost = 0;
+
+        let mut current = path.path()[0];
+
+        for next in path.path().iter().skip(1) {
+            let bresenham = self.bresenham_path(current, *next, blocking);
+
+            if bresenham.is_some() {
+                let bresenham = bresenham.unwrap();
+                new_path.extend(bresenham.path());
+                cost += bresenham.cost();
+                current = *next;
+            } else {
+                return None;
+            }
+        }
+
+        Some(Path::new(new_path, cost))
     }
 
     pub fn get_astar_path(&self, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>, partial: bool) -> Option<Path> {
