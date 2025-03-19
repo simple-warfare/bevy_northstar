@@ -104,6 +104,7 @@ fn main() {
             update_pathfind_type_test.run_if(in_state(State::Playing)),
         )
         .add_systems(Update, entity_under_cursor)
+        .add_systems(Update, handle_reroute_failed)
         .add_event::<Tick>()
         .insert_state(State::Loading)
         .insert_resource(Walkable::default())
@@ -347,6 +348,20 @@ fn set_new_goal(
         let new_goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
         commands.entity(entity).insert(Pathfind { goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0), use_astar: false });
+    }
+}
+
+fn handle_reroute_failed(
+    mut commands: Commands,
+    mut query: Query<(Entity, &Pathfind, &RerouteFailed)>,
+    config: Res<Config>,
+    mut tick_reader: EventReader<Tick>,
+) {
+    for _ in tick_reader.read() {
+        for (entity, pathfind, _) in query.iter_mut() {
+            commands.entity(entity).remove::<RerouteFailed>();
+            commands.entity(entity).insert(Pathfind { goal: pathfind.goal, use_astar: config.use_astar });
+        }
     }
 }
 
