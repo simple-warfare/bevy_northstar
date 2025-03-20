@@ -359,7 +359,7 @@ fn handle_reroute_failed(
     for _ in tick_reader.read() {
         for (entity, pathfind, _) in query.iter_mut() {
             commands.entity(entity).remove::<RerouteFailed>();
-            commands.entity(entity).insert(Pathfind { goal: pathfind.goal, use_astar: config.use_astar });
+            commands.entity(entity).insert(Pathfind { goal: pathfind.goal, use_astar: true });
         }
     }
 }
