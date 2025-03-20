@@ -1,4 +1,6 @@
-use bevy::{math::UVec3, prelude::{Entity, Resource}, utils::hashbrown::HashMap};
+use std::collections::VecDeque;
+
+use bevy::{log, math::UVec3, prelude::{Entity, Resource}, utils::hashbrown::HashMap};
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{
@@ -532,6 +534,42 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 
     pub fn connect_adjacent_chunk_nodes(&mut self) {
+        let nodes = self.graph.get_nodes();
+
+        let mut connections = Vec::new();
+
+        for node in nodes {
+            // Check all the adjacent positions of the node, taking into account cardinal/ordinal settings
+            let directions = if self.chunk_ordinal {
+                Dir::all()
+            } else {
+                Dir::cardinal()
+            };
+
+            for dir in directions {
+                let dir_vec = dir.vector();
+
+                let nx = node.pos.x as i32 + dir_vec.0;
+                let ny = node.pos.y as i32 + dir_vec.1;
+                let nz = node.pos.z as i32 + dir_vec.2;
+
+                if let Some(neighbor) = self.graph.get_node(UVec3::new(nx as u32, ny as u32, nz as u32)) {
+                    // Check if neighbor is in a different chunk
+                    if node.chunk != neighbor.chunk {
+                        let path = Path::from_slice(&[node.pos, neighbor.pos], 1);
+
+                        connections.push((node.pos, neighbor.pos, path));
+                    }
+                }
+            }
+        }
+
+        for (node_pos, neighbor_pos, path) in connections {
+            self.graph.connect_node(node_pos, neighbor_pos, path);
+        }
+    }
+
+/*    pub fn connect_adjacent_chunk_nodes(&mut self) {
         let chunk_size = self.chunk_size as usize;
         let chunk_depth = self.chunk_depth as usize;
 
@@ -550,6 +588,10 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                     for node in chunk_nodes {
                         let direction = node.dir.unwrap();
+
+                        if node.pos == UVec3::new(40, 31, 0) {
+                            log::info!("Node: {:?}", node);
+                        }
 
                         let dir_vec = direction.vector();
 
@@ -614,7 +656,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                 }
             }
         }
-    }
+    } */
 
     pub fn get_nodes_in_chunk_by_dir(&self, chunk: Chunk, dir: Dir) -> Vec<Node> {
         let mut nodes = Vec::new();
@@ -646,7 +688,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         None
     }
 
-    pub fn refine_path(&self, path: Path, blocking: &HashMap<UVec3, Entity>) -> Path {
+    /*pub fn refine_path(&self, path: Path, blocking: &HashMap<UVec3, Entity>) -> Path {
         let mut refined_path = Vec::new();
 
         // Insert the starting point
@@ -677,10 +719,6 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
 
             if !refined {
-                // if the point is in the blocking map, what do we do?
-                //if blocking.contains_key(point) {
-                //    log::error!("Refinement failed, point is blocked, pushing it in anyway?");
-                //}
                 refined_path.push(*point);
             }
         }
@@ -693,6 +731,124 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
         Path::new(refined_path, cost)
+    }*/
+
+
+    /// Uses DDA to generate a stepwise movement path between `start` and `end`
+    fn generate_path_segment(&self, start: UVec3, end: UVec3) -> Vec<UVec3> {
+        let mut path_segment = Vec::new();
+
+        let mut x = start.x as f32;
+        let mut y = start.y as f32;
+        let mut z = start.z as f32;
+
+        let dx = end.x as f32 - start.x as f32;
+        let dy = end.y as f32 - start.y as f32;
+        let dz = end.z as f32 - start.z as f32;
+
+        let steps = dx.abs().max(dy.abs()).max(dz.abs());
+        if steps == 0.0 {
+            return vec![start];
+        }
+
+        let x_step = dx / steps;
+        let y_step = dy / steps;
+        let z_step = dz / steps;
+
+        for _ in 0..=steps as i32 {
+            let grid_x = x.round() as i32;
+            let grid_y = y.round() as i32;
+            let grid_z = z.round() as i32;
+
+            path_segment.push(UVec3 { x: grid_x as u32, y: grid_y as u32, z: grid_z as u32 });
+
+            x += x_step;
+            y += y_step;
+            z += z_step;
+        }
+
+        path_segment
+    }    
+
+    pub fn has_line_of_sight(&self, start: UVec3, end: UVec3, blocking: &HashMap<UVec3, Entity>) -> bool {
+        let mut x = start.x as f32;
+        let mut y = start.y as f32;
+        let mut z = start.z as f32;
+    
+        let dx = end.x as f32 - start.x as f32;
+        let dy = end.y as f32 - start.y as f32;
+        let dz = end.z as f32 - start.z as f32;
+    
+        let steps = dx.abs().max(dy.abs()).max(dz.abs());
+        if steps == 0.0 {
+            return true;
+        }
+    
+        let x_step = dx / steps;
+        let y_step = dy / steps;
+        let z_step = dz / steps;
+    
+        for _ in 0..=steps as i32 {
+            let grid_x = x.round() as usize;
+            let grid_y = y.round() as usize;
+            let grid_z = z.round() as usize;
+    
+            if self.grid[[grid_x as usize, grid_y as usize, grid_z as usize]].wall {
+                return false; // Hit an obstacle
+            }
+    
+            x += x_step;
+            y += y_step;
+            z += z_step;
+        }
+    
+        true
+    }
+
+    pub fn refine_path(&self, path: Path, blocking: &HashMap<UVec3, Entity>) -> Path {
+        if path.is_empty() {
+            return path;
+        }
+    
+        let mut refined_path = VecDeque::new();
+        let mut i = 0;
+    
+        while i < path.path.len() {
+            refined_path.push_back(path.path[i]); // Keep the first node
+            let mut last_valid = i; // Track last valid waypoint
+
+            // Try to skip waypoints while maintaining visibility
+            for j in (i + 1)..path.len() {
+                if self.has_line_of_sight(path.path[i], path.path[j], blocking) {
+                    last_valid = j; // Update last valid waypoint
+                } else {
+                    break; // Stop if an obstacle blocks direct movement
+                }
+            }
+
+            // Ensure every tile is covered in the path segment
+            let segment = self.generate_path_segment(path.path[i], path.path[last_valid]);
+            refined_path.extend(segment.into_iter().skip(1)); // Skip first as it's already added
+
+            // Ensure we step forward properly
+            if last_valid > i {
+                i = last_valid;
+            } else {
+                i += 1; // Move forward minimally to prevent infinite loops
+            }
+        }
+
+        // Calculate the cost of the refined path
+        let mut cost = 0;
+
+        for pos in refined_path.iter() {
+            cost += self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
+        }
+
+        let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
+        path.graph_path = path.path.clone();
+
+        path
     }
 
     pub fn reroute_path(&self, path: &Path, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>) -> Option<Path> {
@@ -799,16 +955,20 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
 
-        // Sort start nodes by distance to the goal
+        // Sort start nodes by distance to the goal and the starting point
         let mut start_nodes = start_nodes
             .iter()
             .map(|node| {
-                let distance = (node.pos.x as i32 - goal.x as i32).abs()
+                let distance_to_goal = (node.pos.x as i32 - goal.x as i32).abs()
                     + (node.pos.y as i32 - goal.y as i32).abs()
                     + (node.pos.z as i32 - goal.z as i32).abs();
 
-                (node, distance)
-            })
+                let distance_to_start = (node.pos.x as i32 - start.x as i32).abs()
+                    + (node.pos.y as i32 - start.y as i32).abs()
+                    + (node.pos.z as i32 - start.z as i32).abs();
+
+                (node, distance_to_goal + distance_to_start)
+                })
             .collect::<Vec<_>>();
 
         // Starting with the node shortest to the goal, find a path to the goal
@@ -848,12 +1008,18 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut goal_nodes = goal_nodes
             .iter()
             .map(|node| {
-                // Ensure this node isn't farther than the goal node from the start point
-                let distance = (node.pos.x as i32 - goal.x as i32).abs()
+                // Calculate the distance from the start to the node and from the node to the goal
+                let distance_to_start = (node.pos.x as i32 - start.x as i32).abs()
+                    + (node.pos.y as i32 - start.y as i32).abs()
+                    + (node.pos.z as i32 - start.z as i32).abs();
+                let distance_to_goal = (node.pos.x as i32 - goal.x as i32).abs()
                     + (node.pos.y as i32 - goal.y as i32).abs()
                     + (node.pos.z as i32 - goal.z as i32).abs();
 
-                (node, distance)
+                // Calculate the total distance as the sum of the distances to the start and goal
+                let total_distance = distance_to_start + distance_to_goal;
+
+                (node, total_distance)
             })
             .collect::<Vec<_>>();
 
@@ -915,13 +1081,14 @@ impl<N: Neighborhood + Default> Grid<N> {
                     }
 
                     let mut refined_path = self.refine_path(Path::new(path, cost), blocking);
+
                     // remove the start point from the refined path
                     refined_path.path.pop_front();
 
                     // add the graph path to the refined path
                     refined_path.graph_path = node_path.path;
 
-                    return Some(refined_path)
+                    return Some(refined_path);
                 }
             }
         }
@@ -1015,9 +1182,10 @@ impl<N: Neighborhood + Default> Grid<N> {
                 return None;
             }
 
-            if blocking.contains_key(&current) {
+            /*if blocking.contains_key(&current) {
+                log::info!("Bresenham path blocked by entity: {:?}, {:?}", blocking[&current], blocking);
                 return None;
-            }
+            }*/
 
             // Error-based stepping
             let double_err_xy = 2 * err_xy;

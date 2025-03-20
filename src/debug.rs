@@ -212,6 +212,26 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                 };
     
                 gizmos.circle_2d(position + center_offset, 2.0, css::MAGENTA);
+
+                // Draw the node connection only to nodes in other chunks
+                for edge in node.get_edges() {
+                    let neighbor = grid.graph.get_node(edge);
+                    if let Some(neighbor) = neighbor {
+                        if neighbor.chunk != node.chunk {
+                            let neighbor_position = match debug_map.map_type {
+                                MapType::Square => Vec2::new(
+                                    (neighbor.pos.x * debug_map.tile_width) as f32,
+                                    (neighbor.pos.y * debug_map.tile_height) as f32,
+                                ),
+                                MapType::Isometric => Vec2::new(
+                                    (neighbor.pos.y as f32 + neighbor.pos.x as f32) * (debug_map.tile_width as f32 * 0.5),
+                                    (neighbor.pos.y as f32 - neighbor.pos.x as f32) * (debug_map.tile_height as f32 * 0.5),
+                                ),
+                            };
+                            gizmos.line_2d(position + center_offset, neighbor_position + center_offset, css::GREEN);
+                        }
+                    }
+                }
             }
         }
 
