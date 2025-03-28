@@ -1,5 +1,5 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, log, prelude::*, text::FontSmoothing, utils::HashMap, window::PrimaryWindow
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, log, prelude::*, text::FontSmoothing, utils::HashMap, 
 };
 
 use bevy_northstar::prelude::*;
@@ -75,9 +75,9 @@ fn main() {
         .add_plugins(TilemapPlugin)
         .add_plugins(TiledMapPlugin::default())
         // bevy_northstar plugins
-        .add_plugins(NorthstarPlugin::<OrdinalNeighborhood>::default())
-        .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood>::default())
-        .insert_resource(Grid::<OrdinalNeighborhood>::new(&GridSettings {
+        .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
+        .add_plugins(NorthstarDebugPlugin::<CardinalNeighborhood>::default())
+        .insert_resource(Grid::<CardinalNeighborhood>::new(&GridSettings {
             width: 16,
             height: 16,
             depth: 1,
@@ -86,7 +86,6 @@ fn main() {
             chunk_ordinal: false,
             default_cost: 1,
             default_wall: true,
-            jump_height: 1,
         }))
         // Observe the LayerCreated event to build the grid
         .add_observer(layer_created)
@@ -367,7 +366,7 @@ fn handle_reroute_failed(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Res<Grid<OrdinalNeighborhood>>,
+    grid: Res<Grid<CardinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<Walkable>,
@@ -412,6 +411,7 @@ fn spawn_minions(
                 tile_height: 8,
                 map_type: MapType::Square,
                 color: color,
+                draw_unrefined: true,
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
@@ -427,7 +427,7 @@ fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
     q_layer: Query<&Name, With<TiledMapLayer>>,
     map_asset: Res<Assets<TiledMap>>,
-    mut grid: ResMut<Grid<OrdinalNeighborhood>>,
+    mut grid: ResMut<Grid<CardinalNeighborhood>>,
     mut state: ResMut<NextState<State>>,
 ) {
     // We can either access the layer components

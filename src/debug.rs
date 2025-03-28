@@ -6,58 +6,13 @@ use bevy::{color::palettes::css, prelude::*};
 use crate::grid::Grid;
 use crate::neighbor::Neighborhood;
 use crate::path::Path;
+use crate::prelude::{DebugMap, DebugPath};
 
 #[derive(Reflect, Debug, Clone, Default)]
 pub enum MapType {
     #[default]
     Square,
     Isometric,
-}
-
-#[derive(Reflect, Component)]
-#[require(Transform)]
-pub struct DebugMap {
-    pub tile_width: u32,
-    pub tile_height: u32,
-    pub map_type: MapType,
-    //
-    pub draw_chunks: bool,
-    pub draw_points: bool,
-    pub draw_entrances: bool,
-    pub draw_cached_paths: bool,
-}
-
-impl Default for DebugMap {
-    fn default() -> Self {
-        DebugMap {
-            tile_width: 16,
-            tile_height: 16,
-            map_type: MapType::Square,
-            draw_chunks: true,
-            draw_points: false,
-            draw_entrances: false,
-            draw_cached_paths: false,
-        }
-    }
-}
-
-#[derive(Component)]
-pub struct DebugPath {
-    pub tile_width: u32,
-    pub tile_height: u32,
-    pub map_type: MapType,
-    pub color: Color,
-}
-
-impl Default for DebugPath {
-    fn default() -> Self {
-        DebugPath {
-            tile_width: 16,
-            tile_height: 16,
-            map_type: MapType::Square,
-            color: bevy::prelude::Color::Srgba(css::RED),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -353,6 +308,57 @@ fn draw_debug_paths<N: Neighborhood + 'static>(
             );
 
             prev = next;
+        }
+
+        if debug_path.draw_unrefined {
+            let mut iter = path.graph_path.iter();
+            let mut prev = if let Some(p) = iter.next() {
+                p
+            } else {
+                continue;
+            };
+
+            let inverted_color = debug_path.color.to_srgba();
+            let inverted_color = Color::srgba(
+                1.0 - inverted_color.red,
+                1.0 - inverted_color.green,
+                1.0 - inverted_color.blue,
+                inverted_color.alpha,
+            );
+
+            for next in iter {
+                let prev_position = match debug_path.map_type {
+                    MapType::Square => Vec2::new(
+                        (prev.x * debug_path.tile_width) as f32,
+                        (prev.y * debug_path.tile_height) as f32,
+                    ),
+                    MapType::Isometric => Vec2::new(
+                        (prev.y as f32 + prev.x as f32) * (debug_path.tile_width as f32 * 0.5),
+                        (prev.y as f32 - prev.x as f32) * (debug_path.tile_height as f32 * 0.5),
+                    ),
+                };
+
+                let next_position = match debug_path.map_type {
+                    MapType::Square => Vec2::new(
+                        (next.x * debug_path.tile_width) as f32,
+                        (next.y * debug_path.tile_height) as f32,
+                    ),
+                    MapType::Isometric => Vec2::new(
+                        (next.y as f32 + next.x as f32) * (debug_path.tile_width as f32 * 0.5),
+                        (next.y as f32 - next.x as f32) * (debug_path.tile_height as f32 * 0.5),
+                    ),
+                };
+
+                let x = prev_position + center_offset;
+                let y = next_position + center_offset;
+
+                gizmos.line_2d(
+                    x, y,
+                    inverted_color
+                );
+
+                prev = next;
+            }
         }
     }
 }

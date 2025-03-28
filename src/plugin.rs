@@ -1,3 +1,4 @@
+#[cfg(feature = "stats")]
 use std::time::Instant;
 
 use crate::prelude::*;
@@ -106,8 +107,8 @@ fn pathfind<N: Neighborhood>(
     mut commands: Commands,
     mut query: Query<(Entity, &Position, &Pathfind), Changed<Pathfind>>,
     blocking: Res<BlockingMap>,
-    mut stats: ResMut<Stats>,
     settings: Res<NorthstarSettings>,
+    #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
 ) where
     N: 'static + Neighborhood,
 {
@@ -164,8 +165,8 @@ fn next_position<N: Neighborhood>(
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
     settings: Res<NorthstarSettings>,
-    mut stats: ResMut<Stats>,
     mut commands: Commands,
+    #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
 ) where
     N: 'static + Neighborhood,
 {

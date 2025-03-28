@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
 
@@ -14,7 +16,7 @@ mod dijkstra;
 mod dir;
 mod graph;
 pub mod grid;
-pub mod los;
+pub mod raycast;
 mod neighbor;
 mod node;
 pub mod path;
@@ -23,7 +25,7 @@ mod theta;
 
 pub mod prelude {
     pub use crate::components::*;
-    pub use crate::debug::{MapType, DebugMap, DebugPath, NorthstarDebugPlugin};
+    pub use crate::debug::{MapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
     pub use crate::grid::{Grid, GridSettings};
     pub use crate::neighbor::*;

@@ -5,7 +5,7 @@ use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 
 use crate::graph::Graph;
-use crate::los::line_of_sight;
+use crate::raycast::line_of_sight_ordinal;
 use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
 #[allow(dead_code)]
@@ -65,7 +65,7 @@ pub fn theta_grid<N: Neighborhood>(
 
             let (parent_pos, (parent_index, parent_cost)) = visited.get_index(index).unwrap();
 
-            let (new_cost, parent) = if line_of_sight(grid, *parent_pos, neighbor) {
+            let (new_cost, parent) = if line_of_sight_ordinal(grid, *parent_pos, neighbor) {
                 // Line of sight exists between grandparent and neighbor
                 (parent_cost + neighbor_point.cost, *parent_index)
             } else {
@@ -160,7 +160,7 @@ pub fn theta_graph<N: Neighborhood>(
 
             let neighbor_cost = neighborhood.heuristic(neighbor, goal);
 
-            let (new_cost, parent) = if line_of_sight(grid, *parent_pos, neighbor) {
+            let (new_cost, parent) = if line_of_sight_ordinal(grid, *parent_pos, neighbor) {
                 (parent_cost + neighbor_cost, *parent_index)
             } else {
                 (cost + neighbor_cost, index)

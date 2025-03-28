@@ -10,6 +10,7 @@ use ndarray::ArrayView3;
 use crate::graph::Graph;
 use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
+/// A* search algorithm for a 3D grid
 pub fn astar_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,
@@ -138,6 +139,7 @@ pub fn astar_grid<N: Neighborhood>(
     }
 }
 
+/// A* search algorithm for a graph of nodes with connected edges
 pub fn astar_graph<N: Neighborhood>(
     neighborhood: &N,
     graph: &Graph,
@@ -234,7 +236,16 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64, false, &HashMap::new()).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.cost(), 2);
         assert_eq!(path.len(), 3);
@@ -253,7 +264,16 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64, false, &HashMap::new()).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.cost(), 3);
         assert_eq!(path.len(), 4);
@@ -271,7 +291,16 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(7, 7, 7);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 16, false, &HashMap::new()).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            16,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.len(), 8);
         // Ensure first position is the start position

@@ -1,5 +1,5 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, ecs::entity, prelude::*, text::FontSmoothing
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, prelude::*, text::FontSmoothing
 };
 
 use bevy_northstar::prelude::*;
@@ -56,7 +56,6 @@ fn main() {
             chunk_ordinal: false,
             default_cost: 1,
             default_wall: true,
-            jump_height: 1,
         }))
         // Observe the LayerCreated event to build the grid
         .add_observer(layer_created)
@@ -74,7 +73,6 @@ fn main() {
             Update,
             update_pathfind_type_test.run_if(in_state(State::Playing)),
         )
-        .add_systems(Update, entity_under_cursor)
         .add_systems(Update, handle_reroute_failed)
         .add_event::<Tick>()
         .insert_state(State::Loading)
@@ -241,48 +239,6 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ));
 }
 
-
-fn entity_under_cursor(
-    mut query: Query<&mut TextSpan, With<EntityDebugText>>,
-    windows: Query<&Window>,
-    camera: Query<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
-    minions: Query<(Entity, &GlobalTransform)>,
-    troubleshooting: Query<(Entity, &Position, Option<&Pathfind>, Option<&Path>, Option<&Next>, Option<&AvoidanceFailed>)>,
-) {
-    let window = windows.single();
-    let (camera, camera_transform, _) = camera.single();
-
-    if let Some(cursor_position) = window
-        .cursor_position()
-        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
-    {
-        for mut span in &mut query {
-            let mut text = String::new();
-
-            for (entity, transform) in minions.iter() {
-                let distance = (transform.translation() - cursor_position.extend(0.0)).length();
-
-                if distance < 8.0 {
-                    text.push_str(&format!("{:?} ", entity));
-
-                    // print all the data in the troubleshooting query
-                    for (entity_other, position, pathfind, path, next, avoidance_failed) in troubleshooting.iter() {
-                        if entity == entity_other {
-                            text.push_str(&format!("{:?} ", position));
-                            text.push_str(&format!("{:?} ", pathfind));
-                            //text.push_str(&format!("{:?} ", path));
-                            text.push_str(&format!("{:?} ", next));
-                            text.push_str(&format!("{:?} ", avoidance_failed));
-                        }
-                    }
-                }
-            }
-
-            **span = text;
-        }
-    }
-}
-
 fn update_stat_text(stats: Res<Stats>, mut query: Query<&mut TextSpan, With<StatText>>) {
     for mut span in &mut query {
         **span = format!("{:.2}ms", stats.pathfinding.average_time * 1000.0);
@@ -353,7 +309,6 @@ fn set_new_goal(
 fn handle_reroute_failed(
     mut commands: Commands,
     mut query: Query<(Entity, &Pathfind, &RerouteFailed)>,
-    config: Res<Config>,
     mut tick_reader: EventReader<Tick>,
 ) {
     for _ in tick_reader.read() {
@@ -387,7 +342,7 @@ fn spawn_minions(
 
     let mut count = 0;
 
-    while count < 128 {
+    while count < 256 {
         let position = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
         let goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
@@ -412,6 +367,7 @@ fn spawn_minions(
                 tile_height: 8,
                 map_type: MapType::Square,
                 color: color,
+                draw_unrefined: false,
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))

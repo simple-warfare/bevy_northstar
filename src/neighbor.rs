@@ -159,9 +159,9 @@ impl Neighborhood for OrdinalNeighborhood {
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = pos.x.max(target.x) - pos.x.min(target.x);
-        let dy = pos.y.max(target.y) - pos.y.min(target.y);
-        dx + dy
+        let dx = pos.x.abs_diff(target.x);
+        let dy = pos.y.abs_diff(target.y);
+        dx.max(dy)
     }
 
     #[inline(always)]
@@ -245,9 +245,9 @@ impl Neighborhood for OrdinalNeighborhood3d {
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (pos.x as i32 - target.x as i32).abs() as u32;
-        let dy = (pos.y as i32 - target.y as i32).abs() as u32;
-        let dz = (pos.z as i32 - target.z as i32).abs() as u32;
+        let dx = pos.x.abs_diff(target.x);
+        let dy = pos.y.abs_diff(target.y);
+        let dz = pos.z.abs_diff(target.z);
         dx.max(dy).max(dz)
     }
 

@@ -3,6 +3,7 @@ use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
 use crate::{dir::Dir, Point};
 
+/// A chunk is a 3D region of the grid.
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub min: UVec3,
@@ -23,6 +24,7 @@ impl Chunk {
         Chunk { min, max }
     }
 
+    /// Returns a 3D `ArrayView3`` of `Point`s of the chunk from the grid.
     pub fn view<'a>(&self, grid: &'a Array3<Point>) -> ArrayView3<'a, Point> {
         grid.slice(s![
             self.min.x as usize..self.max.x as usize + 1,
@@ -31,6 +33,7 @@ impl Chunk {
         ])
     }
 
+    /// Returns a 2D `ArrayView2`` of the edge of the chunk in the given direction.
     pub fn edge<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> ArrayView2<'a, Point> {
         match dir {
             Dir::NORTH => grid.slice(s![
@@ -67,6 +70,7 @@ impl Chunk {
         }
     }
 
+    /// Returns the chunk corner `Point` for the given ordinal direction.
     pub fn corner<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> Point {
         match dir {
             Dir::NORTHEAST => {
