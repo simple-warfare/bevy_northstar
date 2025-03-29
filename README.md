@@ -18,10 +18,15 @@ Press C to disable/enable collision
 
 ## Features  
 ✅ **Supports 2D and 3D Tilemaps** – Supports 2d and 3d tilemaps.  
+
 ✅ **Optimized Performance** – Algorithms are heavily benchmarked for efficiency.  
+
 ✅ **Gizmo Debug View** – Debug visuals for verifying the built HPA graph. Pathing debug components to visualize an entities path.  
-✅ **Stress Tests** – 128x128 map with 128 entities to stress test HPA vs A* and collision. A collision example is provided to stress test narrow pathing. 
+
+✅ **Stress Tests** – 128x128 map with 128 entities to stress test HPA vs A* and collision. A collision example is provided to stress test narrow pathing.
+
 ✅ **Dynamic Collision & Avoidance** – For moving colliders attaching a simple Blocking marker component is all that's needed. If you use the built in systems the pathing will do a configurable look ahead to see if it can do a fast local A* reroute.
+
 ✅ **Bevy Systems Integration** – Bevy systems and components for pathfinding as well as collision markers when avoidance paths fail.
 
 ## Roadmap / TODO  
