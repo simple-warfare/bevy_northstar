@@ -3,12 +3,26 @@ name = "bevy_northstar"
 version = "0.1.0"
 edition = "2021"
 
+authors = ["John Mullins"]
+description = "A Bevy plugin for Hierarchical Pathfinding"
+homepage = "https://github.com/jtothethree/bevy_northstar"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/jtothethree/bevy_northstar"
+
+categories = ["game-development"]
+keywords = ["bevy", "pathfinding", "astar", "game", "hpa", "hpa*", "a*"]
+exclude = ["assets/*", "res/*"]
+
+[features]
+stats = []
+
 [dependencies]
-thiserror = "2.0.9"
-indexmap = "2.7.0"
+thiserror = "2.0.12"
+indexmap = "2.7.1"
 ndarray = { version = "0.16.1", features=["rayon"] }
-rustc-hash = "2.1.0"
-strum = "0.26.3"
+rustc-hash = "2.1.1"
+strum = "0.27.1"
 slab = "0.4.9"
 
 [dependencies.bevy]
@@ -17,20 +31,24 @@ default-features = false
 features=["bevy_render", "bevy_gizmos"]
 
 [dev-dependencies]
-bevy = { version = "0.15", features=["bevy_dev_tools"] }
+bevy = { version = "0.15.3", features=["bevy_dev_tools"] }
 bevy_ecs_tilemap = { version = "0.15" }
-bevy_ecs_tiled = { version = "0.5" }
+bevy_ecs_tiled = { version = "0.5.1" }
 
-### Causing build issues on Windows, need to look into how to handle this 
-# criterion = {version = "0.5.1", features = ["html_reports"]}
-# pprof = {version = "0.14.0", features = ["flamegraph"]}
+[target.'cfg(not(target_os = "windows"))'.dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+pprof = { version = "0.14.0", features = ["flamegraph"] }
 
 rand = "0.8.5"
 
-### See note above about pprof windows issues
-# [[bench]]
-# name = "benches"
-# harness = false
+[target.'cfg(not(target_os = "windows"))']
+[[bench]]
+name = "benches"
+harness = false
 
 [[examples]]
 name = "demo"
+required-features = ["stats"]
+
+[[examples]]
+name = "collision"

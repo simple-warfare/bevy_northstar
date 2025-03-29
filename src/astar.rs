@@ -1,18 +1,24 @@
 use std::collections::BinaryHeap;
 
+use bevy::log;
 use bevy::math::UVec3;
+use bevy::prelude::Entity;
+use bevy::utils::hashbrown::HashMap;
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 
 use crate::graph::Graph;
 use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
 
+/// A* search algorithm for a 3D grid
 pub fn astar_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,
     start: UVec3,
     goal: UVec3,
     size_hint: usize,
+    partial: bool,
+    blocking: &HashMap<UVec3, Entity>,
 ) -> Option<Path> {
     let mut to_visit = BinaryHeap::with_capacity(size_hint / 2);
     to_visit.push(SmallestCostHolder {
@@ -24,9 +30,20 @@ pub fn astar_grid<N: Neighborhood>(
     let mut visited: FxIndexMap<UVec3, (usize, u32)> = FxIndexMap::default();
     visited.insert(start, (usize::MAX, 0));
 
+    let mut closest_node = start;
+    let mut closest_distance = neighborhood.heuristic(start, goal);
+
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
+            let current_distance = neighborhood.heuristic(*current_pos, goal);
+
+            // Update the closest node if this node is closer
+            if current_distance < closest_distance {
+                closest_node = *current_pos;
+                closest_distance = current_distance;
+            }
+
             if *current_pos == goal {
                 let mut current = index;
                 let mut steps = vec![];
@@ -60,6 +77,11 @@ pub fn astar_grid<N: Neighborhood>(
             if neighbor_point.wall || neighbor_point.cost == 0 {
                 continue;
             }
+
+            if blocking.contains_key(&neighbor) {
+                continue;
+            }
+
             let new_cost = cost + neighbor_point.cost;
             let h;
             let n;
@@ -88,9 +110,36 @@ pub fn astar_grid<N: Neighborhood>(
         }
     }
 
-    None
+    if partial {
+        // If the goal is not reached, return the path to the closest node, but if the closest node is the start return None
+
+        if closest_node == start {
+            return None;
+        }
+
+        // If the goal is not reached, return the path to the closest node
+        let mut current = visited.get_index_of(&closest_node).unwrap();
+        let mut steps = vec![];
+
+        while current != usize::MAX {
+            let (pos, _) = visited.get_index(current).unwrap();
+            steps.push(*pos);
+            current = visited.get(pos).unwrap().0;
+        }
+
+        if steps.is_empty() {
+            log::info!("Steps is empty, so there's actually no path?");
+            return None;
+        }
+
+        steps.reverse();
+        Some(Path::new(steps, visited[&closest_node].1))
+    } else {
+        None
+    }
 }
 
+/// A* search algorithm for a graph of nodes with connected edges
 pub fn astar_graph<N: Neighborhood>(
     neighborhood: &N,
     graph: &Graph,
@@ -147,7 +196,7 @@ pub fn astar_graph<N: Neighborhood>(
             let n;
             match visited.entry(neighbor_node.pos) {
                 Vacant(e) => {
-                    h =  neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
+                    h = neighborhood.heuristic(neighbor_node.pos, goal); // This might be a mistake?
                     n = e.index();
                     e.insert((index, new_cost));
                 }
@@ -187,11 +236,22 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.cost(), 2);
         assert_eq!(path.len(), 3);
+        // Ensure first position is the start position
         assert_eq!(path.path()[0], start);
+        // Ensure last position is the goal position
         assert_eq!(path.path()[2], goal);
     }
 
@@ -204,11 +264,22 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 64).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.cost(), 3);
         assert_eq!(path.len(), 4);
+        // Ensure first position is the start position
         assert_eq!(path.path()[0], start);
+        // Ensure last position is the goal position
         assert_eq!(path.path()[3], goal);
         assert_eq!(path.is_position_in_path(UVec3::new(1, 1, 1)), false);
     }
@@ -220,9 +291,22 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(7, 7, 7);
 
-        let path = astar_grid(&OrdinalNeighborhood3d, &grid.view(), start, goal, 16).unwrap();
+        let path = astar_grid(
+            &OrdinalNeighborhood3d,
+            &grid.view(),
+            start,
+            goal,
+            16,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert_eq!(path.len(), 8);
+        // Ensure first position is the start position
+        assert_eq!(path.path()[0], start);
+        // Ensure last position is the goal position
+        assert_eq!(path.path()[7], goal);
     }
 
     #[test]
@@ -277,7 +361,9 @@ mod tests {
 
         assert_eq!(path.cost(), 2);
         assert_eq!(path.len(), 3);
+        // Ensure the first position is the start position
         assert_eq!(path.path()[0], UVec3::new(0, 0, 0));
+        // Ensure the last position is the goal position
         assert_eq!(path.path()[2], UVec3::new(2, 2, 2));
     }
 }

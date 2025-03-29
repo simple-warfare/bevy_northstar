@@ -146,6 +146,10 @@ impl Graph {
 
         paths
     }
+
+    pub fn get_node_at(&self, pos: UVec3) -> Option<&Node> {
+        self.node_ids.get(&pos).and_then(|&id| self.nodes.get(id))
+    }
 }
 
 #[cfg(test)]

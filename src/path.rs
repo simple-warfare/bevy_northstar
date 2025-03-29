@@ -3,9 +3,14 @@ use std::collections::VecDeque;
 use bevy::math::UVec3;
 use bevy::prelude::Component;
 
+/// The path component. This is inserted to an entity after the plugin
+/// systems have pathfound to the goal position.
+/// 
+/// Implmented in `path.rs`
 #[derive(Debug, Clone, Component)]
 pub struct Path {
-    path: VecDeque<UVec3>,
+    pub(crate) path: VecDeque<UVec3>,
+    pub(crate) graph_path: VecDeque<UVec3>,
     cost: u32,
     is_reversed: bool,
 }
@@ -16,46 +21,56 @@ impl Path {
 
         Path {
             path,
+            graph_path: VecDeque::new(),
             cost,
             is_reversed: false,
         }
     }
 
+    /// Create a new path from a slice of `UVec3` positions
     pub fn from_slice(path: &[UVec3], cost: u32) -> Self {
         let path = path.iter().cloned().collect();
 
         Path {
             path: path,
+            graph_path: VecDeque::new(),
             cost,
             is_reversed: false,
         }
     }
 
+    /// Returns true if the path contains the given position
     pub fn is_position_in_path(&self, pos: UVec3) -> bool {
         self.path.contains(&pos)
     }
 
+    /// Returns the path as a slice of `UVec3` positions
     pub fn path(&self) -> &[UVec3] {
         &self.path.as_slices().0
     }
 
+    /// Returns the cost of the path
     pub fn cost(&self) -> u32 {
         self.cost
     }
 
+    /// Returns the length of the path
     pub fn len(&self) -> usize {
         self.path.len()
     }
 
+    /// Returns true if the path is empty
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()
     }
 
+    /// Reverse the path
     pub fn reverse(&mut self) {
         self.path.make_contiguous().reverse();
         self.is_reversed = !self.is_reversed;
     }
 
+    /// Pops the first position of the path
     pub fn pop(&mut self) -> Option<UVec3> {
         // Remove the first element of the path
         self.path.pop_front()
@@ -69,7 +84,6 @@ impl PartialEq for Path {
 }
 
 impl Eq for Path {}
-
 
 // Implement iter for Path
 impl IntoIterator for Path {
