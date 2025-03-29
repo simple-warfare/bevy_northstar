@@ -11,7 +11,7 @@ readme = "README.md"
 repository = "https://github.com/jtothethree/bevy_northstar"
 
 categories = ["game-development"]
-keywords = ["bevy", "pathfinding", "astar", "hap*", "hpa"]
+keywords = ["bevy", "pathfinding", "astar", "hpa", "game"]
 exclude = ["assets/*", "res/*"]
 
 [features]
