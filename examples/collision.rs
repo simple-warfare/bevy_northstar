@@ -113,7 +113,6 @@ fn main() {
             collision: true,
             avoidance_distance: 4,
         })
-        .add_systems(Update, debug_bad_positions.after(move_pathfinders))
         .run();
 }
 
@@ -305,28 +304,22 @@ fn update_pathfind_type_test(
     }
 }
 
-fn debug_bad_positions(
-    query: Query<(Entity, &Position, &Path)>,
-) {
-    let mut positions = HashMap::new();
-
-    for (entity, position, path) in query.iter() {        
-        if positions.contains_key(&position.0) {
-            //log::error!("{:?}", positions);
-            log::error!("Entity {:?} has the same position as another entity: {:?}", entity, path);
-        } else {
-            positions.insert(position.0, (entity, path));
-        }
-    }
-}
-
 fn move_pathfinders(
     mut commands: Commands,
     mut query: Query<(Entity, &mut Position, &Next)>,
     mut tick_reader: EventReader<Tick>,
 ) {
     for _ in tick_reader.read() {
+        let mut debug_next = HashMap::new();
+
         for (entity, mut position, next) in query.iter_mut() {
+            if debug_next.contains_key(&next.0) {
+                log::error!("Entity {:?} has the same next position as another entity: {:?} {:?}", entity, next, debug_next.get(&next.0));
+                continue;
+            }
+
+            debug_next.insert(next.0, entity);
+
             position.0 = next.0;
             let translation = Vec3::new(next.0.x as f32 * 8.0 + 4.0, next.0.y as f32 * 8.0 + 4.0, 4.0);
 
@@ -411,7 +404,7 @@ fn spawn_minions(
                 tile_height: 8,
                 map_type: MapType::Square,
                 color: color,
-                draw_unrefined: true,
+                draw_unrefined: false,
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))

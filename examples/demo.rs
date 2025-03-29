@@ -79,7 +79,7 @@ fn main() {
         .insert_resource(Walkable::default())
         .insert_resource(Config::default())
         .insert_resource(NorthstarSettings {
-            collision: false,
+            collision: true,
             avoidance_distance: 4,
         })
         .run();
@@ -342,7 +342,7 @@ fn spawn_minions(
 
     let mut count = 0;
 
-    while count < 256 {
+    while count < 128 {
         let position = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
         let goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 

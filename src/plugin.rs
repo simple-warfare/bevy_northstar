@@ -211,7 +211,13 @@ fn next_position<N: Neighborhood>(
             path.pop()
         };
         
-        if let Some(next) = next {
+        if let Some(next) = next{
+            if blocking.0.contains_key(&next) && settings.collision {
+                log::error!("Next position is blocked for entity, we should never get here but we did: {:?}", entity);
+                commands.entity(entity).insert(AvoidanceFailed);
+                continue;
+            }
+
             // Calculate the dot product direction
             direction.0.insert(entity, next.as_vec3() - position.0.as_vec3());
 
