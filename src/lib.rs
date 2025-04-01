@@ -1,31 +1,30 @@
 #![doc = include_str!("../README.md")]
 
+use bevy::math::UVec3;
+use indexmap::IndexMap;
+use rustc_hash::FxHasher;
 use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
 
-use bevy::math::UVec3;
 use dir::Dir;
-use indexmap::IndexMap;
-use rustc_hash::FxHasher;
 
 mod astar;
 mod chunk;
 pub mod components;
 pub mod debug;
 mod dijkstra;
-mod dir;
+pub mod dir;
 mod graph;
 pub mod grid;
-pub mod raycast;
-mod neighbor;
+pub mod neighbor;
 mod node;
 pub mod path;
 pub mod plugin;
-mod theta;
+pub mod raycast;
 
 pub mod prelude {
     pub use crate::components::*;
-    pub use crate::debug::{MapType, NorthstarDebugPlugin};
+    pub use crate::debug::{DebugMapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
     pub use crate::grid::{Grid, GridSettings};
     pub use crate::neighbor::*;
@@ -37,7 +36,7 @@ pub mod prelude {
     pub use crate::Point;
 }
 
-pub type NodeId = usize;
+pub(crate) type NodeId = usize;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
 

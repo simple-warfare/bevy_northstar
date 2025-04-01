@@ -1,39 +1,76 @@
-use bevy::{math::UVec3, prelude::{Entity, Resource}, utils::hashbrown::HashMap};
+//! This module contains the `Grid` struct which is the primary `Resource` for the crate.
+use bevy::{
+    math::UVec3,
+    prelude::{Entity, Resource},
+    utils::hashbrown::HashMap,
+};
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    astar::{astar_graph, astar_grid}, chunk::Chunk, dijkstra::dijkstra_grid, dir::{get_movement_type, Dir}, graph::Graph, neighbor::Neighborhood, node::Node, path::Path, raycast::{generate_path_segment_cardinal, generate_path_segment_ordinal, line_of_sight_cardinal, line_of_sight_ordinal}, Point
+    astar::*, chunk::Chunk, dijkstra::*, dir::*, graph::Graph, neighbor::Neighborhood, node::Node,
+    path::Path, raycast::*, Point,
 };
 
 /// Settings for configuring the grid.
-///
-/// # Fields
-///
-/// * `width` - The width of the grid.
-/// * `height` - The height of the grid.
-/// * `depth` - The depth of the grid. Use 1 for 2D grids.
-///
-/// * `chunk_size` - The size of each chunk in the grid.
-/// * `chunk_depth` - The depth of each chunk in the grid. Use 1 for 2D grids.
-///
-/// * `chunk_ordinal` - Create entrances to chunks in corners.
-///
-/// * `default_cost` - The default cost associated with grid cells.
-/// * `default_wall` - A boolean indicating if the default grid cell is a wall.
 pub struct GridSettings {
+    /// The width of the grid.
     pub width: u32,
+    /// The height of the grid.
     pub height: u32,
+    /// The depth of the grid. Use 1 for 2D grids.
     pub depth: u32,
 
+    /// The size of each chunk the grid should be divided into for HPA*.
     pub chunk_size: u32,
+    /// The depth of each chunk the grid should be divided into for HPA*.
     pub chunk_depth: u32,
 
+    /// Create entrances to chunks in corners.
     pub chunk_ordinal: bool,
 
+    /// The default cost associated with grid positions.
     pub default_cost: u32,
+    /// Set to true to default all grid positions to walls.
     pub default_wall: bool,
 }
 
+/// `Grid` is the main `Resource` struct for the crate.
+///
+/// # Example
+/// ```
+/// use bevy::prelude::*;
+/// use bevy_northstar::prelude::*;
+///
+/// fn main() {
+///     App::new()
+///        .add_plugins(DefaultPlugins)
+///        .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
+///        .insert_resource(Grid::<CardinalNeighborhood>::new(&GridSettings {
+///            width: 128,
+///            height: 128,
+///            depth: 1,
+///            chunk_size: 16,
+///            chunk_depth: 1,
+///            chunk_ordinal: true,
+///            default_cost: 1,
+///            default_wall: false,
+///        }))
+///        .insert_resource(NorthstarSettings {
+///            collision: true,
+///            avoidance_distance: 4,
+///         })
+///        .add_systems(Startup, startup)
+///        .run();
+/// }
+///
+/// fn startup(mut commands: Commands, mut grid: ResMut<Grid<CardinalNeighborhood>>) {
+///    // Populate the grid with, you'd usually do this after you load your tilemap
+///    // and then set the points in the grid to match the tilemap.
+///    grid.set_point(UVec3::new(0, 0, 0), Point::new(1, false));
+///    // Initialize the grid
+///    grid.build();
+/// }
+/// ```
 #[derive(Resource)]
 pub struct Grid<N: Neighborhood> {
     pub neighborhood: N,
@@ -53,12 +90,13 @@ pub struct Grid<N: Neighborhood> {
     default_wall: bool,
 
     grid: Array3<Point>,
-    pub chunks: Array3<Chunk>,
+    pub(crate) chunks: Array3<Chunk>,
 
-    pub graph: Graph,
+    pub(crate) graph: Graph,
 }
 
 impl<N: Neighborhood + Default> Grid<N> {
+    /// Creates a new `Grid` instance with the given `GridSettings`.
     pub fn new(settings: &GridSettings) -> Self {
         let x_chunks = settings.width as usize / settings.chunk_size as usize;
         let y_chunks = settings.height as usize / settings.chunk_size as usize;
@@ -100,8 +138,13 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 
     /// Returns an `ArrayView3` reference to the grid.
-    pub fn get_view(&self) -> ArrayView3<Point> {
+    pub fn view(&self) -> ArrayView3<Point> {
         self.grid.view()
+    }
+
+    /// Returns the `Point` at the given position in the grid.
+    pub fn point(&self, pos: UVec3) -> Point {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]]
     }
 
     /// Set the `Point` at the given position in the grid.
@@ -109,28 +152,23 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = point;
     }
 
-    /// Get the `Point` at the given position in the grid.
-    pub fn get_point(&self, pos: UVec3) -> Point {
-        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]]
-    }
-
     /// Returns the width of the grid.
-    pub fn get_width(&self) -> u32 {
+    pub fn width(&self) -> u32 {
         self.width
     }
 
     /// Returns the height of the grid.
-    pub fn get_height(&self) -> u32 {
+    pub fn height(&self) -> u32 {
         self.height
     }
 
     /// Returns the depth of the grid.
-    pub fn get_depth(&self) -> u32 {
+    pub fn depth(&self) -> u32 {
         self.depth
     }
 
     /// Returns the size of each chunk in the grid.
-    pub fn get_chunk_size(&self) -> u32 {
+    pub fn chunk_size(&self) -> u32 {
         self.chunk_size
     }
 
@@ -143,6 +181,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.connect_adjacent_chunk_nodes();
     }
 
+    // Populates the graph with nodes for each edge of each chunk.
     fn build_nodes(&mut self) {
         let chunk_size = self.chunk_size as usize;
         let chunk_depth = self.chunk_depth as usize;
@@ -186,7 +225,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                                 dir,
                             );
 
-                            // Position the nodes in world space using the fixed axis to realign the nodes, 
+                            // Position the nodes in world space using the fixed axis to realign the nodes,
                             // they also need to be adjusted by the position of the chunk in the grid
                             for node in nodes.iter_mut() {
                                 node.pos = match dir {
@@ -332,6 +371,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
+    // Calculates the edge nodes for a given edge in the grid.
     fn calculate_edge_nodes(
         &self,
         start_edge: ArrayView2<Point>,
@@ -362,7 +402,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                 let node = Node::new(pos, chunk.clone(), Some(dir));
                 nodes.push(node);
-            } 
+            }
         }
 
         // Split nodes into groups of continous nodes
@@ -451,6 +491,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         ordinal_nodes
     }
 
+    // Connects the internal nodes of each chunk to each other.
     fn connect_internal_chunk_nodes(&mut self) {
         let chunk_size = self.chunk_size as usize;
         let chunk_depth = self.chunk_depth as usize;
@@ -467,7 +508,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                     let chunk_grid = self.chunks[[x, y, z]].view(&self.grid);
                     let chunk = &self.chunks[[x, y, z]];
 
-                    let nodes = self.graph.get_all_nodes_in_chunk(chunk.clone());
+                    let nodes = self.graph.nodes_in_chunk(chunk.clone());
 
                     let mut connections = Vec::new();
 
@@ -525,8 +566,9 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
+    // Connects the nodes of adjacent chunks to each other.
     fn connect_adjacent_chunk_nodes(&mut self) {
-        let nodes = self.graph.get_nodes();
+        let nodes = self.graph.nodes();
 
         let mut connections = Vec::new();
 
@@ -545,7 +587,10 @@ impl<N: Neighborhood + Default> Grid<N> {
                 let ny = node.pos.y as i32 + dir_vec.1;
                 let nz = node.pos.z as i32 + dir_vec.2;
 
-                if let Some(neighbor) = self.graph.get_node(UVec3::new(nx as u32, ny as u32, nz as u32)) {
+                if let Some(neighbor) = self
+                    .graph
+                    .node_at(UVec3::new(nx as u32, ny as u32, nz as u32))
+                {
                     // Check if neighbor is in a different chunk
                     if node.chunk != neighbor.chunk {
                         let path = Path::from_slice(&[node.pos, neighbor.pos], 1);
@@ -561,29 +606,8 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    /// Returns a vector of `Node`s in the chunk for the given edge.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `chunk` - The chunk to get the nodes from.
-    /// 
-    /// * `dir` - `Dir` direction of the edge.
-    pub fn get_nodes_in_chunk_by_dir(&self, chunk: Chunk, dir: Dir) -> Vec<Node> {
-        let mut nodes = Vec::new();
-
-        let chunk_nodes = self.graph.get_all_nodes_in_chunk(chunk);
-
-        for node in chunk_nodes {
-            if node.dir == Some(dir) {
-                nodes.push(node.clone());
-            }
-        }
-
-        nodes
-    }
-
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
-    pub fn get_chunk_for_position(&self, pos: UVec3) -> Option<&Chunk> {
+    pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
         for chunk in self.chunks.iter() {
             if pos.x >= chunk.min.x
                 && pos.x <= chunk.max.x
@@ -625,11 +649,12 @@ impl<N: Neighborhood + Default> Grid<N> {
             for farthest in (i + 1)..path.len() {
                 if line_of_sight_cardinal(&self.grid.view(), path.path[i], path.path[farthest]) {
                     let shortcut_length = farthest - i; // Reward longer shortcuts
-                    let goal_proximity = self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
+                    let goal_proximity =
+                        self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
 
                     // Base score: encourage longer shortcuts
                     let score = shortcut_length as f32 - goal_proximity * 4.0;
-                    
+
                     // Pick the best shortcut that maximizes the score
                     if score > best_score {
                         best_farthest = farthest;
@@ -641,7 +666,6 @@ impl<N: Neighborhood + Default> Grid<N> {
             let segment = generate_path_segment_cardinal(path.path[i], path.path[best_farthest]);
             refined_path.extend(segment.into_iter().skip(1)); // Avoid duplicate start points
             i = best_farthest; // Move to the best shortcut
-
         }
 
         // Calculate the cost of the refined path
@@ -655,7 +679,7 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 
     /// Optimize a path by using line of sight checks to skip waypoints.
-    /// 
+    ///
     /// This is used to optimize paths generated by the HPA* algorithms.
     /// `get_path` uses this internally so this is only needed if you want to
     /// optimize a path that was generated by a different method.
@@ -672,7 +696,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
         refined_path.push(path.path[i]); // Always keep the first node
 
-        while i < path.len() {    
+        while i < path.len() {
             // Check if we can go directly to the goal
             if line_of_sight_ordinal(&self.grid.view(), path.path[i], goal) {
                 let segment = generate_path_segment_ordinal(path.path[i], goal);
@@ -685,10 +709,12 @@ impl<N: Neighborhood + Default> Grid<N> {
 
             for farthest in (i + 1)..path.len() {
                 if line_of_sight_ordinal(&self.grid.view(), path.path[i], path.path[farthest]) {
-                    let movement_type = get_movement_type(path.path[i].as_vec3(), path.path[farthest].as_vec3());
+                    let movement_type =
+                        get_movement_type(path.path[i].as_vec3(), path.path[farthest].as_vec3());
 
                     let shortcut_length = farthest - i; // Reward longer shortcuts
-                    let goal_proximity = self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
+                    let goal_proximity =
+                        self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
 
                     // Base score: encourage longer shortcuts
                     let mut score = shortcut_length as f32 - goal_proximity * 4.0;
@@ -699,7 +725,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                             score -= 4.0; // Penalize changing movement types
                         }
                     }
-                    
+
                     // Pick the best shortcut that maximizes the score
                     if score > best_score {
                         best_farthest = farthest;
@@ -711,8 +737,11 @@ impl<N: Neighborhood + Default> Grid<N> {
             let segment = generate_path_segment_ordinal(path.path[i], path.path[best_farthest]);
             refined_path.extend(segment.into_iter().skip(1)); // Avoid duplicate start points
 
-            prev_movement_type = Some(get_movement_type(path.path[i].as_vec3(), path.path[best_farthest].as_vec3()));
-    
+            prev_movement_type = Some(get_movement_type(
+                path.path[i].as_vec3(),
+                path.path[best_farthest].as_vec3(),
+            ));
+
             i = best_farthest; // Move to the best shortcut
         }
 
@@ -726,17 +755,23 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
         path.graph_path = path.path.clone();
 
-        path   
+        path
     }
 
     /// Recursively reroutes a path by astar pathing to further chunks until a path can be found.
-    /// 
+    ///
     /// Useful if local collision avoidance is failing.
-    /// 
+    ///
     /// If you're using the plugin pathing systems, you shouldn't need to call this directly.
-    /// 
+    ///
     /// # Arguments
-    pub fn reroute_path(&self, path: &Path, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>) -> Option<Path> {
+    pub fn reroute_path(
+        &self,
+        path: &Path,
+        start: UVec3,
+        goal: UVec3,
+        blocking: &HashMap<UVec3, Entity>,
+    ) -> Option<Path> {
         // When the starting chunks entrances are all blocked, this will try astar path to the NEXT chunk in the graph path
         // recursively until it can find a path out.
         // If it can't find a path out, it will return None.
@@ -781,19 +816,33 @@ impl<N: Neighborhood + Default> Grid<N> {
         None
     }
 
-    pub fn get_path(&self, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>, partial: bool) -> Option<Path> {
+    pub fn get_path(
+        &self,
+        start: UVec3,
+        goal: UVec3,
+        blocking: &HashMap<UVec3, Entity>,
+        partial: bool,
+    ) -> Option<Path> {
         if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
             || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
         {
             return None;
         }
 
-        let start_chunk = self.get_chunk_for_position(start)?;
-        let goal_chunk = self.get_chunk_for_position(goal)?;
+        let start_chunk = self.chunk_at_position(start)?;
+        let goal_chunk = self.chunk_at_position(goal)?;
 
         if start_chunk == goal_chunk {
-            let path = astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 100, partial, blocking);
-            
+            let path = astar_grid(
+                &self.neighborhood,
+                &self.grid.view(),
+                start,
+                goal,
+                100,
+                partial,
+                blocking,
+            );
+
             if let Some(mut path) = path {
                 // We should still refine this path since AStar wasn't requested
                 path = if self.neighborhood.is_ordinal() {
@@ -801,7 +850,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                 } else {
                     self.optimize_path_cardinal(path)
                 };
-                
+
                 path.path.pop_front();
                 return Some(path);
             } else {
@@ -810,7 +859,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
         // Get all nodes in the start chunk
-        let start_nodes = self.graph.get_all_nodes_in_chunk(start_chunk.clone());
+        let start_nodes = self.graph.nodes_in_chunk(start_chunk.clone());
 
         // Build a new blocking map that's adjusted to the start chunk
         let start_blocking = blocking
@@ -830,7 +879,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             &self.neighborhood,
             &start_chunk.view(&self.grid),
             start - start_chunk.min,
-            &start_nodes.iter().map(|node| node.pos - start_chunk.min).collect::<Vec<_>>(),
+            &start_nodes
+                .iter()
+                .map(|node| node.pos - start_chunk.min)
+                .collect::<Vec<_>>(),
             false,
             100,
             &start_blocking,
@@ -846,7 +898,6 @@ impl<N: Neighborhood + Default> Grid<N> {
             return None;
         }
 
-
         // Sort start nodes by distance to the goal and the starting point
         let mut start_nodes = start_nodes
             .iter()
@@ -860,36 +911,39 @@ impl<N: Neighborhood + Default> Grid<N> {
                     + (node.pos.z as i32 - start.z as i32).abs();
 
                 (node, distance_to_goal + distance_to_start)
-                })
+            })
             .collect::<Vec<_>>();
 
         // Starting with the node shortest to the goal, find a path to the goal
         start_nodes.sort_by_key(|(_, distance)| *distance);
 
         // Get all nodes in the goal chunk
-        let goal_nodes = self.graph.get_all_nodes_in_chunk(goal_chunk.clone());
+        let goal_nodes = self.graph.nodes_in_chunk(goal_chunk.clone());
 
         // Build a new blocking map that's adjusted for the goal chunk
         /*let goal_blocking = blocking.clone()
-            .iter()
-            .map(|(pos, entity)| {
-                let adjusted_pos = UVec3::new(
-                    pos.x.saturating_sub(goal_chunk.min.x),
-                    pos.y.saturating_sub(goal_chunk.min.y),
-                    pos.z.saturating_sub(goal_chunk.min.z),
-                );
-                (adjusted_pos, *entity)
-            })
-            .collect::<HashMap<_, _>>();*/
+        .iter()
+        .map(|(pos, entity)| {
+            let adjusted_pos = UVec3::new(
+                pos.x.saturating_sub(goal_chunk.min.x),
+                pos.y.saturating_sub(goal_chunk.min.y),
+                pos.z.saturating_sub(goal_chunk.min.z),
+            );
+            (adjusted_pos, *entity)
+        })
+        .collect::<HashMap<_, _>>();*/
 
         let goal_paths = dijkstra_grid(
             &self.neighborhood,
             &goal_chunk.view(&self.grid),
             goal - goal_chunk.min,
-            &goal_nodes.iter().map(|node| node.pos - goal_chunk.min).collect::<Vec<_>>(),
+            &goal_nodes
+                .iter()
+                .map(|node| node.pos - goal_chunk.min)
+                .collect::<Vec<_>>(),
             false,
             100,
-            &HashMap::new()//&goal_blocking,
+            &HashMap::new(), //&goal_blocking,
         );
 
         let goal_nodes = goal_nodes
@@ -935,7 +989,6 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut path: Vec<UVec3> = Vec::new();
         let mut cost = 0;
 
-
         // Here is the problem. If the starting position can't get to the start node then this whole thing fails. Need to fix it.
 
         for (start_node, _) in start_nodes {
@@ -950,22 +1003,32 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                 if let Some(node_path) = node_path {
                     // Add start_path to the node_path
-                    let start_path = start_paths.get(&(start_node.pos - start_chunk.min)).unwrap();
+                    let start_path = start_paths
+                        .get(&(start_node.pos - start_chunk.min))
+                        .unwrap();
                     path.extend(start_path.path().iter().map(|pos| *pos + start_chunk.min));
                     cost += start_path.cost();
 
-
                     // Add node_path paths to path
-                    for (node, next_node) in node_path.path().iter().zip(node_path.path().iter().skip(1)) {
+                    for (node, next_node) in
+                        node_path.path().iter().zip(node_path.path().iter().skip(1))
+                    {
                         // Get the cached edge path between node and next node
-                        let cached_path = self.graph.get_node(*node).unwrap().edges[next_node].clone();
+                        let cached_path =
+                            self.graph.node_at(*node).unwrap().edges[next_node].clone();
                         path.extend(cached_path.path().iter().skip(1));
                         cost += cached_path.cost();
                     }
 
                     // Add end path to path
                     let end_path = goal_paths.get(&(goal_node.pos - goal_chunk.min)).unwrap();
-                    path.extend(end_path.path().iter().rev().map(|pos| *pos + goal_chunk.min));
+                    path.extend(
+                        end_path
+                            .path()
+                            .iter()
+                            .rev()
+                            .map(|pos| *pos + goal_chunk.min),
+                    );
                     cost += end_path.cost();
 
                     if path.len() == 0 {
@@ -992,7 +1055,13 @@ impl<N: Neighborhood + Default> Grid<N> {
         None
     }
 
-    pub fn get_astar_path(&self, start: UVec3, goal: UVec3, blocking: &HashMap<UVec3, Entity>, partial: bool) -> Option<Path> {
+    pub fn get_astar_path(
+        &self,
+        start: UVec3,
+        goal: UVec3,
+        blocking: &HashMap<UVec3, Entity>,
+        partial: bool,
+    ) -> Option<Path> {
         if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
             || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
         {
@@ -1005,8 +1074,16 @@ impl<N: Neighborhood + Default> Grid<N> {
             return None;
         }
 
-        let path = astar_grid(&self.neighborhood, &self.grid.view(), start, goal, 1024, partial, blocking);
-        
+        let path = astar_grid(
+            &self.neighborhood,
+            &self.grid.view(),
+            start,
+            goal,
+            1024,
+            partial,
+            blocking,
+        );
+
         if let Some(mut path) = path {
             path.path.pop_front();
             return Some(path);
@@ -1131,7 +1208,7 @@ mod tests {
 
         grid.build_nodes();
 
-        let nodes = grid.graph.get_nodes();
+        let nodes = grid.graph.nodes();
 
         assert_eq!(nodes[0].pos, UVec3::new(2, 3, 0));
         assert_eq!(nodes[1].pos, UVec3::new(3, 2, 0));
@@ -1203,7 +1280,7 @@ mod tests {
 
         let edges = grid
             .graph
-            .get_node(UVec3::new(2, 3, 0))
+            .node_at(UVec3::new(2, 3, 0))
             .unwrap()
             .edges
             .clone();
@@ -1219,7 +1296,7 @@ mod tests {
     #[test]
     pub fn test_get_chunk_for_position() {
         let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
-        let chunk = grid.get_chunk_for_position(UVec3::new(0, 0, 0)).unwrap();
+        let chunk = grid.chunk_at_position(UVec3::new(0, 0, 0)).unwrap();
 
         assert_eq!(chunk.min, UVec3::new(0, 0, 0));
         assert_eq!(
@@ -1237,9 +1314,7 @@ mod tests {
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
         grid.build_nodes();
 
-        let nodes = grid
-            .graph
-            .get_all_nodes_in_chunk(grid.chunks[[0, 0, 0]].clone());
+        let nodes = grid.graph.nodes_in_chunk(grid.chunks[[0, 0, 0]].clone());
 
         assert_eq!(nodes.len(), 2);
     }
@@ -1250,14 +1325,27 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_path(UVec3::new(10, 10, 0), UVec3::new(4, 4, 0), &HashMap::new(), false);
-        let raw_path = grid.get_astar_path(UVec3::new(10, 10, 0), UVec3::new(4, 4, 0), &HashMap::new(), false);
+        let path = grid.get_path(
+            UVec3::new(10, 10, 0),
+            UVec3::new(4, 4, 0),
+            &HashMap::new(),
+            false,
+        );
+        let raw_path = grid.get_astar_path(
+            UVec3::new(10, 10, 0),
+            UVec3::new(4, 4, 0),
+            &HashMap::new(),
+            false,
+        );
 
         assert!(path.is_some());
         // Ensure start point is the first point in the path
         assert_ne!(path.clone().unwrap().path()[0], UVec3::new(10, 10, 0));
         // Ensure end point is the last point in the path
-        assert_eq!(path.clone().unwrap().path().last().unwrap(), &UVec3::new(4, 4, 0));
+        assert_eq!(
+            path.clone().unwrap().path().last().unwrap(),
+            &UVec3::new(4, 4, 0)
+        );
 
         assert_eq!(path.clone().unwrap().len(), raw_path.unwrap().len());
         assert_eq!(path.unwrap().len(), 6);
@@ -1328,7 +1416,12 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_path(UVec3::new(7, 7, 0), UVec3::new(121, 121, 0), &HashMap::new(), false);
+        let path = grid.get_path(
+            UVec3::new(7, 7, 0),
+            UVec3::new(121, 121, 0),
+            &HashMap::new(),
+            false,
+        );
 
         assert!(path.is_some());
         assert!(path.unwrap().len() > 0);
@@ -1350,7 +1443,12 @@ mod tests {
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
 
         grid.build();
-        let path = grid.get_path(UVec3::new(0, 0, 0), UVec3::new(31, 31, 3), &HashMap::new(), false);
+        let path = grid.get_path(
+            UVec3::new(0, 0, 0),
+            UVec3::new(31, 31, 3),
+            &HashMap::new(),
+            false,
+        );
 
         assert!(path.is_some());
     }
@@ -1361,7 +1459,12 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), &HashMap::new(), false);
+        let path = grid.get_astar_path(
+            UVec3::new(0, 0, 0),
+            UVec3::new(10, 10, 0),
+            &HashMap::new(),
+            false,
+        );
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 10);

@@ -167,7 +167,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     map_entity.with_child(DebugMap {
         tile_width: 8,
         tile_height: 8,
-        map_type: MapType::Square,
+        map_type: DebugMapType::Square,
         draw_chunks: true,
         draw_points: false,
         draw_entrances: true,
@@ -249,7 +249,7 @@ fn entity_under_cursor(
     windows: Query<&Window>,
     camera: Query<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
     minions: Query<(Entity, &GlobalTransform)>,
-    troubleshooting: Query<(Entity, &Position, Option<&Pathfind>, Option<&Path>, Option<&Next>, Option<&AvoidanceFailed>)>,
+    troubleshooting: Query<(Entity, &GridPos, Option<&Pathfind>, Option<&Path>, Option<&NextPos>, Option<&AvoidanceFailed>)>,
 ) {
     let window = windows.single();
     let (camera, camera_transform, _) = camera.single();
@@ -306,7 +306,7 @@ fn update_pathfind_type_test(
 
 fn move_pathfinders(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Position, &Next)>,
+    mut query: Query<(Entity, &mut GridPos, &NextPos)>,
     mut tick_reader: EventReader<Tick>,
 ) {
     for _ in tick_reader.read() {
@@ -326,7 +326,7 @@ fn move_pathfinders(
             commands
                 .entity(entity)
                 .insert(Transform::from_translation(translation))
-                .remove::<Next>();
+                .remove::<NextPos>();
         }
     }
 }
@@ -367,9 +367,9 @@ fn spawn_minions(
     let layer_entity = layer_entity.iter().next().unwrap();
 
     walkable.tiles = Vec::new();
-    for x in 0..grid.get_width() {
-        for y in 0..grid.get_height() {
-            if grid.get_point(UVec3::new(x, y, 0)).wall == false {
+    for x in 0..grid.width() {
+        for y in 0..grid.height() {
+            if grid.point(UVec3::new(x, y, 0)).wall == false {
                 let position = Vec3::new(x as f32 * 8.0, y as f32 * 8.0, 0.0);
 
                 walkable.tiles.push(position);
@@ -402,13 +402,13 @@ fn spawn_minions(
             .insert(DebugPath {
                 tile_width: 8,
                 tile_height: 8,
-                map_type: MapType::Square,
+                map_type: DebugMapType::Square,
                 color: color,
                 draw_unrefined: false,
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
-            .insert(Position(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
+            .insert(GridPos(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
             //.insert(Goal(UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0)))
             .set_parent(layer_entity);
 

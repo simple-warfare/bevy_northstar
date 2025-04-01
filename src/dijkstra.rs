@@ -1,16 +1,31 @@
-use std::collections::BinaryHeap;
-
+//! Dijkstra's algorithm implementation for pathfinding in a grid or graph.
 use bevy::{
-    math::UVec3, prelude::Entity, utils::hashbrown::{HashMap, HashSet}
+    math::UVec3,
+    prelude::Entity,
+    utils::hashbrown::{HashMap, HashSet},
 };
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
+use std::collections::BinaryHeap;
 
 use crate::{
     graph::Graph, neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder,
 };
 
-pub fn dijkstra_grid<N: Neighborhood>(
+/// Dijkstra's algorithm for pathfinding in a grid.
+///
+/// ## Arguments
+/// * `neighborhood` - The `Neighborhood` to use for finding neighbors.
+/// * `grid` - The `Grid` to search.
+/// * `start` - The starting position.
+/// * `goals` - The goal positions.
+/// * `only_closest_goal` - If true, only the closest goal will be returned.
+/// * `size_hint` - A hint for the size of the priority queue.
+/// * `blocking` - A map of blocking entities.
+///
+/// ## Returns
+/// A `HashMap` of `UVec3` goal positions with their respective `Path`s.
+pub(crate) fn dijkstra_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,
     start: UVec3,
@@ -111,6 +126,17 @@ pub fn dijkstra_grid<N: Neighborhood>(
     goal_data
 }
 
+/// Dijkstra's algorithm for pathfinding in a graph.
+///
+/// ## Arguments
+/// * `graph` - The `Graph` to search.
+/// * `start` - The starting position.
+/// * `goals` - The goal positions.
+/// * `only_closest_goal` - If true, only the closest goal will be returned.
+/// * `size_hint` - A hint for the size of the priority queue.
+///
+/// ## Returns
+/// A `HashMap` of `UVec3` goal positions with their respective `Path`s.
 #[allow(dead_code)]
 pub fn dijkstra_graph(
     graph: &Graph,
@@ -143,8 +169,8 @@ pub fn dijkstra_graph(
                 }
             }
 
-            let node = graph.get_node(*current_pos).unwrap();
-            node.get_edges()
+            let node = graph.node_at(*current_pos).unwrap();
+            node.edges()
         };
 
         for &neighbor in neighbors.iter() {

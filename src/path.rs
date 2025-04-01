@@ -1,12 +1,12 @@
-use std::collections::VecDeque;
-
+//! This module defines the important `Path` component.
 use bevy::math::UVec3;
 use bevy::prelude::Component;
+use std::collections::VecDeque;
 
 /// The path component. This is inserted to an entity after the plugin
 /// systems have pathfound to the goal position.
-/// 
-/// Implmented in `path.rs`
+///
+/// `Path` will also be returned if you manually call pathfinding functions.
 #[derive(Debug, Clone, Component)]
 pub struct Path {
     pub(crate) path: VecDeque<UVec3>,
@@ -44,7 +44,18 @@ impl Path {
         self.path.contains(&pos)
     }
 
-    /// Returns the path as a slice of `UVec3` positions
+    /// Returns the path as a slice of `UVec3` positions.
+    /// Useful to represent the path for UI etc.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use bevy::prelude::*;
+    /// use bevy_northstar::prelude::*;
+    ///
+    /// let path = Path::new(vec![UVec3::new(1, 2, 3), UVec3::new(4, 5, 6)], 10);
+    /// assert_eq!(path.path(), &[UVec3::new(1, 2, 3), UVec3::new(4, 5, 6)]);
+    /// ```
     pub fn path(&self) -> &[UVec3] {
         &self.path.as_slices().0
     }
@@ -64,13 +75,13 @@ impl Path {
         self.path.is_empty()
     }
 
-    /// Reverse the path
+    /// Reverse the path in place.
     pub fn reverse(&mut self) {
         self.path.make_contiguous().reverse();
         self.is_reversed = !self.is_reversed;
     }
 
-    /// Pops the first position of the path
+    /// Pops the first position of the path.
     pub fn pop(&mut self) -> Option<UVec3> {
         // Remove the first element of the path
         self.path.pop_front()

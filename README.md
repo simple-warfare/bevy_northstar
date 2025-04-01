@@ -50,6 +50,6 @@ This crate has the following Cargo features:
 
 ## Thanks
 Thanks to the following crates and blogs that have been used as references
-* https://github.com/evenfurther/pathfinding
-* https://github.com/mich101mich/hierarchical_pathfinding
-* https://alexmelenchon.github.io/Hierarchial-Pathfinding-Research/
+* <https://github.com/evenfurther/pathfinding>
+* <https://github.com/mich101mich/hierarchical_pathfinding>
+* <https://alexmelenchon.github.io/Hierarchial-Pathfinding-Research/>

@@ -1,8 +1,10 @@
+//! Northstar Plugin. This plugin handles the pathfinding and collision avoidance systems.
 #[cfg(feature = "stats")]
 use std::time::Instant;
 
-use crate::prelude::*;
 use bevy::{log, prelude::*, utils::hashbrown::HashMap};
+
+use crate::prelude::*;
 
 #[derive(Default)]
 pub struct NorthstarPlugin<N: Neighborhood> {
@@ -36,10 +38,10 @@ impl Stats {
         self.pathfinding.pathfind_time.push(time);
         self.pathfinding.pathfind_length.push(length);
 
-        self.pathfinding.average_time =
-            self.pathfinding.pathfind_time.iter().sum::<f64>() / self.pathfinding.pathfind_time.len() as f64;
-        self.pathfinding.average_length =
-            self.pathfinding.pathfind_length.iter().sum::<f64>() / self.pathfinding.pathfind_length.len() as f64;
+        self.pathfinding.average_time = self.pathfinding.pathfind_time.iter().sum::<f64>()
+            / self.pathfinding.pathfind_time.len() as f64;
+        self.pathfinding.average_length = self.pathfinding.pathfind_length.iter().sum::<f64>()
+            / self.pathfinding.pathfind_length.len() as f64;
     }
 
     pub fn reset_pathfinding(&mut self) {
@@ -53,10 +55,10 @@ impl Stats {
         self.collision.avoidance_time.push(time);
         self.collision.avoidance_length.push(length);
 
-        self.collision.average_time =
-            self.collision.avoidance_time.iter().sum::<f64>() / self.collision.avoidance_time.len() as f64;
-        self.collision.average_length =
-            self.collision.avoidance_length.iter().sum::<f64>() / self.collision.avoidance_length.len() as f64;
+        self.collision.average_time = self.collision.avoidance_time.iter().sum::<f64>()
+            / self.collision.avoidance_time.len() as f64;
+        self.collision.average_length = self.collision.avoidance_length.iter().sum::<f64>()
+            / self.collision.avoidance_length.len() as f64;
     }
 
     pub fn reset_collision(&mut self) {
@@ -83,8 +85,8 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
                 next_position::<N>,
                 reroute_path::<N>,
             )
-            .chain()
-            .in_set(PathingSet),
+                .chain()
+                .in_set(PathingSet),
         )
         .insert_resource(BlockingMap::default());
 
@@ -105,7 +107,7 @@ pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 fn pathfind<N: Neighborhood>(
     grid: Option<Res<Grid<N>>>,
     mut commands: Commands,
-    mut query: Query<(Entity, &Position, &Pathfind), Changed<Pathfind>>,
+    mut query: Query<(Entity, &GridPos, &Pathfind), Changed<Pathfind>>,
     blocking: Res<BlockingMap>,
     settings: Res<NorthstarSettings>,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
@@ -134,7 +136,7 @@ fn pathfind<N: Neighborhood>(
 
         let path = if pathfind.use_astar {
             grid.get_astar_path(start.0, pathfind.goal, blocking, false)
-        } else { 
+        } else {
             grid.get_path(start.0, pathfind.goal, blocking, false)
         };
 
@@ -144,13 +146,13 @@ fn pathfind<N: Neighborhood>(
         if let Some(path) = path {
             #[cfg(feature = "stats")]
             stats.add_pathfinding(elapsed_time, path.cost() as f64);
-            
+
             commands.entity(entity).insert(path);
         } else {
             #[cfg(feature = "stats")]
             stats.add_pathfinding(elapsed_time, 0.0);
 
-            commands.entity(entity).remove::<Next>(); // Just to be safe
+            commands.entity(entity).remove::<NextPos>(); // Just to be safe
             commands.entity(entity).insert(Pathfind {
                 goal: pathfind.goal,
                 use_astar: false,
@@ -160,7 +162,14 @@ fn pathfind<N: Neighborhood>(
 }
 
 fn next_position<N: Neighborhood>(
-    mut query: Query<(Entity, &mut Path, &Position, &Pathfind), (Without<Next>, Without<AvoidanceFailed>, Without<RerouteFailed>)>,
+    mut query: Query<
+        (Entity, &mut Path, &GridPos, &Pathfind),
+        (
+            Without<NextPos>,
+            Without<AvoidanceFailed>,
+            Without<RerouteFailed>,
+        ),
+    >,
     grid: Option<Res<Grid<N>>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
@@ -186,7 +195,16 @@ fn next_position<N: Neighborhood>(
             #[cfg(feature = "stats")]
             let start = Instant::now();
 
-            let success = avoidance(&grid, entity, &mut path, pathfind, position.0, &blocking.0, &direction.0, settings.avoidance_distance);
+            let success = avoidance(
+                &grid,
+                entity,
+                &mut path,
+                pathfind,
+                position.0,
+                &blocking.0,
+                &direction.0,
+                settings.avoidance_distance,
+            );
 
             if !success {
                 commands.entity(entity).insert(AvoidanceFailed);
@@ -200,18 +218,21 @@ fn next_position<N: Neighborhood>(
 
             let potential_next = path.path.front().unwrap();
 
-
             if blocking.0.contains_key(potential_next) && blocking.0[potential_next] != entity {
                 log::info!("Blocking: {:?}", blocking.0);
-                log::error!("Next position is blocked for entity: {:?}, other entity: {:?}", entity, blocking.0[potential_next]);
+                log::error!(
+                    "Next position is blocked for entity: {:?}, other entity: {:?}",
+                    entity,
+                    blocking.0[potential_next]
+                );
             }
 
             path.pop()
         } else {
             path.pop()
         };
-        
-        if let Some(next) = next{
+
+        if let Some(next) = next {
             if blocking.0.contains_key(&next) && settings.collision {
                 log::error!("Next position is blocked for entity, we should never get here but we did: {:?}", entity);
                 commands.entity(entity).insert(AvoidanceFailed);
@@ -219,11 +240,13 @@ fn next_position<N: Neighborhood>(
             }
 
             // Calculate the dot product direction
-            direction.0.insert(entity, next.as_vec3() - position.0.as_vec3());
+            direction
+                .0
+                .insert(entity, next.as_vec3() - position.0.as_vec3());
 
             blocking.0.remove(&position.0);
             blocking.0.insert(next, entity);
-            commands.entity(entity).insert(Next(next));
+            commands.entity(entity).insert(NextPos(next));
         } else {
             log::error!("No next position found for entity: {:?}", entity);
         }
@@ -265,7 +288,6 @@ where
 
     let difference = next_position.as_vec3() - position.as_vec3();
 
-
     let unblocked_pos: Vec<UVec3> = path
         .path
         .iter()
@@ -296,13 +318,14 @@ where
     if unblocked_pos.len() < count {
         let avoidance_goal = {
             let _ = info_span!("avoidance_goal", name = "avoidance_goal").entered();
-         
+
             // Get the first unlocked position AFTER skipping the count, we don't care about the direction
-            path.path.iter()
+            path.path
+                .iter()
                 .skip(count)
                 .find(|pos| blocking.contains_key(&**pos) == false)
         };
-        
+
         // If we have an avoidance goal, astar path to that
         if let Some(avoidance_goal) = avoidance_goal {
             let new_path = grid.get_astar_path(position, *avoidance_goal, &blocking, false);
@@ -362,13 +385,12 @@ where
 }
 
 fn reroute_path<N: Neighborhood>(
-    mut query: Query<(Entity, &Position, &Pathfind, &Path), With<AvoidanceFailed>>,
+    mut query: Query<(Entity, &GridPos, &Pathfind, &Path), With<AvoidanceFailed>>,
     grid: Res<Grid<N>>,
     blocking: Res<BlockingMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) 
-where 
+) where
     N: 'static + Neighborhood,
 {
     for (entity, position, pathfind, path) in query.iter_mut() {
@@ -382,7 +404,6 @@ where
         let new_path = grid.reroute_path(path, position.0, pathfind.goal, &blocking.0);
 
         if let Some(new_path) = new_path {
-
             // if the last point in the path is not the goal...
             if new_path.path().last().unwrap() != &pathfind.goal {
                 log::error!("WE HAVE A PARTIAL ROUTE ISSUE: {:?}", entity);
@@ -409,7 +430,7 @@ where
 
 fn update_blocking_map(
     mut blocking_set: ResMut<BlockingMap>,
-    query: Query<(Entity, &Position)> // WHY DID I HAVE THIS Changed<Position>>,
+    query: Query<(Entity, &GridPos)>, // WHY DID I HAVE THIS Changed<Position>>,
 ) {
     blocking_set.0.clear();
 

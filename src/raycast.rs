@@ -1,9 +1,10 @@
+//! Raycasting and pathfinding utilities for 2D/3D grids.
 use bevy::math::UVec3;
 use ndarray::ArrayView3;
 
 use crate::Point;
 
-/// Check if there is a line of sight between two points in the grid.
+/// Check if there is a line of sight between two points in the grid allowing diagonal movement.
 /// 
 /// Arguments:
 /// * `grid` - A 3D array view of `Point`s representing the grid.
@@ -14,7 +15,7 @@ use crate::Point;
 /// * `true` if there is a line of sight between the two points.
 /// * `false` if there is an obstacle between the two points.
 /// 
-/// # Examples
+/// # Example
 /// 
 /// ```
 /// use bevy::math::UVec3;
@@ -69,6 +70,15 @@ pub fn line_of_sight_ordinal(grid: &ArrayView3<Point>, start: UVec3, end: UVec3)
     true
 }
 
+/// Check if there is a line of sight between two points in the grid allowing only cardinal movement.
+/// 
+/// Arguments:
+/// * `grid` - A 3D array view of `Point`s representing the grid.
+/// * `start` - The starting point.
+/// * `end` - The ending point.
+/// 
+/// Returns:
+/// * `true` if there is a line of sight between the two points.
 pub fn line_of_sight_cardinal(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
     let mut pos = start.as_ivec3();
     let end = end.as_ivec3();
@@ -137,6 +147,7 @@ pub(crate) fn generate_path_segment_ordinal(start: UVec3, end: UVec3) -> Vec<UVe
     segment
 }
 
+// Generates the positions of a path segment between two points in a 3D grid using cardinal movement.
 pub(crate) fn generate_path_segment_cardinal(start: UVec3, end: UVec3) -> Vec<UVec3> {
     let mut segment = Vec::new();
     segment.push(start);
@@ -168,7 +179,8 @@ pub(crate) fn generate_path_segment_cardinal(start: UVec3, end: UVec3) -> Vec<UV
 
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid
-pub fn bresenham_path(grid: &ArrayView3<Point>, start: UVec3, goal: UVec3, ordinal: bool) -> Option<Vec<UVec3>> {
+#[allow(dead_code)]
+pub(crate) fn bresenham_path(grid: &ArrayView3<Point>, start: UVec3, goal: UVec3, ordinal: bool) -> Option<Vec<UVec3>> {
     let mut path = Vec::new();
     let mut current = start;
 
@@ -350,7 +362,7 @@ mod tests {
 
         grid.build();
 
-        let path = bresenham_path(&grid.get_view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 11);
@@ -359,7 +371,7 @@ mod tests {
 
         grid.build();
 
-        let path = bresenham_path(&grid.get_view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 21);
@@ -369,7 +381,7 @@ mod tests {
         grid.set_point(UVec3::new(5, 5, 0), Point::new(1, true));
         grid.build();
 
-        let path = bresenham_path(&grid.get_view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
 
         assert!(path.is_none());
     }
