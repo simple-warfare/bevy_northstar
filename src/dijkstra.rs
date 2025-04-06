@@ -9,7 +9,7 @@ use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
 use crate::{
-    graph::Graph, neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder,
+    graph::Graph, grid::Point, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder,
 };
 
 /// Dijkstra's algorithm for pathfinding in a grid.

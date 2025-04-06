@@ -3,7 +3,7 @@ use bevy::math::UVec3;
 use ndarray::ArrayView3;
 use std::fmt::Debug;
 
-use crate::Point;
+use crate::grid::Point;
 
 /// The `Neighborhood` trait defines the interface for different neighborhood types.
 /// You can implement this trait to define custom neighborhoods and hueristics.

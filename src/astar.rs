@@ -5,13 +5,13 @@ use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
 use crate::{
-    graph::Graph, neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder,
+    graph::Graph, grid::Point, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder,
 };
 
-/// A* search algorithm for a `Grid` of `Point's`.
+/// A* search algorithm for a [`Grid`] of [`Point`]s.
 ///
 /// # Arguments
-/// * `neighborhood` - Reference to the `Neighborhood` to use.
+/// * `neighborhood` - Reference to the [`Neighborhood`] to use.
 /// * `grid` - A reference to a 3D array representing the grid.
 /// * `start` - The starting position in the grid.
 /// * `goal` - The goal position in the grid.
@@ -20,7 +20,7 @@ use crate::{
 /// * `blocking` - A reference to a map of positions that are blocked.
 ///
 /// # Returns
-/// * `Option<Path>` - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
+/// * [`Option<Path>`] - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
 pub(crate) fn astar_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,

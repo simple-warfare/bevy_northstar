@@ -7,8 +7,14 @@ use bevy::{
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    astar::*, chunk::Chunk, dijkstra::*, dir::*, graph::Graph, neighbor::Neighborhood, node::Node,
-    path::Path, raycast::*, Point,
+    chunk::Chunk,
+    dijkstra::*,
+    dir::*,
+    graph::Graph,
+    neighbor::Neighborhood,
+    node::Node,
+    path::Path,
+    pathfind::{pathfind, pathfind_astar, reroute_path},
 };
 
 /// Settings for configuring the grid.
@@ -32,6 +38,27 @@ pub struct GridSettings {
     pub default_cost: u32,
     /// Set to true to default all grid positions to walls.
     pub default_wall: bool,
+}
+
+/// [`Point`] represents a single position on the grid.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Point {
+    /// The movement cost associated with this point.
+    pub cost: u32,
+    /// Wall will block all movement.
+    pub wall: bool,
+    /// Ramp will allow movement up or down.
+    pub ramp: bool,
+}
+
+impl Point {
+    pub fn new(cost: u32, wall: bool) -> Self {
+        Point {
+            cost,
+            wall,
+            ramp: false,
+        }
+    }
 }
 
 /// `Grid` is the main `Resource` struct for the crate.
@@ -90,9 +117,9 @@ pub struct Grid<N: Neighborhood> {
     default_wall: bool,
 
     grid: Array3<Point>,
-    pub(crate) chunks: Array3<Chunk>,
+    chunks: Array3<Chunk>,
 
-    pub(crate) graph: Graph,
+    graph: Graph,
 }
 
 impl<N: Neighborhood + Default> Grid<N> {
@@ -140,6 +167,14 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Returns an `ArrayView3` reference to the grid.
     pub fn view(&self) -> ArrayView3<Point> {
         self.grid.view()
+    }
+
+    pub(crate) fn chunk_view(&self, chunk: &Chunk) -> ArrayView3<Point> {
+        chunk.view(&self.grid)
+    }
+
+    pub(crate) fn graph(&self) -> &Graph {
+        &self.graph
     }
 
     /// Returns the `Point` at the given position in the grid.
@@ -230,35 +265,35 @@ impl<N: Neighborhood + Default> Grid<N> {
                             for node in nodes.iter_mut() {
                                 node.pos = match dir {
                                     Dir::NORTH => UVec3::new(
-                                        node.pos.x + current_chunk.min.x,
-                                        node.pos.y + current_chunk.max.y,
-                                        node.pos.z + current_chunk.min.z,
+                                        node.pos.x + current_chunk.min().x,
+                                        node.pos.y + current_chunk.max().y,
+                                        node.pos.z + current_chunk.min().z,
                                     ),
                                     Dir::EAST => UVec3::new(
-                                        node.pos.y + current_chunk.max.x,
-                                        node.pos.x + current_chunk.min.y,
-                                        node.pos.z + current_chunk.min.z,
+                                        node.pos.y + current_chunk.max().x,
+                                        node.pos.x + current_chunk.min().y,
+                                        node.pos.z + current_chunk.min().z,
                                     ),
                                     Dir::SOUTH => UVec3::new(
-                                        node.pos.x + current_chunk.min.x,
-                                        node.pos.y + current_chunk.min.y,
-                                        node.pos.z + current_chunk.min.z,
+                                        node.pos.x + current_chunk.min().x,
+                                        node.pos.y + current_chunk.min().y,
+                                        node.pos.z + current_chunk.min().z,
                                     ),
                                     Dir::WEST => UVec3::new(
-                                        node.pos.y + current_chunk.min.x,
-                                        node.pos.x + current_chunk.min.y,
-                                        node.pos.z + current_chunk.min.z,
+                                        node.pos.y + current_chunk.min().x,
+                                        node.pos.x + current_chunk.min().y,
+                                        node.pos.z + current_chunk.min().z,
                                     ),
                                     // TODO: WE NEED TO FIX UP AND DOWN NODE STUFFS
                                     Dir::UP => UVec3::new(
-                                        node.pos.x + current_chunk.min.x,
-                                        node.pos.y + current_chunk.min.y,
-                                        node.pos.z + current_chunk.max.z,
+                                        node.pos.x + current_chunk.min().x,
+                                        node.pos.y + current_chunk.min().y,
+                                        node.pos.z + current_chunk.max().z,
                                     ),
                                     Dir::DOWN => UVec3::new(
-                                        node.pos.x + current_chunk.min.x,
-                                        node.pos.y + current_chunk.min.y,
-                                        node.pos.z + current_chunk.min.z,
+                                        node.pos.x + current_chunk.min().x,
+                                        node.pos.y + current_chunk.min().y,
+                                        node.pos.z + current_chunk.min().z,
                                     ),
                                     _ => panic!("Invalid direction"),
                                 }
@@ -300,64 +335,64 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                                 let pos = match dir {
                                     Dir::NORTHEAST => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.max.y,
-                                        current_chunk.min.z,
+                                        current_chunk.max().x,
+                                        current_chunk.max().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::SOUTHEAST => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.min.y,
-                                        current_chunk.min.z,
+                                        current_chunk.max().x,
+                                        current_chunk.min().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::SOUTHWEST => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.min.y,
-                                        current_chunk.min.z,
+                                        current_chunk.min().x,
+                                        current_chunk.min().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::NORTHWEST => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.max.y,
-                                        current_chunk.min.z,
+                                        current_chunk.min().x,
+                                        current_chunk.max().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::NORTHEASTUP => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.max.y,
-                                        current_chunk.max.z,
+                                        current_chunk.max().x,
+                                        current_chunk.max().y,
+                                        current_chunk.max().z,
                                     ),
                                     Dir::SOUTHEASTUP => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.min.y,
-                                        current_chunk.max.z,
+                                        current_chunk.max().x,
+                                        current_chunk.min().y,
+                                        current_chunk.max().z,
                                     ),
                                     Dir::SOUTHWESTUP => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.min.y,
-                                        current_chunk.max.z,
+                                        current_chunk.min().x,
+                                        current_chunk.min().y,
+                                        current_chunk.max().z,
                                     ),
                                     Dir::NORTHWESTUP => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.max.y,
-                                        current_chunk.max.z,
+                                        current_chunk.min().x,
+                                        current_chunk.max().y,
+                                        current_chunk.max().z,
                                     ),
                                     Dir::NORTHEASTDOWN => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.max.y,
-                                        current_chunk.min.z,
+                                        current_chunk.max().x,
+                                        current_chunk.max().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::SOUTHEASTDOWN => UVec3::new(
-                                        current_chunk.max.x,
-                                        current_chunk.min.y,
-                                        current_chunk.min.z,
+                                        current_chunk.max().x,
+                                        current_chunk.min().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::SOUTHWESTDOWN => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.min.y,
-                                        current_chunk.min.z,
+                                        current_chunk.min().x,
+                                        current_chunk.min().y,
+                                        current_chunk.min().z,
                                     ),
                                     Dir::NORTHWESTDOWN => UVec3::new(
-                                        current_chunk.min.x,
-                                        current_chunk.max.y,
-                                        current_chunk.min.z,
+                                        current_chunk.min().x,
+                                        current_chunk.max().y,
+                                        current_chunk.min().z,
                                     ),
                                     _ => panic!("Invalid direction"),
                                 };
@@ -521,11 +556,11 @@ impl<N: Neighborhood + Default> Grid<N> {
                             .collect::<Vec<_>>();
 
                         // Adjust node.pos by the chunk position
-                        let start_pos = node.pos - chunk.min;
+                        let start_pos = node.pos - chunk.min();
 
                         let goals = other_nodes
                             .iter()
-                            .map(|pos| *pos - chunk.min)
+                            .map(|pos| *pos - chunk.min())
                             .collect::<Vec<_>>();
 
                         let paths = dijkstra_grid(
@@ -541,13 +576,13 @@ impl<N: Neighborhood + Default> Grid<N> {
                         // Readjust position to world space and then connect the nodes
                         for (goal_pos, path) in paths {
                             let start = node.pos;
-                            let goal = goal_pos + chunk.min;
+                            let goal = goal_pos + chunk.min();
 
                             // Readjust path to world space
                             let path_vec = path
                                 .path()
                                 .iter()
-                                .map(|pos| *pos + chunk.min)
+                                .map(|pos| *pos + chunk.min())
                                 .collect::<Vec<_>>();
 
                             connections.push((
@@ -609,153 +644,18 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
     pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
         for chunk in self.chunks.iter() {
-            if pos.x >= chunk.min.x
-                && pos.x <= chunk.max.x
-                && pos.y >= chunk.min.y
-                && pos.y <= chunk.max.y
-                && pos.z >= chunk.min.z
-                && pos.z <= chunk.max.z
+            if pos.x >= chunk.min().x
+                && pos.x <= chunk.max().x
+                && pos.y >= chunk.min().y
+                && pos.y <= chunk.max().y
+                && pos.z >= chunk.min().z
+                && pos.z <= chunk.max().z
             {
                 return Some(chunk);
             }
         }
 
         None
-    }
-
-    pub fn optimize_path_cardinal(&self, path: Path) -> Path {
-        if path.is_empty() {
-            return path;
-        }
-
-        let goal = *path.path.back().unwrap();
-
-        let mut refined_path = Vec::new();
-        let mut i = 0;
-
-        refined_path.push(path.path[i]); // Always keep the first node
-
-        while i < path.len() {
-            // Check if we can go directly to the goal
-            if line_of_sight_cardinal(&self.grid.view(), path.path[i], goal) {
-                let segment = generate_path_segment_cardinal(path.path[i], goal);
-                refined_path.extend(segment.into_iter().skip(1)); // Add intermediate points
-                break; // We're done
-            }
-
-            let mut best_farthest = i + 1;
-            let mut best_score = f32::NEG_INFINITY;
-
-            for farthest in (i + 1)..path.len() {
-                if line_of_sight_cardinal(&self.grid.view(), path.path[i], path.path[farthest]) {
-                    let shortcut_length = farthest - i; // Reward longer shortcuts
-                    let goal_proximity =
-                        self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
-
-                    // Base score: encourage longer shortcuts
-                    let score = shortcut_length as f32 - goal_proximity * 4.0;
-
-                    // Pick the best shortcut that maximizes the score
-                    if score > best_score {
-                        best_farthest = farthest;
-                        best_score = score;
-                    }
-                }
-            }
-
-            let segment = generate_path_segment_cardinal(path.path[i], path.path[best_farthest]);
-            refined_path.extend(segment.into_iter().skip(1)); // Avoid duplicate start points
-            i = best_farthest; // Move to the best shortcut
-        }
-
-        // Calculate the cost of the refined path
-        let mut cost = 0;
-        for pos in refined_path.iter() {
-            cost += self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
-        }
-        let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
-        path.graph_path = path.path.clone();
-        path
-    }
-
-    /// Optimize a path by using line of sight checks to skip waypoints.
-    ///
-    /// This is used to optimize paths generated by the HPA* algorithms.
-    /// `get_path` uses this internally so this is only needed if you want to
-    /// optimize a path that was generated by a different method.
-    pub fn optimize_path_ordinal(&self, path: Path) -> Path {
-        if path.is_empty() {
-            return path;
-        }
-
-        let goal = *path.path.back().unwrap();
-
-        let mut refined_path = Vec::new();
-        let mut i = 0;
-        let mut prev_movement_type = None;
-
-        refined_path.push(path.path[i]); // Always keep the first node
-
-        while i < path.len() {
-            // Check if we can go directly to the goal
-            if line_of_sight_ordinal(&self.grid.view(), path.path[i], goal) {
-                let segment = generate_path_segment_ordinal(path.path[i], goal);
-                refined_path.extend(segment.into_iter().skip(1)); // Add intermediate points
-                break; // We're done
-            }
-
-            let mut best_farthest = i + 1;
-            let mut best_score = f32::NEG_INFINITY;
-
-            for farthest in (i + 1)..path.len() {
-                if line_of_sight_ordinal(&self.grid.view(), path.path[i], path.path[farthest]) {
-                    let movement_type =
-                        get_movement_type(path.path[i].as_vec3(), path.path[farthest].as_vec3());
-
-                    let shortcut_length = farthest - i; // Reward longer shortcuts
-                    let goal_proximity =
-                        self.neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
-
-                    // Base score: encourage longer shortcuts
-                    let mut score = shortcut_length as f32 - goal_proximity * 4.0;
-
-                    // Apply penalty if switching movement types
-                    if let Some(prev) = prev_movement_type {
-                        if prev != movement_type {
-                            score -= 4.0; // Penalize changing movement types
-                        }
-                    }
-
-                    // Pick the best shortcut that maximizes the score
-                    if score > best_score {
-                        best_farthest = farthest;
-                        best_score = score;
-                    }
-                }
-            }
-
-            let segment = generate_path_segment_ordinal(path.path[i], path.path[best_farthest]);
-            refined_path.extend(segment.into_iter().skip(1)); // Avoid duplicate start points
-
-            prev_movement_type = Some(get_movement_type(
-                path.path[i].as_vec3(),
-                path.path[best_farthest].as_vec3(),
-            ));
-
-            i = best_farthest; // Move to the best shortcut
-        }
-
-        // Calculate the cost of the refined path
-        let mut cost = 0;
-
-        for pos in refined_path.iter() {
-            cost += self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
-        }
-
-        let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
-        path.graph_path = path.path.clone();
-
-        path
     }
 
     /// Recursively reroutes a path by astar pathing to further chunks until a path can be found.
@@ -772,324 +672,40 @@ impl<N: Neighborhood + Default> Grid<N> {
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
     ) -> Option<Path> {
-        // When the starting chunks entrances are all blocked, this will try astar path to the NEXT chunk in the graph path
-        // recursively until it can find a path out.
-        // If it can't find a path out, it will return None.
-
-        if path.graph_path.is_empty() {
-            // Our only option here is to astar path to the goal
-            return self.get_astar_path(start, goal, blocking, false);
-        }
-
-        let new_path = path.graph_path.iter().find_map(|pos| {
-            let new_path = self.get_astar_path(start, *pos, blocking, false);
-            if new_path.is_some() && new_path.as_ref().unwrap().len() > 0 {
-                new_path
-            } else {
-                None
-            }
-        });
-
-        // HPA the rest of the way to the goal using get_path from the last position in the new path to the goal
-        if let Some(new_path) = new_path {
-            let mut hpa_path = Vec::new();
-
-            for pos in new_path.path() {
-                hpa_path.push(*pos);
-            }
-
-            let last_pos = *new_path.path().last().unwrap();
-
-            let hpa = self.get_path(last_pos, goal, blocking, false);
-
-            if let Some(hpa) = hpa {
-                for pos in hpa.path() {
-                    hpa_path.push(*pos);
-                }
-
-                let mut path = Path::new(hpa_path, new_path.cost() + hpa.cost());
-                path.graph_path = hpa.graph_path.clone();
-                return Some(path);
-            }
-        }
-
-        None
+        reroute_path(
+            &self,
+            path,
+            start,
+            goal,
+            blocking,
+        )
     }
 
-    pub fn get_path(
+    pub fn pathfind(
         &self,
         start: UVec3,
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
-        if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
-            || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
-        {
-            return None;
-        }
-
-        let start_chunk = self.chunk_at_position(start)?;
-        let goal_chunk = self.chunk_at_position(goal)?;
-
-        if start_chunk == goal_chunk {
-            let path = astar_grid(
-                &self.neighborhood,
-                &self.grid.view(),
-                start,
-                goal,
-                100,
-                partial,
-                blocking,
-            );
-
-            if let Some(mut path) = path {
-                // We should still refine this path since AStar wasn't requested
-                path = if self.neighborhood.is_ordinal() {
-                    self.optimize_path_ordinal(path)
-                } else {
-                    self.optimize_path_cardinal(path)
-                };
-
-                path.path.pop_front();
-                return Some(path);
-            } else {
-                return None;
-            }
-        }
-
-        // Get all nodes in the start chunk
-        let start_nodes = self.graph.nodes_in_chunk(start_chunk.clone());
-
-        // Build a new blocking map that's adjusted to the start chunk
-        let start_blocking = blocking
-            .iter()
-            .map(|(pos, entity)| {
-                let adjusted_pos = UVec3::new(
-                    pos.x.saturating_sub(start_chunk.min.x),
-                    pos.y.saturating_sub(start_chunk.min.y),
-                    pos.z.saturating_sub(start_chunk.min.z),
-                );
-                (adjusted_pos, *entity)
-            })
-            .collect::<HashMap<_, _>>();
-
-        // Get the djikstra paths to all starting nodes, ruling any that don't have paths
-        let start_paths = dijkstra_grid(
-            &self.neighborhood,
-            &start_chunk.view(&self.grid),
-            start - start_chunk.min,
-            &start_nodes
-                .iter()
-                .map(|node| node.pos - start_chunk.min)
-                .collect::<Vec<_>>(),
-            false,
-            100,
-            &start_blocking,
-        );
-
-        // Rule out any start_nodes that don't have paths
-        let start_nodes = start_nodes
-            .iter()
-            .filter(|node| start_paths.contains_key(&(node.pos - start_chunk.min)))
-            .collect::<Vec<_>>();
-
-        if start_nodes.is_empty() {
-            return None;
-        }
-
-        // Sort start nodes by distance to the goal and the starting point
-        let mut start_nodes = start_nodes
-            .iter()
-            .map(|node| {
-                let distance_to_goal = (node.pos.x as i32 - goal.x as i32).abs()
-                    + (node.pos.y as i32 - goal.y as i32).abs()
-                    + (node.pos.z as i32 - goal.z as i32).abs();
-
-                let distance_to_start = (node.pos.x as i32 - start.x as i32).abs()
-                    + (node.pos.y as i32 - start.y as i32).abs()
-                    + (node.pos.z as i32 - start.z as i32).abs();
-
-                (node, distance_to_goal + distance_to_start)
-            })
-            .collect::<Vec<_>>();
-
-        // Starting with the node shortest to the goal, find a path to the goal
-        start_nodes.sort_by_key(|(_, distance)| *distance);
-
-        // Get all nodes in the goal chunk
-        let goal_nodes = self.graph.nodes_in_chunk(goal_chunk.clone());
-
-        // Build a new blocking map that's adjusted for the goal chunk
-        /*let goal_blocking = blocking.clone()
-        .iter()
-        .map(|(pos, entity)| {
-            let adjusted_pos = UVec3::new(
-                pos.x.saturating_sub(goal_chunk.min.x),
-                pos.y.saturating_sub(goal_chunk.min.y),
-                pos.z.saturating_sub(goal_chunk.min.z),
-            );
-            (adjusted_pos, *entity)
-        })
-        .collect::<HashMap<_, _>>();*/
-
-        let goal_paths = dijkstra_grid(
-            &self.neighborhood,
-            &goal_chunk.view(&self.grid),
-            goal - goal_chunk.min,
-            &goal_nodes
-                .iter()
-                .map(|node| node.pos - goal_chunk.min)
-                .collect::<Vec<_>>(),
-            false,
-            100,
-            &HashMap::new(), //&goal_blocking,
-        );
-
-        let goal_nodes = goal_nodes
-            .iter()
-            .filter(|node| goal_paths.contains_key(&(node.pos - goal_chunk.min)))
-            .collect::<Vec<_>>();
-
-        let mut goal_nodes = goal_nodes
-            .iter()
-            .map(|node| {
-                // Calculate the distance from the start to the node and from the node to the goal
-                let distance_to_start = (node.pos.x as i32 - start.x as i32).abs()
-                    + (node.pos.y as i32 - start.y as i32).abs()
-                    + (node.pos.z as i32 - start.z as i32).abs();
-                let distance_to_goal = (node.pos.x as i32 - goal.x as i32).abs()
-                    + (node.pos.y as i32 - goal.y as i32).abs()
-                    + (node.pos.z as i32 - goal.z as i32).abs();
-
-                // Calculate the total distance as the sum of the distances to the start and goal
-                let total_distance = distance_to_start + distance_to_goal;
-
-                (node, total_distance)
-            })
-            .collect::<Vec<_>>();
-
-        goal_nodes.sort_by_key(|(_, distance)| *distance);
-
-        // Calculate the distance from the start to the goal
-        let start_distance = (start.x as i32 - goal.x as i32).abs()
-            + (start.y as i32 - goal.y as i32).abs()
-            + (start.z as i32 - goal.z as i32).abs();
-
-        // Move goal_nodes that are farther from the goal in the direction of the starting point to the end of the list
-        goal_nodes.sort_by_key(|(_, distance)| {
-            let distance = *distance as i32 - start_distance;
-            if distance < 0 {
-                distance.abs()
-            } else {
-                distance
-            }
-        });
-
-        let mut path: Vec<UVec3> = Vec::new();
-        let mut cost = 0;
-
-        // Here is the problem. If the starting position can't get to the start node then this whole thing fails. Need to fix it.
-
-        for (start_node, _) in start_nodes {
-            for (goal_node, _) in goal_nodes.clone() {
-                let node_path = astar_graph(
-                    &self.neighborhood,
-                    &self.graph,
-                    start_node.pos,
-                    goal_node.pos,
-                    100,
-                );
-
-                if let Some(node_path) = node_path {
-                    // Add start_path to the node_path
-                    let start_path = start_paths
-                        .get(&(start_node.pos - start_chunk.min))
-                        .unwrap();
-                    path.extend(start_path.path().iter().map(|pos| *pos + start_chunk.min));
-                    cost += start_path.cost();
-
-                    // Add node_path paths to path
-                    for (node, next_node) in
-                        node_path.path().iter().zip(node_path.path().iter().skip(1))
-                    {
-                        // Get the cached edge path between node and next node
-                        let cached_path =
-                            self.graph.node_at(*node).unwrap().edges[next_node].clone();
-                        path.extend(cached_path.path().iter().skip(1));
-                        cost += cached_path.cost();
-                    }
-
-                    // Add end path to path
-                    let end_path = goal_paths.get(&(goal_node.pos - goal_chunk.min)).unwrap();
-                    path.extend(
-                        end_path
-                            .path()
-                            .iter()
-                            .rev()
-                            .map(|pos| *pos + goal_chunk.min),
-                    );
-                    cost += end_path.cost();
-
-                    if path.len() == 0 {
-                        return None;
-                    }
-
-                    let mut refined_path = if self.neighborhood.is_ordinal() {
-                        self.optimize_path_ordinal(Path::new(path, cost))
-                    } else {
-                        self.optimize_path_cardinal(Path::new(path, cost))
-                    };
-
-                    // remove the start point from the refined path
-                    refined_path.path.pop_front();
-
-                    // add the graph path to the refined path
-                    refined_path.graph_path = node_path.path;
-
-                    return Some(refined_path);
-                }
-            }
-        }
-
-        None
+        pathfind(&self, start, goal, blocking, partial)
     }
 
-    pub fn get_astar_path(
+    pub fn pathfind_astar(
         &self,
         start: UVec3,
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
-        if self.grid[[start.x as usize, start.y as usize, start.z as usize]].wall
-            || self.grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
-        {
-            return None;
-        }
-
-        // if goal is in the blocking map, return None
-        if blocking.contains_key(&goal) && !partial {
-            //log::error!("Goal is in the blocking map");
-            return None;
-        }
-
-        let path = astar_grid(
+        pathfind_astar(
             &self.neighborhood,
             &self.grid.view(),
             start,
             goal,
-            1024,
-            partial,
             blocking,
-        );
-
-        if let Some(mut path) = path {
-            path.path.pop_front();
-            return Some(path);
-        } else {
-            return None;
-        }
+            partial,
+        )
     }
 }
 
@@ -1099,9 +715,8 @@ mod tests {
 
     use crate::{
         dir::Dir,
-        grid::{Grid, GridSettings},
+        grid::{Grid, GridSettings, Point},
         neighbor::OrdinalNeighborhood3d,
-        Point,
     };
 
     const GRID_SETTINGS: GridSettings = GridSettings {
@@ -1298,9 +913,9 @@ mod tests {
         let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
         let chunk = grid.chunk_at_position(UVec3::new(0, 0, 0)).unwrap();
 
-        assert_eq!(chunk.min, UVec3::new(0, 0, 0));
+        assert_eq!(chunk.min(), UVec3::new(0, 0, 0));
         assert_eq!(
-            chunk.max,
+            chunk.max(),
             UVec3::new(
                 GRID_SETTINGS.chunk_size - 1,
                 GRID_SETTINGS.chunk_size - 1,
@@ -1325,13 +940,13 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_path(
+        let path = grid.pathfind(
             UVec3::new(10, 10, 0),
             UVec3::new(4, 4, 0),
             &HashMap::new(),
             false,
         );
-        let raw_path = grid.get_astar_path(
+        let raw_path = grid.pathfind_astar(
             UVec3::new(10, 10, 0),
             UVec3::new(4, 4, 0),
             &HashMap::new(),
@@ -1416,7 +1031,7 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_path(
+        let path = grid.pathfind(
             UVec3::new(7, 7, 0),
             UVec3::new(121, 121, 0),
             &HashMap::new(),
@@ -1443,7 +1058,7 @@ mod tests {
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
 
         grid.build();
-        let path = grid.get_path(
+        let path = grid.pathfind(
             UVec3::new(0, 0, 0),
             UVec3::new(31, 31, 3),
             &HashMap::new(),
@@ -1459,7 +1074,7 @@ mod tests {
 
         grid.build();
 
-        let path = grid.get_astar_path(
+        let path = grid.pathfind_astar(
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             &HashMap::new(),

@@ -19,7 +19,7 @@ pub struct GridPos(pub UVec3);
 *****************************************/
 
 /// Insert `Pathfind` on an entity to pathfind to a goal.
-/// Once the plugin systems have found a path, `NextPos` will be inserted.
+/// Once the plugin systems have found a path, [`NextPos`] will be inserted.
 #[derive(Component, Default, Debug)]
 pub struct Pathfind {
     /// The goal to pathfind to.
@@ -69,9 +69,9 @@ pub struct DebugPath {
     pub tile_width: u32,
     /// The height of a tile in pixels.
     pub tile_height: u32,
-    /// Tilemap layout for determinining gizmo placement.
+    /// Tilemap layout [`DebugMapType`] for determinining gizmo placement.
     pub map_type: DebugMapType,
-    /// The color of the path gizmo.
+    /// The [`Color`] of the path gizmo.
     pub color: Color,
     /// Draw the raw HPA* path before it's been refined.
     /// This is useful for debugging the HPA* algorithm.
@@ -103,7 +103,7 @@ pub struct DebugMap {
     pub tile_width: u32,
     /// The height of a tile in pixels.
     pub tile_height: u32,
-    /// Tilemap layout for determinining gizmo placement.
+    /// Tilemap layout [`DebugMapType`] for determinining gizmo placement.
     pub map_type: DebugMapType,
     /// Draw the chunk boundaries.
     pub draw_chunks: bool,

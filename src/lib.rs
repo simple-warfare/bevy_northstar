@@ -1,12 +1,9 @@
 #![doc = include_str!("../README.md")]
 
-use bevy::math::UVec3;
 use indexmap::IndexMap;
 use rustc_hash::FxHasher;
 use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
-
-use dir::Dir;
 
 mod astar;
 mod chunk;
@@ -19,6 +16,7 @@ pub mod grid;
 pub mod neighbor;
 mod node;
 pub mod path;
+pub mod pathfind;
 pub mod plugin;
 pub mod raycast;
 
@@ -26,57 +24,18 @@ pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{DebugMapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
-    pub use crate::grid::{Grid, GridSettings};
+    pub use crate::grid::{Grid, GridSettings, Point};
     pub use crate::neighbor::*;
     pub use crate::path::Path;
     pub use crate::plugin::NorthstarPlugin;
     pub use crate::plugin::NorthstarSettings;
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;
-    pub use crate::Point;
 }
 
 pub(crate) type NodeId = usize;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Point {
-    pub cost: u32,
-    pub wall: bool,
-    pub ramp: bool,
-}
-
-impl Point {
-    pub fn new(cost: u32, wall: bool) -> Self {
-        Point {
-            cost,
-            wall,
-            ramp: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Edge {
-    pub start: UVec3,
-    pub end: UVec3,
-    pub dir: Dir,
-    pub cost: u32,
-    pub walkable: bool,
-}
-
-impl Edge {
-    pub fn new(start: UVec3, end: UVec3, dir: Dir, cost: u32, walkable: bool) -> Self {
-        Edge {
-            start,
-            end,
-            dir,
-            cost,
-            walkable,
-        }
-    }
-}
 
 pub(crate) struct SmallestCostHolder<Id> {
     estimated_cost: Id,

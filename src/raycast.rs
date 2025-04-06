@@ -2,14 +2,14 @@
 use bevy::math::UVec3;
 use ndarray::ArrayView3;
 
-use crate::Point;
+use crate::grid::Point;
 
 /// Check if there is a line of sight between two points in the grid allowing diagonal movement.
 /// 
 /// Arguments:
-/// * `grid` - A 3D array view of `Point`s representing the grid.
-/// * `start` - The starting point.
-/// * `end` - The ending point.
+/// * `grid` - A 3D array view of [`Point`]s representing the grid.
+/// * `start` - The starting [`UVec3`].
+/// * `end` - The ending point [`UVec3`].
 /// 
 /// Returns:
 /// * `true` if there is a line of sight between the two points.
@@ -31,7 +31,7 @@ use crate::Point;
 /// 
 /// assert_eq!(line_of_sight_ordinal(&grid.view(), start, end), false);
 /// ```
-pub fn line_of_sight_ordinal(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
+pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
     // TDDO: This can be optimized using integers
     let start = start.as_vec3();
     let end = end.as_vec3();
@@ -69,37 +69,6 @@ pub fn line_of_sight_ordinal(grid: &ArrayView3<Point>, start: UVec3, end: UVec3)
 
     true
 }
-
-/// Check if there is a line of sight between two points in the grid allowing only cardinal movement.
-/// 
-/// Arguments:
-/// * `grid` - A 3D array view of `Point`s representing the grid.
-/// * `start` - The starting point.
-/// * `end` - The ending point.
-/// 
-/// Returns:
-/// * `true` if there is a line of sight between the two points.
-pub fn line_of_sight_cardinal(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
-    let mut pos = start.as_ivec3();
-    let end = end.as_ivec3();
-
-    while (pos.x, pos.y, pos.z) != (end.x, end.y, end.z) {
-        if grid[[pos.x as usize, pos.y as usize, pos.z as usize]].wall {
-            return false; // Hit an obstacle
-        }
-        
-        if pos.x != end.x {
-            pos.x += (end.x - pos.x).signum();
-        } else if pos.y != end.y {
-            pos.y += (end.y - pos.y).signum();
-        } else if pos.z != end.z {
-            pos.z += (end.z - pos.z).signum();
-        }
-    }
-
-    true
-}
-
 
 // Generates the positions of a path segment between two points in a 3D grid.
 pub(crate) fn generate_path_segment_ordinal(start: UVec3, end: UVec3) -> Vec<UVec3> {
@@ -332,7 +301,7 @@ mod tests {
     use bevy::math::UVec3;
     use ndarray::Array3;
 
-    use crate::{prelude::*, raycast::{bresenham_path, line_of_sight_ordinal}};
+    use crate::{prelude::*, raycast::{bresenham_path, line_of_sight}};
 
     const GRID_SETTINGS: GridSettings = GridSettings {
         width: 12,
@@ -353,7 +322,7 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let end = UVec3::new(9, 9, 0);
 
-        assert_eq!(line_of_sight_ordinal(&grid.view(), start, end), false);
+        assert_eq!(line_of_sight(&grid.view(), start, end), false);
     }
 
     #[test]

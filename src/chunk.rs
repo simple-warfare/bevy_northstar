@@ -2,15 +2,15 @@
 use bevy::math::UVec3;
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
-use crate::{dir::Dir, Point};
+use crate::{dir::Dir, grid::Point};
 
 /// A chunk is a 3D region of the grid.
 #[derive(Debug, Clone)]
 pub(crate) struct Chunk {
     /// The minimum coordinates of the chunk.
-    pub min: UVec3,
+    min: UVec3,
     /// The maximum coordinates of the chunk.
-    pub max: UVec3,
+    max: UVec3,
 }
 
 impl PartialEq for Chunk {
@@ -25,6 +25,14 @@ impl Chunk {
     /// Creates a new chunk from minimum and maximum coordinates.
     pub(crate) fn new(min: UVec3, max: UVec3) -> Self {
         Chunk { min, max }
+    }
+
+    pub(crate) fn min(&self) -> UVec3 {
+        self.min
+    }
+
+    pub(crate) fn max(&self) -> UVec3 {
+        self.max
     }
 
     /// Returns a 3D `ArrayView3`` of `Point`s of the chunk from the grid.

@@ -66,6 +66,7 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
     }
 }
 
+// / Draw the debug gizmos for the chunks, points, entrances, and cached paths.
 fn draw_debug_map<N: Neighborhood + 'static>(
     query: Query<(&Transform, &DebugMap)>,
     grid: Option<Res<Grid<N>>>,
@@ -181,7 +182,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 
         if debug_map.draw_entrances {
             // Draw graph nodes
-            for node in grid.graph.nodes() {
+            for node in grid.graph().nodes() {
                 let position = match debug_map.map_type {
                     DebugMapType::Square => Vec2::new(
                         (node.pos.x * debug_map.tile_width) as f32,
@@ -199,7 +200,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 
                 // Draw the node connection only to nodes in other chunks
                 for edge in node.edges() {
-                    let neighbor = grid.graph.node_at(edge);
+                    let neighbor = grid.graph().node_at(edge);
                     if let Some(neighbor) = neighbor {
                         if neighbor.chunk != node.chunk {
                             let neighbor_position = match debug_map.map_type {
@@ -242,7 +243,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
             let mut color_index = 0;
 
             // Draw cached paths
-            for path in grid.graph.all_paths() {
+            for path in grid.graph().all_paths() {
                 if debug_map.draw_entrances && !debug_map.draw_cached_paths {
                     if path.len() > 2 {
                         continue;
@@ -297,6 +298,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
     }
 }
 
+// Draw the debug gizmos for [`DebugPath`]s.
 fn draw_debug_paths<N: Neighborhood + 'static>(
     query: Query<(&DebugPath, &Path)>,
     mut gizmos: Gizmos,

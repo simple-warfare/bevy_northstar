@@ -29,11 +29,11 @@ fn benchmarks(c: &mut Criterion) {
     ));
 
     group.bench_function("pathfind_64x64", |b| b.iter(|| 
-        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0), &HashMap::new(), false)
+        grid.pathfind(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0), &HashMap::new(), false)
     ));
 
     group.bench_function("raw_pathfind_64x64", |b| b.iter(|| 
-        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0), &HashMap::new(), false)
+        grid.pathfind_astar(UVec3::new(0, 0, 0), UVec3::new(63, 63, 0), &HashMap::new(), false)
     ));
 
     let grid_settings = GridSettings {
@@ -54,11 +54,11 @@ fn benchmarks(c: &mut Criterion) {
     ));
 
     group.bench_function("pathfind_512x512", |b| b.iter(|| 
-        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0), &HashMap::new(), false)
+        grid.pathfind(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0), &HashMap::new(), false)
     ));
 
     group.bench_function("raw_pathfind_512x512", |b| b.iter(|| 
-        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0), &HashMap::new(), false)
+        grid.pathfind_astar(UVec3::new(0, 0, 0), UVec3::new(511, 511, 0), &HashMap::new(), false)
     ));
 
 
@@ -80,11 +80,11 @@ fn benchmarks(c: &mut Criterion) {
     ));
 
     group.bench_function("pathfind_128x128x4", |b| b.iter(|| 
-        grid.get_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3), &HashMap::new(), false)
+        grid.pathfind(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3), &HashMap::new(), false)
     ));
 
     group.bench_function("raw_pathfind_128x128x4", |b| b.iter(|| 
-        grid.get_astar_path(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3), &HashMap::new(), false)
+        grid.pathfind_astar(UVec3::new(0, 0, 0), UVec3::new(127, 127, 3), &HashMap::new(), false)
     ));
     
     group.finish();

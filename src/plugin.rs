@@ -6,27 +6,40 @@ use bevy::{log, prelude::*, utils::hashbrown::HashMap};
 
 use crate::prelude::*;
 
+/// NorthstarPlugin is the main plugin for the Northstar pathfinding and collision avoidance systems.
+/// 
 #[derive(Default)]
 pub struct NorthstarPlugin<N: Neighborhood> {
     _neighborhood: std::marker::PhantomData<N>,
 }
 
+/// Tracks the average time the pathfinding algorithm takes.
 #[derive(Default)]
 pub struct PathfindingStats {
+    /// The average time taken for pathfinding in seconds.
     pub average_time: f64,
+    /// The average length of the path found.
     pub average_length: f64,
+    /// A `Vec` list of all the pathfinding times.
     pub pathfind_time: Vec<f64>,
+    /// A `Vec` list of all the pathfinding lengths.
     pub pathfind_length: Vec<f64>,
 }
 
+/// Tracks the average time the collision avoidance algorithms take.
 #[derive(Default)]
 pub struct CollisionStats {
+    /// The average time taken for collision avoidance in seconds.
     pub average_time: f64,
+    /// The average length of the path found after collision avoidance.
     pub average_length: f64,
+    /// A `Vec` list of all the collision avoidance times.
     pub avoidance_time: Vec<f64>,
+    /// A `Vec` list of all the collision avoidance lengths.
     pub avoidance_length: Vec<f64>,
 }
 
+/// The `Stats` `Resource` holds the pathfinding and collision avoidance statistics.
 #[derive(Resource, Default)]
 pub struct Stats {
     pub pathfinding: PathfindingStats,
@@ -69,9 +82,13 @@ impl Stats {
     }
 }
 
+/// The `NorthstarSettings` `Resource` holds the settings for the Northstar plugin.
+/// It allows you to enable or disable collision avoidance and set the distance for avoidance.
 #[derive(Resource, Default)]
 pub struct NorthstarSettings {
+    /// If true, collision avoidance will be enabled.
     pub collision: bool,
+    /// The distance for collision avoidance. This is the number of positions to check ahead for collisions.
     pub avoidance_distance: usize,
 }
 
@@ -95,15 +112,23 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
     }
 }
 
+/// The `PathingSet` is a system set that is used to group the pathfinding systems together.
+/// You can use this set to schedule systems before or after the pathfinding systems.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PathingSet;
 
+/// The `BlockingMap` `Resource` contains a map of positions of entities holding the `Blocking` component.
+/// The map is rebuilt every frame at the beginning of the `PathingSet`.
 #[derive(Resource, Default)]
 pub struct BlockingMap(pub HashMap<UVec3, Entity>);
 
+/// The `DirectionMap` `Resource` contains a map of every pathfinding entity's last moved direction.
+/// This is mainly used for collision avoidance but could be used for other purposes.
 #[derive(Resource, Default)]
 pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 
+// The main pathfinding system. Queries for entities with the a changed `Pathfind` component.
+// It will pathfind to the goal position and insert a `Path` component with the path found.
 fn pathfind<N: Neighborhood>(
     grid: Option<Res<Grid<N>>>,
     mut commands: Commands,
@@ -135,9 +160,9 @@ fn pathfind<N: Neighborhood>(
         };
 
         let path = if pathfind.use_astar {
-            grid.get_astar_path(start.0, pathfind.goal, blocking, false)
+            grid.pathfind_astar(start.0, pathfind.goal, blocking, false)
         } else {
-            grid.get_path(start.0, pathfind.goal, blocking, false)
+            grid.pathfind(start.0, pathfind.goal, blocking, false)
         };
 
         #[cfg(feature = "stats")]
@@ -161,6 +186,8 @@ fn pathfind<N: Neighborhood>(
     });
 }
 
+// The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
+// If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
 fn next_position<N: Neighborhood>(
     mut query: Query<
         (Entity, &mut Path, &GridPos, &Pathfind),
@@ -253,6 +280,8 @@ fn next_position<N: Neighborhood>(
     }
 }
 
+// The `avoidance` function does a lookahead on the path, if any blocking entities are found
+// that are moving in the opposite relateive direciton it will attempt a short astar reroute.
 fn avoidance<N: Neighborhood>(
     grid: &Grid<N>,
     entity: Entity,
@@ -328,7 +357,7 @@ where
 
         // If we have an avoidance goal, astar path to that
         if let Some(avoidance_goal) = avoidance_goal {
-            let new_path = grid.get_astar_path(position, *avoidance_goal, &blocking, false);
+            let new_path = grid.pathfind_astar(position, *avoidance_goal, &blocking, false);
 
             // Replace the first few positions of path until the avoidance goal
             if let Some(new_path) = new_path {
@@ -371,7 +400,7 @@ where
             return false;
         }
 
-        let new_path = grid.get_path(position, pathfind.goal, &blocking, false);
+        let new_path = grid.pathfind(position, pathfind.goal, &blocking, false);
 
         if let Some(new_path) = new_path {
             *path = new_path;
@@ -384,6 +413,10 @@ where
     true
 }
 
+// The `reroute_path` system is responsible for rerouting the path if the `AvoidanceFailed` component is present.
+// It will attempt to find a new full path to the goal position and insert it into the entity.
+// If the reroute fails, it will insert a `RerouteFailed` component to the entity.
+// Once an entity has a reroute failure, no pathfinding will be attempted until the user handles reinserts the `Pathfind` component.
 fn reroute_path<N: Neighborhood>(
     mut query: Query<(Entity, &GridPos, &Pathfind, &Path), With<AvoidanceFailed>>,
     grid: Res<Grid<N>>,
