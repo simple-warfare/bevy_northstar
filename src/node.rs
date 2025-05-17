@@ -1,5 +1,5 @@
 //! This module defines the `Node` struct, which represents a node in the graph.
-use bevy::{math::UVec3, utils::hashbrown::HashMap};
+use bevy::{math::UVec3, platform::collections::HashMap};
 use std::hash::{Hash, Hasher};
 
 use crate::{chunk::Chunk, dir::Dir, path::Path};

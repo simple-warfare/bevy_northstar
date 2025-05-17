@@ -2,8 +2,9 @@
 use bevy::{
     math::UVec3,
     prelude::Entity,
-    utils::hashbrown::{HashMap, HashSet},
+    platform::collections::{HashMap, HashSet},
 };
+
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 use std::collections::BinaryHeap;

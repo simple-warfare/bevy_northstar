@@ -1,8 +1,8 @@
 //! This module contains the `Grid` struct which is the primary `Resource` for the crate.
 use bevy::{
     math::UVec3,
-    prelude::{Entity, Resource},
-    utils::hashbrown::HashMap,
+    prelude::{Entity, Component},
+    platform::collections::HashMap,
 };
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
@@ -38,6 +38,29 @@ pub struct GridSettings {
     pub default_cost: u32,
     /// Set to true to default all grid positions to walls.
     pub default_wall: bool,
+
+    /// Collision
+    pub collision: bool,
+    
+    /// Collision Avoidance distance
+    pub avoidance_distance: u32,
+}
+
+impl Default for GridSettings {
+    fn default() -> Self {
+        GridSettings {
+            width: 64,
+            height: 64,
+            depth: 1,
+            chunk_size: 16,
+            chunk_depth: 1,
+            chunk_ordinal: false,
+            default_cost: 1,
+            default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
+        }
+    }
 }
 
 /// [`Point`] represents a single position on the grid.
@@ -81,13 +104,10 @@ impl Point {
 ///            chunk_ordinal: true,
 ///            default_cost: 1,
 ///            default_wall: false,
-///        }))
-///        .insert_resource(NorthstarSettings {
-///            collision: true,
+///            collision: false,
 ///            avoidance_distance: 4,
-///         })
-///        .add_systems(Startup, startup)
-///        .run();
+///        }))
+///        .add_systems(Startup, startup);
 /// }
 ///
 /// fn startup(mut commands: Commands, mut grid: ResMut<Grid<CardinalNeighborhood>>) {
@@ -98,7 +118,7 @@ impl Point {
 ///    grid.build();
 /// }
 /// ```
-#[derive(Resource)]
+#[derive(Component)]
 pub struct Grid<N: Neighborhood> {
     pub neighborhood: N,
 
@@ -115,6 +135,9 @@ pub struct Grid<N: Neighborhood> {
     default_cost: u32,
     #[allow(dead_code)]
     default_wall: bool,
+
+    collision: bool,
+    avoidance_distance: u32,
 
     grid: Array3<Point>,
     chunks: Array3<Chunk>,
@@ -139,6 +162,8 @@ impl<N: Neighborhood + Default> Grid<N> {
             chunk_ordinal: settings.chunk_ordinal,
             default_cost: settings.default_cost,
             default_wall: settings.default_wall,
+            collision: settings.collision,
+            avoidance_distance: settings.avoidance_distance,
             grid: Array3::from_elem(
                 (
                     settings.width as usize,
@@ -205,6 +230,26 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Returns the size of each chunk in the grid.
     pub fn chunk_size(&self) -> u32 {
         self.chunk_size
+    }
+
+    /// Returns if collision is enabled on the graph
+    pub fn collision(&self) -> bool {
+        self.collision
+    }
+
+    /// Set the collision flag on the graph
+    pub fn set_collision(&mut self, collision: bool) {
+        self.collision = collision;
+    }
+
+    /// Returns the avoidance distance for collision avoidance
+    pub fn avoidance_distance(&self) -> u32 {
+        self.avoidance_distance
+    }
+
+    /// Set the avoidance distance for collision avoidance
+    pub fn set_avoidance_distance(&mut self, distance: u32) {
+        self.avoidance_distance = distance;
     }
 
     /// Builds the entire grid. This includes creating nodes for each edge of each chunk, caching
@@ -711,7 +756,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
 #[cfg(test)]
 mod tests {
-    use bevy::{math::UVec3, utils::hashbrown::HashMap};
+    use bevy::{math::UVec3, platform::collections::HashMap};
 
     use crate::{
         dir::Dir,
@@ -728,6 +773,8 @@ mod tests {
         chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
+        collision: false,
+        avoidance_distance: 4,
     };
 
     #[test]
@@ -747,6 +794,8 @@ mod tests {
             chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         });
 
         // Fill grid edges with walls
@@ -802,6 +851,8 @@ mod tests {
             chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         });
 
         let chunk = grid.chunks.iter().next().unwrap().clone();
@@ -868,6 +919,8 @@ mod tests {
             chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         });
 
         grid.build_nodes();
@@ -977,6 +1030,8 @@ mod tests {
             chunk_ordinal: false,
             default_cost: 0,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         });
 
         let start_edge = grid.chunks[[0, 0, 0]].edge(&grid.grid, Dir::NORTH);
@@ -1011,6 +1066,8 @@ mod tests {
             chunk_ordinal: true,
             default_cost: 1,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         });
 
         for x in 0..width {
@@ -1053,6 +1110,8 @@ mod tests {
             chunk_ordinal: false,
             default_cost: 1,
             default_wall: false,
+            collision: false,
+            avoidance_distance: 4,
         };
 
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);

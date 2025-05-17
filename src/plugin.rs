@@ -2,7 +2,7 @@
 #[cfg(feature = "stats")]
 use std::time::Instant;
 
-use bevy::{log, prelude::*, utils::hashbrown::HashMap};
+use bevy::{log, prelude::*, platform::collections::HashMap};
 
 use crate::prelude::*;
 
@@ -82,16 +82,6 @@ impl Stats {
     }
 }
 
-/// The `NorthstarSettings` `Resource` holds the settings for the Northstar plugin.
-/// It allows you to enable or disable collision avoidance and set the distance for avoidance.
-#[derive(Resource, Default)]
-pub struct NorthstarSettings {
-    /// If true, collision avoidance will be enabled.
-    pub collision: bool,
-    /// The distance for collision avoidance. This is the number of positions to check ahead for collisions.
-    pub avoidance_distance: usize,
-}
-
 impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
     fn build(&self, app: &mut App) {
         app.add_systems(
@@ -129,19 +119,18 @@ pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 
 // The main pathfinding system. Queries for entities with the a changed `Pathfind` component.
 // It will pathfind to the goal position and insert a `Path` component with the path found.
-fn pathfind<N: Neighborhood>(
-    grid: Option<Res<Grid<N>>>,
+fn pathfind<N: Neighborhood + 'static>(
+    grid: Query<&Grid<N>>,
     mut commands: Commands,
     mut query: Query<(Entity, &GridPos, &Pathfind), Changed<Pathfind>>,
     blocking: Res<BlockingMap>,
-    settings: Res<NorthstarSettings>,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) where
-    N: 'static + Neighborhood,
+) 
 {
-    let grid = match grid {
-        Some(grid) => grid,
-        None => return,
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
     };
 
     query.iter_mut().for_each(|(entity, start, pathfind)| {
@@ -153,7 +142,7 @@ fn pathfind<N: Neighborhood>(
         #[cfg(feature = "stats")]
         let start_time = Instant::now();
 
-        let blocking = if settings.collision {
+        let blocking = if grid.collision() {
             &blocking.0
         } else {
             &HashMap::new()
@@ -188,7 +177,7 @@ fn pathfind<N: Neighborhood>(
 
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
-fn next_position<N: Neighborhood>(
+fn next_position<N: Neighborhood + 'static>(
     mut query: Query<
         (Entity, &mut Path, &GridPos, &Pathfind),
         (
@@ -197,18 +186,17 @@ fn next_position<N: Neighborhood>(
             Without<RerouteFailed>,
         ),
     >,
-    grid: Option<Res<Grid<N>>>,
+    grid: Query<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
-    settings: Res<NorthstarSettings>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) where
-    N: 'static + Neighborhood,
+) 
 {
-    let grid = match grid {
-        Some(grid) => grid,
-        None => return,
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
     };
 
     for (entity, mut path, position, pathfind) in &mut query {
@@ -218,7 +206,7 @@ fn next_position<N: Neighborhood>(
             continue;
         }
 
-        let next = if settings.collision {
+        let next = if grid.collision() {
             #[cfg(feature = "stats")]
             let start = Instant::now();
 
@@ -230,7 +218,7 @@ fn next_position<N: Neighborhood>(
                 position.0,
                 &blocking.0,
                 &direction.0,
-                settings.avoidance_distance,
+                grid.avoidance_distance() as usize,
             );
 
             if !success {
@@ -260,7 +248,7 @@ fn next_position<N: Neighborhood>(
         };
 
         if let Some(next) = next {
-            if blocking.0.contains_key(&next) && settings.collision {
+            if blocking.0.contains_key(&next) && grid.collision() {
                 log::error!("Next position is blocked for entity, we should never get here but we did: {:?}", entity);
                 commands.entity(entity).insert(AvoidanceFailed);
                 continue;
@@ -417,15 +405,20 @@ where
 // It will attempt to find a new full path to the goal position and insert it into the entity.
 // If the reroute fails, it will insert a `RerouteFailed` component to the entity.
 // Once an entity has a reroute failure, no pathfinding will be attempted until the user handles reinserts the `Pathfind` component.
-fn reroute_path<N: Neighborhood>(
+fn reroute_path<N: Neighborhood + 'static>(
     mut query: Query<(Entity, &GridPos, &Pathfind, &Path), With<AvoidanceFailed>>,
-    grid: Res<Grid<N>>,
+    grid: Query<&Grid<N>>,
     blocking: Res<BlockingMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) where
-    N: 'static + Neighborhood,
+) 
 {
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
+    };
+
     for (entity, position, pathfind, path) in query.iter_mut() {
         #[cfg(feature = "stats")]
         let start = Instant::now();

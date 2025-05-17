@@ -1,5 +1,5 @@
 //! Graph module for managing nodes and edges in relative space.
-use bevy::{math::UVec3, utils::hashbrown::HashMap};
+use bevy::{platform::collections::HashMap, math::UVec3};
 
 use crate::{chunk::Chunk, dir::Dir, node::Node, path::Path, NodeId};
 

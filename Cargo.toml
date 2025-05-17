@@ -26,14 +26,14 @@ strum = "0.27.1"
 slab = "0.4.9"
 
 [dependencies.bevy]
-version = "0.15"
+version = "0.16"
 default-features = false
 features=["bevy_render", "bevy_gizmos"]
 
 [dev-dependencies]
-bevy = { version = "0.15.3", features=["bevy_dev_tools"] }
-bevy_ecs_tilemap = { version = "0.15" }
-bevy_ecs_tiled = { version = "0.5.1" }
+bevy = { version = "0.16", features=["bevy_dev_tools"] }
+bevy_ecs_tilemap = { version = "0.16" }
+bevy_ecs_tiled = { version = "0.7" }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
@@ -52,3 +52,6 @@ required-features = ["stats"]
 
 [[examples]]
 name = "collision"
+
+[[examples]]
+name = "basic"

@@ -20,8 +20,8 @@ use crate::grid::Point;
 /// ```
 /// use bevy::math::UVec3;
 /// use ndarray::Array3;
-/// use bevy_northstar::Point;
-/// use bevy_northstar::raycast::line_of_sight_ordinal;
+/// use bevy_northstar::grid::Point;
+/// use bevy_northstar::raycast::line_of_sight;
 /// 
 /// let mut grid = Array3::from_elem((10, 10, 1), Point::new(1, false));
 /// grid[[5, 5, 0]] = Point::new(1, true);
@@ -29,7 +29,7 @@ use crate::grid::Point;
 /// let start = UVec3::new(0, 0, 0);
 /// let end = UVec3::new(9, 9, 0);
 /// 
-/// assert_eq!(line_of_sight_ordinal(&grid.view(), start, end), false);
+/// assert_eq!(line_of_sight(&grid.view(), start, end), false);
 /// ```
 pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
     // TDDO: This can be optimized using integers
@@ -312,6 +312,8 @@ mod tests {
         chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
+        collision: true,
+        avoidance_distance: 4,
     };
 
     #[test]

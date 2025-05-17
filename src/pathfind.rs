@@ -1,6 +1,6 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, math::UVec3, utils::hashbrown::HashMap};
+use bevy::{ecs::entity::Entity, math::UVec3, platform::collections::HashMap};
 use ndarray::ArrayView3;
 
 use crate::{

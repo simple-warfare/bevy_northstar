@@ -1,5 +1,7 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, prelude::*, text::FontSmoothing
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
+    prelude::*,
+    text::FontSmoothing,
 };
 
 use bevy_northstar::prelude::*;
@@ -36,9 +38,11 @@ fn main() {
                     font_size: 32.0,
                     font_smoothing: FontSmoothing::default(),
                     font: default(),
+                    ..default()
                 },
                 text_color: Color::srgb(0.0, 1.0, 0.0),
                 enabled: true,
+                ..default()
             },
         })
         // bevy_ecs_tilemap and bevy_ecs_tiled main plugins
@@ -47,16 +51,6 @@ fn main() {
         // bevy_northstar plugins
         .add_plugins(NorthstarPlugin::<OrdinalNeighborhood>::default())
         .add_plugins(NorthstarDebugPlugin::<OrdinalNeighborhood>::default())
-        .insert_resource(Grid::<OrdinalNeighborhood>::new(&GridSettings {
-            width: 128,
-            height: 128,
-            depth: 1,
-            chunk_size: 16,
-            chunk_depth: 1,
-            chunk_ordinal: false,
-            default_cost: 1,
-            default_wall: true,
-        }))
         // Observe the LayerCreated event to build the grid
         .add_observer(layer_created)
         // Add our systems and run the app!
@@ -68,7 +62,10 @@ fn main() {
         //.add_systems(Update, pathfind_minions.run_if(in_state(State::Playing)))
         .add_systems(Update, set_new_goal.run_if(in_state(State::Playing)))
         .add_systems(Update, update_stat_text.run_if(in_state(State::Playing)))
-        .add_systems(Update, update_collision_text.run_if(in_state(State::Playing)))
+        .add_systems(
+            Update,
+            update_collision_text.run_if(in_state(State::Playing)),
+        )
         .add_systems(
             Update,
             update_pathfind_type_test.run_if(in_state(State::Playing)),
@@ -78,10 +75,6 @@ fn main() {
         .insert_state(State::Loading)
         .insert_resource(Walkable::default())
         .insert_resource(Config::default())
-        .insert_resource(NorthstarSettings {
-            collision: true,
-            avoidance_distance: 4,
-        })
         .run();
 }
 
@@ -95,7 +88,7 @@ fn tick(time: Res<Time>, mut tick_writer: EventWriter<Tick>, config: Res<Config>
     }
 
     if time.elapsed_secs() % 0.25 < time.delta_secs() {
-        tick_writer.send_default();
+        tick_writer.write_default();
     }
 }
 
@@ -109,7 +102,6 @@ struct PathfindTypeText;
 
 #[derive(Component, Debug)]
 struct EntityDebugText;
-
 
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn a 2D camera (required by Bevy)
@@ -126,14 +118,22 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // You can eventually add some extra settings to your map
     map_entity.insert((
-        TiledMapSettings {
-            //layer_positioning: LayerPositioning::Centered,
-            ..default()
-        },
         TilemapRenderSettings {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
+        Grid::<OrdinalNeighborhood>::new(&GridSettings {
+            width: 128,
+            height: 128,
+            depth: 1,
+            chunk_size: 16,
+            chunk_depth: 1,
+            chunk_ordinal: false,
+            default_cost: 1,
+            default_wall: true,
+            collision: true,
+            avoidance_distance: 4,
+        }),
     ));
 
     map_entity.with_child(DebugMap {
@@ -246,16 +246,22 @@ fn update_stat_text(stats: Res<Stats>, mut query: Query<&mut TextSpan, With<Stat
 }
 
 fn update_collision_text(
-    stats: Res<Stats>, 
-    mut query: Query<&mut TextSpan, With<CollisionText>>, 
-    northstar_settings: Res<NorthstarSettings>
+    stats: Res<Stats>,
+    mut query: Query<&mut TextSpan, With<CollisionText>>,
+    grid: Query<&Grid<OrdinalNeighborhood>>,
 ) {
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
+    };
+
     for mut span in &mut query {
-        if northstar_settings.collision {
+        if grid.collision() {
             **span = format!("{:.2}ms", stats.collision.average_time * 1000.0);
         } else {
             **span = "Off".to_string();
-        }        
+        }
     }
 }
 
@@ -280,7 +286,11 @@ fn move_pathfinders(
     for _ in tick_reader.read() {
         for (entity, mut position, next) in query.iter_mut() {
             position.0 = next.0;
-            let translation = Vec3::new(next.0.x as f32 * 8.0 + 4.0, next.0.y as f32 * 8.0 + 4.0, 4.0);
+            let translation = Vec3::new(
+                next.0.x as f32 * 8.0 + 4.0,
+                next.0.y as f32 * 8.0 + 4.0,
+                4.0,
+            );
 
             commands
                 .entity(entity)
@@ -299,7 +309,7 @@ fn set_new_goal(
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
-        commands.entity(entity).insert(Pathfind { 
+        commands.entity(entity).insert(Pathfind {
             goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0),
             use_astar: config.use_astar,
         });
@@ -314,19 +324,28 @@ fn handle_reroute_failed(
     for _ in tick_reader.read() {
         for (entity, pathfind, _) in query.iter_mut() {
             commands.entity(entity).remove::<RerouteFailed>();
-            commands.entity(entity).insert(Pathfind { goal: pathfind.goal, use_astar: true });
+            commands.entity(entity).insert(Pathfind {
+                goal: pathfind.goal,
+                use_astar: true,
+            });
         }
     }
 }
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Res<Grid<OrdinalNeighborhood>>,
+    grid: Query<&Grid<OrdinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<Walkable>,
     config: Res<Config>,
 ) {
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
+    };
+
     let layer_entity = layer_entity.iter().next().unwrap();
 
     walkable.tiles = Vec::new();
@@ -371,12 +390,16 @@ fn spawn_minions(
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
-            .insert(GridPos(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
+            .insert(GridPos(UVec3::new(
+                (position.x / 8.0) as u32,
+                (position.y / 8.0) as u32,
+                0,
+            )))
             .insert(Pathfind {
                 goal: UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0),
                 use_astar: config.use_astar,
             })
-            .set_parent(layer_entity);
+            .insert(ChildOf(layer_entity));
 
         count += 1;
     }
@@ -384,43 +407,40 @@ fn spawn_minions(
 
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
-    q_layer: Query<&Name, With<TiledMapLayer>>,
     map_asset: Res<Assets<TiledMap>>,
-    mut grid: ResMut<Grid<OrdinalNeighborhood>>,
+    grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut state: ResMut<NextState<State>>,
 ) {
-    // We can either access the layer components
-    if let Ok(name) = q_layer.get(trigger.event().layer) {
-        info!("Received TiledLayerCreated event for layer '{}'", name);
-    }
+    let mut grid = grid.into_inner();
 
-    // Or directly the underneath Tiled Layer structure
-    let layer = trigger.event().layer(&map_asset);
-    layer.as_tile_layer().map(|layer| {
-        let width = layer.width().unwrap();
-        let height = layer.height().unwrap();
+    let layer = trigger.event().get_layer(&map_asset);
+    if let Some(layer) = layer {
+        if let Some(tile_layer) = layer.as_tile_layer() {
+            let width = tile_layer.width().unwrap();
+            let height = tile_layer.height().unwrap();
 
-        for x in 0..width {
-            for y in 0..height {
-                let tile = layer.get_tile(x as i32, y as i32);
-                if tile.is_some() {
-                    let tile_id = tile.unwrap().id();
+            for x in 0..width {
+                for y in 0..height {
+                    let tile = tile_layer.get_tile(x as i32, y as i32);
+                    if let Some(tile) = tile {
+                        let tile_id = tile.id();
 
-                    if tile_id == 14 {
-                        grid.set_point(
-                            UVec3::new(x as u32, height - 1 - y as u32, 0),
-                            Point::new(1, false),
-                        );
-                    } else {
-                        grid.set_point(
-                            UVec3::new(x as u32, height - 1 - y as u32, 0),
-                            Point::new(0, true),
-                        );
+                        if tile_id == 14 {
+                            grid.set_point(
+                                UVec3::new(x as u32, height - 1 - y as u32, 0),
+                                Point::new(1, false),
+                            );
+                        } else {
+                            grid.set_point(
+                                UVec3::new(x as u32, height - 1 - y as u32, 0),
+                                Point::new(0, true),
+                            );
+                        }
                     }
                 }
             }
         }
-    });
+    }
 
     info!("Loaded layer: {:?}", layer);
     grid.build();
@@ -431,71 +451,86 @@ fn layer_created(
 pub fn input(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut OrthographicProjection), With<Camera>>,
+    camera: Single<(&mut Transform, &mut Projection), With<Camera>>,
     mut pathfinders: Query<(Entity, &Pathfind)>,
     mut config: ResMut<Config>,
     mut stats: ResMut<Stats>,
-    mut northstar_settings: ResMut<NorthstarSettings>,
+    grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut commands: Commands,
 ) {
-    for (mut transform, mut ortho) in query.iter_mut() {
-        let mut direction = Vec3::ZERO;
+    let mut grid = grid.into_inner();
 
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            direction -= Vec3::new(1.0, 0.0, 0.0);
-        }
+    let (mut transform, mut projection) = camera.into_inner();
+    match &mut *projection {
+        Projection::Orthographic(ref mut ortho) => {
+            let mut direction = Vec3::ZERO;
 
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            direction += Vec3::new(1.0, 0.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            direction += Vec3::new(0.0, 1.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            direction -= Vec3::new(0.0, 1.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyZ) {
-            ortho.scale += 0.1;
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyX) {
-            ortho.scale -= 0.1;
-        }
-
-        if keyboard_input.just_pressed(KeyCode::Space) {
-            config.paused = !config.paused;
-        }
-
-        if keyboard_input.just_pressed(KeyCode::KeyP) {
-            config.use_astar = !config.use_astar;
-            stats.reset_pathfinding();
-
-            // Remove pathfind from all pathfinders
-            for (entity, _) in pathfinders.iter_mut() {
-                commands.entity(entity).remove::<Pathfind>().remove::<NextPos>().remove::<Path>();
+            if keyboard_input.pressed(KeyCode::KeyA) {
+                direction -= Vec3::new(1.0, 0.0, 0.0);
             }
-        }
 
-        if keyboard_input.just_pressed(KeyCode::KeyC) {
-            northstar_settings.collision = !northstar_settings.collision;
-            stats.reset_collision();
-            // Remove pathfind from all pathfinders
-            for (entity, _) in pathfinders.iter_mut() {
-                commands.entity(entity).remove::<Pathfind>().remove::<NextPos>().remove::<Path>();
+            if keyboard_input.pressed(KeyCode::KeyD) {
+                direction += Vec3::new(1.0, 0.0, 0.0);
             }
-        }
 
-        if ortho.scale < 0.5 {
-            ortho.scale = 0.5;
-        }
+            if keyboard_input.pressed(KeyCode::KeyW) {
+                direction += Vec3::new(0.0, 1.0, 0.0);
+            }
 
-        let z = transform.translation.z;
-        transform.translation += time.delta_secs() * direction * 500.;
-        // Important! We need to restore the Z values when moving the camera around.
-        // Bevy has a specific camera setup and this can mess with how our layers are shown.
-        transform.translation.z = z;
+            if keyboard_input.pressed(KeyCode::KeyS) {
+                direction -= Vec3::new(0.0, 1.0, 0.0);
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyZ) {
+                ortho.scale += 0.1;
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyX) {
+                ortho.scale -= 0.1;
+            }
+
+            if keyboard_input.just_pressed(KeyCode::Space) {
+                config.paused = !config.paused;
+            }
+
+            if keyboard_input.just_pressed(KeyCode::KeyP) {
+                config.use_astar = !config.use_astar;
+                stats.reset_pathfinding();
+
+                // Remove pathfind from all pathfinders
+                for (entity, _) in pathfinders.iter_mut() {
+                    commands
+                        .entity(entity)
+                        .remove::<Pathfind>()
+                        .remove::<NextPos>()
+                        .remove::<Path>();
+                }
+            }
+
+            if keyboard_input.just_pressed(KeyCode::KeyC) {
+                let current_collision = grid.collision();
+                grid.set_collision(!current_collision);
+                stats.reset_collision();
+                // Remove pathfind from all pathfinders
+                for (entity, _) in pathfinders.iter_mut() {
+                    commands
+                        .entity(entity)
+                        .remove::<Pathfind>()
+                        .remove::<NextPos>()
+                        .remove::<Path>();
+                }
+            }
+
+            if ortho.scale < 0.5 {
+                ortho.scale = 0.5;
+            }
+
+            let z = transform.translation.z;
+            transform.translation += time.delta_secs() * direction * 500.;
+            // Important! We need to restore the Z values when moving the camera around.
+            // Bevy has a specific camera setup and this can mess with how our layers are shown.
+            transform.translation.z = z;
+        }
+        _ => {}
     }
 }

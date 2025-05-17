@@ -29,8 +29,7 @@ pub enum DebugMapType {
 ///    App::new()
 ///       .add_plugins(DefaultPlugins)
 ///       .add_plugins(NorthstarDebugPlugin::<CardinalNeighborhood>::default())
-///       .add_systems(Startup, setup)
-///       .run();
+///       .add_systems(Startup, setup);
 /// }
 ///
 /// fn setup(mut commands: Commands) {
@@ -69,12 +68,13 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
 // / Draw the debug gizmos for the chunks, points, entrances, and cached paths.
 fn draw_debug_map<N: Neighborhood + 'static>(
     query: Query<(&Transform, &DebugMap)>,
-    grid: Option<Res<Grid<N>>>,
+    grid: Query<&Grid<N>>,
     mut gizmos: Gizmos,
 ) {
-    let grid = match grid {
-        Some(grid) => grid,
-        None => return,
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
     };
 
     for (transform, debug_map) in query.iter() {

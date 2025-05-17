@@ -1,5 +1,5 @@
 //! A* algorithms used by the crate.
-use bevy::{log, math::UVec3, prelude::Entity, utils::hashbrown::HashMap};
+use bevy::{log, math::UVec3, platform::collections::HashMap, prelude::Entity};
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 use std::collections::BinaryHeap;

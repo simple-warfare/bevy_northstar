@@ -1,4 +1,4 @@
-use bevy::{math::UVec3, utils::hashbrown::HashMap};
+use bevy::{math::UVec3, platform::collections::HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::{grid::{Grid, GridSettings}, prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d}};
@@ -18,6 +18,8 @@ fn benchmarks(c: &mut Criterion) {
         chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
+        collision: false,
+        avoidance_distance: 4,
     };
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
@@ -45,6 +47,8 @@ fn benchmarks(c: &mut Criterion) {
         chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
+        collision: false,
+        avoidance_distance: 4,
     };
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
@@ -71,6 +75,8 @@ fn benchmarks(c: &mut Criterion) {
         chunk_ordinal: false,
         default_cost: 1,
         default_wall: false,
+        collision: false,
+        avoidance_distance: 4,
     };
 
     let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);

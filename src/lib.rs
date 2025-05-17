@@ -28,7 +28,6 @@ pub mod prelude {
     pub use crate::neighbor::*;
     pub use crate::path::Path;
     pub use crate::plugin::NorthstarPlugin;
-    pub use crate::plugin::NorthstarSettings;
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;
 }

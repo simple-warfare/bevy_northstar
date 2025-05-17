@@ -1,5 +1,9 @@
 use bevy::{
-    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}, log, prelude::*, text::FontSmoothing, utils::HashMap, 
+    dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
+    log,
+    platform::collections::HashMap,
+    prelude::*,
+    text::FontSmoothing,
 };
 
 use bevy_northstar::prelude::*;
@@ -66,9 +70,11 @@ fn main() {
                     font_size: 32.0,
                     font_smoothing: FontSmoothing::default(),
                     font: default(),
+                    ..default()
                 },
                 text_color: Color::srgb(0.0, 1.0, 0.0),
                 enabled: true,
+                ..default()
             },
         })
         // bevy_ecs_tilemap and bevy_ecs_tiled main plugins
@@ -77,16 +83,6 @@ fn main() {
         // bevy_northstar plugins
         .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
         .add_plugins(NorthstarDebugPlugin::<CardinalNeighborhood>::default())
-        .insert_resource(Grid::<CardinalNeighborhood>::new(&GridSettings {
-            width: 16,
-            height: 16,
-            depth: 1,
-            chunk_size: 8,
-            chunk_depth: 1,
-            chunk_ordinal: false,
-            default_cost: 1,
-            default_wall: true,
-        }))
         // Observe the LayerCreated event to build the grid
         .add_observer(layer_created)
         // Add our systems and run the app!
@@ -109,10 +105,6 @@ fn main() {
         .insert_resource(Walkable::default())
         .insert_resource(Stats::default())
         .insert_resource(Config::default())
-        .insert_resource(NorthstarSettings {
-            collision: true,
-            avoidance_distance: 4,
-        })
         .run();
 }
 
@@ -126,7 +118,7 @@ fn tick(time: Res<Time>, mut tick_writer: EventWriter<Tick>, config: Res<Config>
     }
 
     if time.elapsed_secs() % 0.25 < time.delta_secs() {
-        tick_writer.send_default();
+        tick_writer.write_default();
     }
 }
 
@@ -141,10 +133,12 @@ struct EntityDebugText;
 
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Spawn a 2D camera (required by Bevy)
-    commands.spawn(Camera2d).insert(Transform::from_translation(Vec3::new(64.0, 64.0, 1.0))).insert(OrthographicProjection {
-        scale: 0.25,
-        ..OrthographicProjection::default_2d()
-    });
+    commands
+        .spawn(Camera2d)
+        .insert(Transform::from_translation(Vec3::new(64.0, 64.0, 1.0)));
+        /*.insert(Projection::Orthographic(OrthographicProjection {
+            scale: 0.25,
+        })); */
 
     // Load the map ...
     let map_handle: Handle<TiledMap> = asset_server.load("demo_16.tmx");
@@ -154,14 +148,22 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     // You can eventually add some extra settings to your map
     map_entity.insert((
-        TiledMapSettings {
-            //layer_positioning: LayerPositioning::Centered,
-            ..default()
-        },
         TilemapRenderSettings {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
+        Grid::<CardinalNeighborhood>::new(&GridSettings {
+            width: 16,
+            height: 16,
+            depth: 1,
+            chunk_size: 8,
+            chunk_depth: 1,
+            chunk_ordinal: false,
+            default_cost: 1,
+            default_wall: true,
+            collision: true,
+            avoidance_distance: 4,
+        }),
     ));
 
     map_entity.with_child(DebugMap {
@@ -246,13 +248,20 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
 fn entity_under_cursor(
     mut query: Query<&mut TextSpan, With<EntityDebugText>>,
-    windows: Query<&Window>,
-    camera: Query<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
+    windows: Single<&Window>,
+    camera: Single<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
     minions: Query<(Entity, &GlobalTransform)>,
-    troubleshooting: Query<(Entity, &GridPos, Option<&Pathfind>, Option<&Path>, Option<&NextPos>, Option<&AvoidanceFailed>)>,
+    troubleshooting: Query<(
+        Entity,
+        &GridPos,
+        Option<&Pathfind>,
+        Option<&Path>,
+        Option<&NextPos>,
+        Option<&AvoidanceFailed>,
+    )>,
 ) {
-    let window = windows.single();
-    let (camera, camera_transform, _) = camera.single();
+    let window = windows.into_inner();
+    let (camera, camera_transform, _) = camera.into_inner();
 
     if let Some(cursor_position) = window
         .cursor_position()
@@ -268,7 +277,9 @@ fn entity_under_cursor(
                     text.push_str(&format!("{:?} ", entity));
 
                     // print all the data in the troubleshooting query
-                    for (entity_other, position, pathfind, path, next, avoidance_failed) in troubleshooting.iter() {
+                    for (entity_other, position, pathfind, path, next, avoidance_failed) in
+                        troubleshooting.iter()
+                    {
                         if entity == entity_other {
                             text.push_str(&format!("{:?} ", position));
                             text.push_str(&format!("{:?} ", pathfind));
@@ -314,14 +325,23 @@ fn move_pathfinders(
 
         for (entity, mut position, next) in query.iter_mut() {
             if debug_next.contains_key(&next.0) {
-                log::error!("Entity {:?} has the same next position as another entity: {:?} {:?}", entity, next, debug_next.get(&next.0));
+                log::error!(
+                    "Entity {:?} has the same next position as another entity: {:?} {:?}",
+                    entity,
+                    next,
+                    debug_next.get(&next.0)
+                );
                 continue;
             }
 
             debug_next.insert(next.0, entity);
 
             position.0 = next.0;
-            let translation = Vec3::new(next.0.x as f32 * 8.0 + 4.0, next.0.y as f32 * 8.0 + 4.0, 4.0);
+            let translation = Vec3::new(
+                next.0.x as f32 * 8.0 + 4.0,
+                next.0.y as f32 * 8.0 + 4.0,
+                4.0,
+            );
 
             commands
                 .entity(entity)
@@ -339,7 +359,10 @@ fn set_new_goal(
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::thread_rng()).unwrap();
 
-        commands.entity(entity).insert(Pathfind { goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0), use_astar: false });
+        commands.entity(entity).insert(Pathfind {
+            goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0),
+            use_astar: false,
+        });
     }
 }
 
@@ -352,18 +375,27 @@ fn handle_reroute_failed(
     for _ in tick_reader.read() {
         for (entity, pathfind, _) in query.iter_mut() {
             commands.entity(entity).remove::<RerouteFailed>();
-            commands.entity(entity).insert(Pathfind { goal: pathfind.goal, use_astar: config.use_astar });
+            commands.entity(entity).insert(Pathfind {
+                goal: pathfind.goal,
+                use_astar: config.use_astar,
+            });
         }
     }
 }
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Res<Grid<CardinalNeighborhood>>,
+    grid: Query<&Grid<CardinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<Walkable>,
 ) {
+    let grid = if let Ok(grid) = grid.single() {
+        grid
+    } else {
+        return;
+    };
+
     let layer_entity = layer_entity.iter().next().unwrap();
 
     walkable.tiles = Vec::new();
@@ -408,9 +440,12 @@ fn spawn_minions(
             })
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
-            .insert(GridPos(UVec3::new((position.x / 8.0) as u32, (position.y / 8.0) as u32, 0)))
-            //.insert(Goal(UVec3::new((goal.x / 8.0) as u32, (goal.y / 8.0) as u32, 0)))
-            .set_parent(layer_entity);
+            .insert(GridPos(UVec3::new(
+                (position.x / 8.0) as u32,
+                (position.y / 8.0) as u32,
+                0,
+            )))
+            .insert(ChildOf(layer_entity));
 
         count += 1;
     }
@@ -418,43 +453,40 @@ fn spawn_minions(
 
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
-    q_layer: Query<&Name, With<TiledMapLayer>>,
     map_asset: Res<Assets<TiledMap>>,
-    mut grid: ResMut<Grid<CardinalNeighborhood>>,
+    grid: Single<&mut Grid<CardinalNeighborhood>>,
     mut state: ResMut<NextState<State>>,
 ) {
-    // We can either access the layer components
-    if let Ok(name) = q_layer.get(trigger.event().layer) {
-        info!("Received TiledLayerCreated event for layer '{}'", name);
-    }
+    let mut grid = grid.into_inner();
 
-    // Or directly the underneath Tiled Layer structure
-    let layer = trigger.event().layer(&map_asset);
-    layer.as_tile_layer().map(|layer| {
-        let width = layer.width().unwrap();
-        let height = layer.height().unwrap();
+    let layer = trigger.event().get_layer(&map_asset);
+    if let Some(layer) = layer {
+        if let Some(tile_layer) = layer.as_tile_layer() {
+            let width = tile_layer.width().unwrap();
+            let height = tile_layer.height().unwrap();
 
-        for x in 0..width {
-            for y in 0..height {
-                let tile = layer.get_tile(x as i32, y as i32);
-                if tile.is_some() {
-                    let tile_id = tile.unwrap().id();
+            for x in 0..width {
+                for y in 0..height {
+                    let tile = tile_layer.get_tile(x as i32, y as i32);
+                    if let Some(tile) = tile {
+                        let tile_id = tile.id();
 
-                    if tile_id == 14 {
-                        grid.set_point(
-                            UVec3::new(x as u32, height - 1 - y as u32, 0),
-                            Point::new(1, false),
-                        );
-                    } else {
-                        grid.set_point(
-                            UVec3::new(x as u32, height - 1 - y as u32, 0),
-                            Point::new(0, true),
-                        );
+                        if tile_id == 14 {
+                            grid.set_point(
+                                UVec3::new(x as u32, height - 1 - y as u32, 0),
+                                Point::new(1, false),
+                            );
+                        } else {
+                            grid.set_point(
+                                UVec3::new(x as u32, height - 1 - y as u32, 0),
+                                Point::new(0, true),
+                            );
+                        }
                     }
                 }
             }
         }
-    });
+    }
 
     info!("Loaded layer: {:?}", layer);
     grid.build();
@@ -465,54 +497,58 @@ fn layer_created(
 pub fn input(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut OrthographicProjection), With<Camera>>,
+    camera: Single<(&mut Transform, &mut Projection), With<Camera>>,
     mut config: ResMut<Config>,
     mut stats: ResMut<Stats>,
 ) {
-    for (mut transform, mut ortho) in query.iter_mut() {
-        let mut direction = Vec3::ZERO;
+    let (mut transform, mut projection) = camera.into_inner();
+    match &mut *projection {
+        Projection::Orthographic(ortho) => {
+            let mut direction = Vec3::ZERO;
 
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            direction -= Vec3::new(1.0, 0.0, 0.0);
+            if keyboard_input.pressed(KeyCode::KeyA) {
+                direction -= Vec3::new(1.0, 0.0, 0.0);
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyD) {
+                direction += Vec3::new(1.0, 0.0, 0.0);
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyW) {
+                direction += Vec3::new(0.0, 1.0, 0.0);
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyS) {
+                direction -= Vec3::new(0.0, 1.0, 0.0);
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyZ) {
+                ortho.scale += 0.1;
+            }
+
+            if keyboard_input.pressed(KeyCode::KeyX) {
+                ortho.scale -= 0.1;
+            }
+
+            if keyboard_input.just_pressed(KeyCode::Space) {
+                config.paused = !config.paused;
+            }
+
+            if keyboard_input.just_pressed(KeyCode::KeyP) {
+                config.use_astar = !config.use_astar;
+                stats.reset();
+            }
+
+            if ortho.scale < 0.25 {
+                ortho.scale = 0.25;
+            }
+
+            let z = transform.translation.z;
+            transform.translation += time.delta_secs() * direction * 500.;
+            // Important! We need to restore the Z values when moving the camera around.
+            // Bevy has a specific camera setup and this can mess with how our layers are shown.
+            transform.translation.z = z;
         }
-
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            direction += Vec3::new(1.0, 0.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            direction += Vec3::new(0.0, 1.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            direction -= Vec3::new(0.0, 1.0, 0.0);
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyZ) {
-            ortho.scale += 0.1;
-        }
-
-        if keyboard_input.pressed(KeyCode::KeyX) {
-            ortho.scale -= 0.1;
-        }
-
-        if keyboard_input.just_pressed(KeyCode::Space) {
-            config.paused = !config.paused;
-        }
-
-        if keyboard_input.just_pressed(KeyCode::KeyP) {
-            config.use_astar = !config.use_astar;
-            stats.reset();
-        }
-
-        if ortho.scale < 0.25 {
-            ortho.scale = 0.25;
-        }
-
-        let z = transform.translation.z;
-        transform.translation += time.delta_secs() * direction * 500.;
-        // Important! We need to restore the Z values when moving the camera around.
-        // Bevy has a specific camera setup and this can mess with how our layers are shown.
-        transform.translation.z = z;
+        _ => {}
     }
 }
