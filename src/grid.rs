@@ -1,8 +1,8 @@
 //! This module contains the `Grid` struct which is the primary `Resource` for the crate.
 use bevy::{
     math::UVec3,
-    prelude::{Entity, Component},
     platform::collections::HashMap,
+    prelude::{Component, Entity},
 };
 use ndarray::{Array3, ArrayView2, ArrayView3};
 
@@ -41,7 +41,7 @@ pub struct GridSettings {
 
     /// Collision
     pub collision: bool,
-    
+
     /// Collision Avoidance distance
     pub avoidance_distance: u32,
 }
@@ -95,27 +95,32 @@ impl Point {
 ///     App::new()
 ///        .add_plugins(DefaultPlugins)
 ///        .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
-///        .insert_resource(Grid::<CardinalNeighborhood>::new(&GridSettings {
-///            width: 128,
-///            height: 128,
-///            depth: 1,
-///            chunk_size: 16,
-///            chunk_depth: 1,
-///            chunk_ordinal: true,
-///            default_cost: 1,
-///            default_wall: false,
-///            collision: false,
-///            avoidance_distance: 4,
-///        }))
 ///        .add_systems(Startup, startup);
 /// }
 ///
-/// fn startup(mut commands: Commands, mut grid: ResMut<Grid<CardinalNeighborhood>>) {
+/// fn startup(mut commands: Commands) {
 ///    // Populate the grid with, you'd usually do this after you load your tilemap
 ///    // and then set the points in the grid to match the tilemap.
+///
+///    let mut grid: Grid<CardinalNeighborhood> = Grid::new(&GridSettings {
+///       width: 64,
+///       height: 64,
+///       depth: 1,
+///       chunk_size: 16,
+///       chunk_depth: 1,
+///       chunk_ordinal: false,
+///       default_cost: 1,
+///       default_wall: false,
+///       collision: true,
+///       avoidance_distance: 4,
+///    });
+///
 ///    grid.set_point(UVec3::new(0, 0, 0), Point::new(1, false));
 ///    // Initialize the grid
 ///    grid.build();
+/// 
+///    // Add the grid to the world
+///    commands.spawn(grid);
 /// }
 /// ```
 #[derive(Component)]
@@ -717,13 +722,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
     ) -> Option<Path> {
-        reroute_path(
-            &self,
-            path,
-            start,
-            goal,
-            blocking,
-        )
+        reroute_path(&self, path, start, goal, blocking)
     }
 
     pub fn pathfind(

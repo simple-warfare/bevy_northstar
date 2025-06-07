@@ -104,19 +104,42 @@ struct PathfindTypeText;
 struct EntityDebugText;
 
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Spawn a 2D camera (required by Bevy)
+    // Get our anchor positioning calculated
+    let anchor = TilemapAnchor::Center;
+
+    let tilemap_size = TilemapSize { x: 128, y: 128 };
+    let tilemap_gridsize = TilemapGridSize { x: 8.0, y: 8.0 };
+    let tilemap_tilesize = TilemapTileSize { x: 8.0, y: 8.0 };
+
+    let offset = anchor.as_offset(
+        &tilemap_size,
+        &tilemap_gridsize,
+        &tilemap_tilesize,
+        &TilemapType::Square,
+    );
+
+    let camera_offset = Vec3::new(
+        offset.x + (tilemap_size.x as f32 * tilemap_gridsize.x) / 2.0,
+        offset.y + (tilemap_size.y as f32 * tilemap_gridsize.y) / 2.0,
+        1.0,
+    );
+
+    // Spawn a 2D camera and set the position based on the centered anchor offset
     commands.spawn(Camera2d).insert(Transform {
-        translation: Vec3::new(512.0, 512.0, 1.0),
+        translation: camera_offset,
         ..Default::default()
     });
 
     // Load the map ...
     let map_handle: Handle<TiledMap> = asset_server.load("demo_128.tmx");
 
-    // ... then spawn it !
-    let mut map_entity = commands.spawn(TiledMapHandle(map_handle));
+    let mut map_entity = commands.spawn((
+        TiledMapHandle(map_handle),
+        anchor,
+    ));
 
-    // You can eventually add some extra settings to your map
+    // Insert the grid as a child of the map entity. This won't currently affect anything, but in the future
+    // we may want to have the grid as a child of the map entity so that multiple grids can be supported.
     map_entity.insert((
         TilemapRenderSettings {
             render_chunk_size: UVec2::new(32, 32),
@@ -136,15 +159,20 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         }),
     ));
 
-    map_entity.with_child(DebugMap {
-        tile_width: 8,
-        tile_height: 8,
-        map_type: DebugMapType::Square,
-        draw_chunks: true,
-        draw_points: false,
-        draw_entrances: true,
-        draw_cached_paths: false,
-    });
+    // Add the debug map as a child of the map entity
+    // Set the translation to offset the the debug gizmos. 
+    map_entity.with_child((
+        DebugMap {
+            tile_width: 8,
+            tile_height: 8,
+            map_type: DebugMapType::Square,
+            draw_chunks: true,
+            draw_points: false,
+            draw_entrances: true,
+            draw_cached_paths: false,
+        },
+        Transform::from_translation(offset.extend(0.0)),
+    ));
 
     commands
         .spawn((
@@ -281,14 +309,25 @@ fn update_pathfind_type_test(
 fn move_pathfinders(
     mut commands: Commands,
     mut query: Query<(Entity, &mut GridPos, &NextPos)>,
+    tilemap: Single<(&TilemapSize, &TilemapTileSize, &TilemapGridSize, &TilemapAnchor)>,
     mut tick_reader: EventReader<Tick>,
 ) {
+    let (map_size, tile_size, grid_size, anchor) = tilemap.into_inner();
+
     for _ in tick_reader.read() {
+        let offset = anchor.as_offset(
+            map_size,
+            grid_size,
+            tile_size,
+            &TilemapType::Square,
+        );
+
         for (entity, mut position, next) in query.iter_mut() {
             position.0 = next.0;
+
             let translation = Vec3::new(
-                next.0.x as f32 * 8.0 + 4.0,
-                next.0.y as f32 * 8.0 + 4.0,
+                next.0.x as f32 * grid_size.x + offset.x,
+                next.0.y as f32 * grid_size.y + offset.y,
                 4.0,
             );
 

@@ -120,18 +120,14 @@ pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 // The main pathfinding system. Queries for entities with the a changed `Pathfind` component.
 // It will pathfind to the goal position and insert a `Path` component with the path found.
 fn pathfind<N: Neighborhood + 'static>(
-    grid: Query<&Grid<N>>,
+    grid: Single<&Grid<N>>,
     mut commands: Commands,
     mut query: Query<(Entity, &GridPos, &Pathfind), Changed<Pathfind>>,
     blocking: Res<BlockingMap>,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
 ) 
 {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let grid = grid.into_inner();
 
     query.iter_mut().for_each(|(entity, start, pathfind)| {
         if start.0 == pathfind.goal {
@@ -186,18 +182,15 @@ fn next_position<N: Neighborhood + 'static>(
             Without<RerouteFailed>,
         ),
     >,
-    grid: Query<&Grid<N>>,
+    //TODO: We probably need to do an optional single here if someone configures error handling
+    grid: Single<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
 ) 
 {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let grid = grid.into_inner();
 
     for (entity, mut path, position, pathfind) in &mut query {
         if position.0 == pathfind.goal {
@@ -407,17 +400,13 @@ where
 // Once an entity has a reroute failure, no pathfinding will be attempted until the user handles reinserts the `Pathfind` component.
 fn reroute_path<N: Neighborhood + 'static>(
     mut query: Query<(Entity, &GridPos, &Pathfind, &Path), With<AvoidanceFailed>>,
-    grid: Query<&Grid<N>>,
+    grid: Single<&Grid<N>>,
     blocking: Res<BlockingMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
 ) 
 {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let grid = grid.into_inner();
 
     for (entity, position, pathfind, path) in query.iter_mut() {
         #[cfg(feature = "stats")]

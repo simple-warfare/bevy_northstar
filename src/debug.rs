@@ -16,6 +16,22 @@ pub enum DebugMapType {
     Isometric,
 }
 
+// #[derive(Reflect, Debug, Clone, Default)]
+// pub enum DebugMapAnchor {
+//     #[default]
+//     None,
+//     Center,
+//     BottomLeft,
+//     BottomCenter,
+//     BottomRight,
+//     CenterLeft,
+//     CenterRight,
+//     TopLeft,
+//     TopCenter,
+//     TopRight,
+//     Custom(Vec2),
+// }
+
 /// Debug plugin for the Northstar pathfinding library.
 /// Add this plugin to your app to add the systems required to draw the debug helper gizmos.
 ///
@@ -62,6 +78,7 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
         app.add_systems(Update, (draw_debug_map::<N>, draw_debug_paths::<N>))
             .register_type::<DebugMap>()
             .register_type::<DebugMapType>();
+            //.register_type::<DebugMapAnchor>();
     }
 }
 
@@ -80,17 +97,6 @@ fn draw_debug_map<N: Neighborhood + 'static>(
     for (transform, debug_map) in query.iter() {
         //let offset = transform.translation.truncate();
         let offset = transform.translation.truncate();
-
-        let center_offset = match debug_map.map_type {
-            DebugMapType::Square => {
-                offset
-                    + Vec2::new(
-                        debug_map.tile_width as f32 * 0.5,
-                        debug_map.tile_height as f32 * 0.5,
-                    )
-            }
-            DebugMapType::Isometric => offset + Vec2::new(debug_map.tile_width as f32 * 0.5, 0.0),
-        };
 
         if debug_map.draw_chunks {
             // Draw chunk boundaries
@@ -119,10 +125,15 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                                 ((y + 1) * chunk_size) as f32 * debug_map.tile_height as f32,
                             );
 
-                            gizmos.line_2d(bottom_left + offset, bottom_right + offset, css::WHITE);
-                            gizmos.line_2d(bottom_right + offset, top_right + offset, css::WHITE);
-                            gizmos.line_2d(top_right + offset, top_left + offset, css::WHITE);
-                            gizmos.line_2d(top_left + offset, bottom_left + offset, css::WHITE);
+                            let bottom_left = bottom_left + offset - debug_map.tile_width as f32 * 0.5;
+                            let bottom_right = bottom_right + offset - debug_map.tile_height as f32 * 0.5;
+                            let top_left = top_left + offset - debug_map.tile_width as f32 * 0.5;
+                            let top_right = top_right + offset - debug_map.tile_height as f32 * 0.5;
+
+                            gizmos.line_2d(bottom_left, bottom_right, css::WHITE);
+                            gizmos.line_2d(bottom_right, top_right, css::WHITE);
+                            gizmos.line_2d(top_right, top_left, css::WHITE);
+                            gizmos.line_2d(top_left, bottom_left, css::WHITE);
                         }
                     }
                 }
@@ -175,7 +186,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                         ),
                     };
 
-                    gizmos.circle_2d(position + center_offset, 2.0, color);
+                    gizmos.circle_2d(position + offset, 2.0, color);
                 }
             }
         }
@@ -196,7 +207,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                     ),
                 };
 
-                gizmos.circle_2d(position + center_offset, 2.0, css::MAGENTA);
+                gizmos.circle_2d(position + offset, 2.0, css::MAGENTA);
 
                 // Draw the node connection only to nodes in other chunks
                 for edge in node.edges() {
@@ -216,8 +227,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                                 ),
                             };
                             gizmos.line_2d(
-                                position + center_offset,
-                                neighbor_position + center_offset,
+                                position + offset,
+                                neighbor_position + offset,
                                 css::GREEN,
                             );
                         }
@@ -284,8 +295,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                     }
 
                     gizmos.line_2d(
-                        prev_position + center_offset,
-                        next_position + center_offset,
+                        prev_position + offset,
+                        next_position + offset,
                         color,
                     );
 
@@ -301,20 +312,25 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 // Draw the debug gizmos for [`DebugPath`]s.
 fn draw_debug_paths<N: Neighborhood + 'static>(
     query: Query<(&DebugPath, &Path)>,
+    debug_map: Single<&Transform, With<DebugMap>>,
     mut gizmos: Gizmos,
 ) {
+    let transform = debug_map.into_inner();
+
     for (debug_path, path) in query.iter() {
         if path.is_empty() {
             continue;
         }
 
-        let center_offset = match debug_path.map_type {
+        /*let center_offset = match debug_path.map_type {
             DebugMapType::Square => Vec2::new(
                 debug_path.tile_width as f32 * 0.5,
                 debug_path.tile_height as f32 * 0.5,
             ),
             DebugMapType::Isometric => Vec2::new(debug_path.tile_width as f32 * 0.5, 0.0),
-        };
+        };*/
+
+        let center_offset = transform.translation.truncate();
 
         // Iterate over path.path() drawing a line from one point to the next point until completed
         let mut iter = path.path().iter();
