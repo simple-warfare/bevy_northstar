@@ -14,7 +14,7 @@ pub struct NorthstarPlugin<N: Neighborhood> {
 }
 
 /// Tracks the average time the pathfinding algorithm takes.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PathfindingStats {
     /// The average time taken for pathfinding in seconds.
     pub average_time: f64,
@@ -27,7 +27,7 @@ pub struct PathfindingStats {
 }
 
 /// Tracks the average time the collision avoidance algorithms take.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CollisionStats {
     /// The average time taken for collision avoidance in seconds.
     pub average_time: f64,
@@ -40,7 +40,7 @@ pub struct CollisionStats {
 }
 
 /// The `Stats` `Resource` holds the pathfinding and collision avoidance statistics.
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Debug)]
 pub struct Stats {
     pub pathfinding: PathfindingStats,
     pub collision: CollisionStats,
@@ -157,16 +157,22 @@ fn pathfind<N: Neighborhood + 'static>(
             #[cfg(feature = "stats")]
             stats.add_pathfinding(elapsed_time, path.cost() as f64);
 
-            commands.entity(entity).insert(path);
+            commands.entity(entity).insert(path).remove::<PathfindingFailed>();
+            // We remove PathfindingFailed even if it's not there.
         } else {
             #[cfg(feature = "stats")]
             stats.add_pathfinding(elapsed_time, 0.0);
 
-            commands.entity(entity).remove::<NextPos>(); // Just to be safe
-            commands.entity(entity).insert(Pathfind {
-                goal: pathfind.goal,
-                use_astar: false,
-            }); // Don't let anyone get stuck try again next frame
+            commands
+                .entity(entity)
+                .insert((
+                    PathfindingFailed,
+                    Pathfind {
+                        goal: pathfind.goal,
+                        use_astar: false,
+                    }
+                ))
+                .remove::<NextPos>(); // Just to be safe
         }
     });
 }
@@ -445,7 +451,7 @@ fn reroute_path<N: Neighborhood + 'static>(
 
 fn update_blocking_map(
     mut blocking_set: ResMut<BlockingMap>,
-    query: Query<(Entity, &GridPos)>, // WHY DID I HAVE THIS Changed<Position>>,
+    query: Query<(Entity, &GridPos)>,
 ) {
     blocking_set.0.clear();
 

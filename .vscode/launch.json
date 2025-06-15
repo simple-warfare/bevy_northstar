@@ -64,12 +64,12 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug collision example",
+            "name": "Debug collision_testing example",
             "cargo": {
                 "args": [
                     "build",
                     "--example",
-                    "collision",
+                    "collision_testing",
                     "--features",
                     "stats"
                 ]

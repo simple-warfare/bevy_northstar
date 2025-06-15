@@ -28,6 +28,18 @@ pub struct Pathfind {
     pub use_astar: bool,
 }
 
+impl Pathfind {
+    /// Creates a new `Pathfind` component with the given goal. HPA* will be used to pathfind.
+    pub fn new(goal: UVec3) -> Self {
+        Pathfind { goal, use_astar: false }
+    }
+
+    /// Creates a new `Pathfind` component with the given goal. Traditional A* will be used to pathfind.
+    pub fn new_astar(goal: UVec3) -> Self {
+        Pathfind { goal, use_astar: true }
+    }
+}
+
 /// The next position in the path. 
 /// The `pathfind` system will insert this into the entity when a path is found.
 /// Remove `NextPos` after you've moved the entity to the next position and 
@@ -46,6 +58,12 @@ pub struct NextPos(pub UVec3);
 /// static blocking tiles such as walls.
 #[derive(Component, Default)]
 pub struct Blocking;
+
+/// Marker component that is inserted to an entity when a collision is detected.
+/// The built-in pathfinding system will try to pathfind for this entity every frame unless
+/// you handle the failure in a custom way.
+#[derive(Component, Default, Debug)]
+pub struct PathfindingFailed;
 
 /// Marker component that is inserted to an entity when local avoidance fails.
 /// Currently this marker is handled by the `reroute_path` system and can be ignored

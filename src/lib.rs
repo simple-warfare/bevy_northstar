@@ -30,7 +30,17 @@ pub mod prelude {
     pub use crate::plugin::NorthstarPlugin;
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;
+    pub use crate::{CardinalGrid, CardinalGrid3d, OrdinalGrid, OrdinalGrid3d};
 }
+
+/// Alias for a 2d CardinalNeighborhood grid. Allows only 4 directions (N, S, E, W).
+pub type CardinalGrid = grid::Grid<neighbor::CardinalNeighborhood>;
+/// Alias for a 3d CardinalNeighborhood grid. Allows cardinal directions and up and down.
+pub type CardinalGrid3d = grid::Grid<neighbor::CardinalNeighborhood3d>;
+/// Alias for a 2d OrdinalNeighborhood grid. Allows all 8 direcitons.
+pub type OrdinalGrid = grid::Grid<neighbor::OrdinalNeighborhood>;
+/// Alias for a 3d OrdinalNeighborhood grid. Allows all 26 directions.
+pub type OrdinalGrid3d = grid::Grid<neighbor::OrdinalNeighborhood3d>;
 
 pub(crate) type NodeId = usize;
 
