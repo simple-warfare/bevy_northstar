@@ -8,7 +8,7 @@ use crate::{
     graph::Graph, grid::Point, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder,
 };
 
-/// A* search algorithm for a [`Grid`] of [`Point`]s.
+/// A* search algorithm for a [`crate::grid::Grid`] of [`crate::grid::Point`]s.
 ///
 /// # Arguments
 /// * `neighborhood` - Reference to the [`Neighborhood`] to use.
