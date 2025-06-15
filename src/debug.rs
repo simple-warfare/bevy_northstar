@@ -37,7 +37,7 @@ pub enum DebugMapType {
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use bevy::prelude::*;
 /// use bevy_northstar::prelude::*;
 ///
