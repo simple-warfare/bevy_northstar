@@ -1,25 +1,13 @@
 # bevy_northstar
+[![Crates.io](https://img.shields.io/crates/v/bevy_northstar)](https://crates.io/crates/bevy_northstar)
+[![docs](https://docs.rs/bevy_northstar/badge.svg)](https://docs.rs/bevy_northstar/)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jtothethree/bevy_northstar/blob/main/LICENSE)
+[![Crates.io](https://img.shields.io/crates/d/bevy_northstar)](https://crates.io/crates/bevy_northstar)
+[![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
 ## A 2d/3d hierarchical pathfinding crate for Bevy. 
 
 `bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal point it's refined to get a more accurate path.
-
-### This crate is still a work in progress.
-
-The crate is currently opinionated in the sense that it's not bring-your-own-grid. That may change in the future.
-
-## Demo
-cargo run --example demo --features stats --release
-
-Press P to switch between HPA* and traditional A*
-Press C to disable/enable collision
-
-![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
-
-
-## Flags
-This crate has the following Cargo features:
-
-- `stats`: Enables pathfinding benchmarks. Useful to get an idea of how much time it's using per frame.
+The crate provides:
 
 ## Features  
 - **Supports 2D and 3D Tilemaps** – Supports 2d and 3d tilemaps.  
@@ -34,11 +22,91 @@ This crate has the following Cargo features:
 
 - **Bevy Systems Integration** – Bevy systems and components for pathfinding as well as collision markers when avoidance paths fail.
 
-## Roadmap / TODO
-- **Code & Documentation Cleanup** – Refine and document the API.
-- **Basic Example** - Create a minimal example demonstrating only the basics usage for the crate. Move existing examples to stress tests.
 
-  
+
+## Demo
+cargo run --example demo --features stats --release
+
+Press P to switch between HPA* and traditional A*
+Press C to disable/enable collision
+
+![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
+
+
+## Feature Flags
+This crate has the following Cargo features:
+
+- `stats`: Enables pathfinding benchmarks. Useful to get an idea of how much time it's using per frame.
+
+# Quick Start
+
+Add required dependencies to your `Cargo.toml` file:
+
+```toml
+[dependencies]
+bevy = "0.16"
+bevy_northstar = "0.2"
+```
+
+The basic requirements to use the crate are to spawn an entity with a `Grid` component, adjust the points, and then call `Grid::build()` so the chunk entrances and internal paths can be calculated. 
+
+To use the built-in pathfinding systems for the crate, insert the NorthstarPlugin specifying the `Neighborhood` to use.
+
+The built-in neighborhoods are:
+* `CardinalNeighborhood` 4 directions allowing no diagonal movement.
+* `CardinalNeighborhood3d` 6 directions, including up and down, allowing no diagonal movement.
+* `OrdinalNeighborhood` 8 directions allowing for diagonal movement.
+* `OrdinalNeighborhood3d` 26 directions which includes the base ordinal movements and their up/down directions.
+
+```rust,no_run
+use bevy::prelude::*;
+use bevy_northstar::prelude::*;
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        // Add the Northstar Plugin with a selected neighborhood to use the built in pathfinding systems
+        .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
+        .add_systems(Startup, (startup, build_grid.after(startup)))
+        .run();
+}
+
+fn startup(mut commands: Commands) {
+    commands.spawn(Camera2d::default());
+
+    // Spawn the grid used for pathfinding.
+    commands.spawn(Grid::<CardinalNeighborhood>::new(&GridSettings {
+        width: 16,
+        height: 16,
+        chunk_size: 4,
+        ..Default::default()
+    }));
+}
+
+fn build_grid(grid: Single<&mut Grid<CardinalNeighborhood>>) {
+    let mut grid = grid.into_inner();
+
+    // Let's set the position 8, 8 to a wall
+    grid.set_point(UVec3::new(8, 8, 0), Point::new(u32::MAX, true));
+
+    info!("Building the grid...");
+
+    // The grid needs to be built after setting the points.
+    // Building the grid will calculate the chunk entrances and cache internal paths.
+    grid.build();
+
+    info!("Grid built successfully!");
+}
+```
+
+## Bevy Compatibility
+
+|bevy|bevy_northstar|
+|---|---|
+|0.16|0.2|
+
+
+## Roadmap / TODO
 - **Modify & Rebuild Grid Chunks Dynamically** – Support updates to the grid after it’s been built.    
 - **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
 - **Parallelized Graph Building** – Speed up grid/graph construction using parallelism.  
@@ -51,6 +119,6 @@ This crate has the following Cargo features:
 
 ## Thanks
 Thanks to the following crates and blogs that have been used as references
-* https://github.com/evenfurther/pathfinding
-* https://github.com/mich101mich/hierarchical_pathfinding
-* https://alexmelenchon.github.io/Hierarchial-Pathfinding-Research/
+* <https://github.com/evenfurther/pathfinding>
+* <https://github.com/mich101mich/hierarchical_pathfinding>
+* <https://alexmelenchon.github.io/Hierarchial-Pathfinding-Research/>

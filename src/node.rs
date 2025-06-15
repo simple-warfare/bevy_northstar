@@ -1,20 +1,25 @@
-use bevy::{math::UVec3, utils::hashbrown::HashMap};
+//! This module defines the `Node` struct, which represents a node in the graph.
+use bevy::{math::UVec3, platform::collections::HashMap};
 use std::hash::{Hash, Hasher};
 
-use crate::chunk::Chunk;
-use crate::dir::Dir;
-use crate::path::Path;
+use crate::{chunk::Chunk, dir::Dir, path::Path};
 
+/// A `Node` for use in `Graph`.
 #[derive(Debug, Clone)]
-pub struct Node {
-    pub pos: UVec3,
-    pub chunk: Chunk,
-    pub edges: HashMap<UVec3, Path>,
-    pub dir: Option<Dir>,
+pub(crate) struct Node {
+    /// The position of the node in space.
+    pub(crate) pos: UVec3,
+    /// The chunk that this node belongs to.
+    pub(crate) chunk: Chunk,
+    /// Edges are the other nodes that this node is connected to and the path to them.
+    pub(crate) edges: HashMap<UVec3, Path>,
+    /// The direction of the edge relative to the chunk.
+    #[allow(dead_code)]
+    pub(crate) dir: Option<Dir>,
 }
 
 impl Node {
-    pub fn new(pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> Self {
+    pub(crate) fn new(pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> Self {
         Node {
             pos,
             chunk,
@@ -23,7 +28,8 @@ impl Node {
         }
     }
 
-    pub fn get_edges(&self) -> Vec<UVec3> {
+    /// Returns all positions that are connected to this `Node`.
+    pub(crate) fn edges(&self) -> Vec<UVec3> {
         self.edges.keys().cloned().collect()
     }
 }

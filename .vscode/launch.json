@@ -26,6 +26,24 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug basic example",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "basic"
+                ]
+            },
+            "args": [],
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug demo example",
             "cargo": {
                 "args": [
@@ -46,12 +64,12 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug collision example",
+            "name": "Debug collision_testing example",
             "cargo": {
                 "args": [
                     "build",
                     "--example",
-                    "collision",
+                    "collision_testing",
                     "--features",
                     "stats"
                 ]

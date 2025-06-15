@@ -1,14 +1,16 @@
+//! This module defines the `Chunk` struct, which represents a 3D region of the grid.
 use bevy::math::UVec3;
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
-use crate::{dir::Dir, Point};
+use crate::{dir::Dir, grid::Point};
 
 /// A chunk is a 3D region of the grid.
 #[derive(Debug, Clone)]
-pub struct Chunk {
-    pub min: UVec3,
-    pub max: UVec3,
-    //pub nodes: Vec<Node>,
+pub(crate) struct Chunk {
+    /// The minimum coordinates of the chunk.
+    min: UVec3,
+    /// The maximum coordinates of the chunk.
+    max: UVec3,
 }
 
 impl PartialEq for Chunk {
@@ -20,12 +22,21 @@ impl PartialEq for Chunk {
 impl Eq for Chunk {}
 
 impl Chunk {
-    pub fn new(min: UVec3, max: UVec3) -> Self {
+    /// Creates a new chunk from minimum and maximum coordinates.
+    pub(crate) fn new(min: UVec3, max: UVec3) -> Self {
         Chunk { min, max }
     }
 
+    pub(crate) fn min(&self) -> UVec3 {
+        self.min
+    }
+
+    pub(crate) fn max(&self) -> UVec3 {
+        self.max
+    }
+
     /// Returns a 3D `ArrayView3`` of `Point`s of the chunk from the grid.
-    pub fn view<'a>(&self, grid: &'a Array3<Point>) -> ArrayView3<'a, Point> {
+    pub(crate) fn view<'a>(&self, grid: &'a Array3<Point>) -> ArrayView3<'a, Point> {
         grid.slice(s![
             self.min.x as usize..self.max.x as usize + 1,
             self.min.y as usize..self.max.y as usize + 1,
@@ -34,7 +45,7 @@ impl Chunk {
     }
 
     /// Returns a 2D `ArrayView2`` of the edge of the chunk in the given direction.
-    pub fn edge<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> ArrayView2<'a, Point> {
+    pub(crate) fn edge<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> ArrayView2<'a, Point> {
         match dir {
             Dir::NORTH => grid.slice(s![
                 self.min.x as usize..self.max.x as usize + 1,
@@ -66,12 +77,12 @@ impl Chunk {
                 self.min.y as usize..self.max.y as usize + 1,
                 self.min.z as usize,
             ]),
-            _ => panic!("Ordinal directions are not an edge"),
+            _ => panic!("Ordinal directions do not have an edge."),
         }
     }
 
     /// Returns the chunk corner `Point` for the given ordinal direction.
-    pub fn corner<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> Point {
+    pub(crate) fn corner(&self, grid: &Array3<Point>, dir: Dir) -> Point {
         match dir {
             Dir::NORTHEAST => {
                 grid[[
@@ -157,7 +168,7 @@ impl Chunk {
                     self.min.z as usize,
                 ]]
             }
-            _ => panic!("Diagonal directions are not a corner"),
+            _ => panic!("Cardinal directions have no corner."),
         }
     }
 }

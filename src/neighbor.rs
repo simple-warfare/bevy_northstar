@@ -1,19 +1,26 @@
+//! This module defines the `Neighborhood` trait and its implementations for different types of neighborhoods.
 use bevy::math::UVec3;
 use ndarray::ArrayView3;
-
 use std::fmt::Debug;
 
-use crate::Point;
+use crate::grid::Point;
 
+/// The `Neighborhood` trait defines the interface for different neighborhood types.
+/// You can implement this trait to define custom neighborhoods and hueristics.
 pub trait Neighborhood: Clone + Debug + Default + Sync + Send {
+    /// Returns the possible directions at a position by the neighborhood.
     fn directions(&self) -> Vec<(i32, i32, i32)>;
+    /// Returns a `Vec` of neighbors for a given position.
     fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3, target: &mut Vec<UVec3>);
+    /// Returns the heuristic cost from a position to a target.
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32;
+    /// Returns true if the neighborhood allows ordinal movement.
     fn is_ordinal(&self) -> bool {
         false
     }
 }
 
+/// Use `CardinalNeighborhood` for standard 2D pathfinding with no diagonal movement.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CardinalNeighborhood;
 
@@ -54,6 +61,8 @@ impl Neighborhood for CardinalNeighborhood {
     }
 }
 
+/// Use `CardinalNeighborhood3d` for 3D pathfinding with no diagonal movement.
+/// This neighborhood allows movement in the cardinal directions in 3D space only in UP or DOWN directions.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CardinalNeighborhood3d;
 
@@ -116,6 +125,8 @@ impl Neighborhood for CardinalNeighborhood3d {
     }
 }
 
+/// Use `OrdinalNeighborhood` for 2D pathfinding with diagonal movement.
+/// This neighborhood allows movement in all 8 directions.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OrdinalNeighborhood;
 
@@ -170,6 +181,9 @@ impl Neighborhood for OrdinalNeighborhood {
     }
 }
 
+/// Use `OrdinalNeighborhood3d` for 3D pathfinding with diagonal movement.
+/// This neighborhood allows movement in all 26 directions.
+/// It's the 3D version of `OrdinalNeighborhood`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OrdinalNeighborhood3d;
 

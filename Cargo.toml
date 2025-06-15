@@ -1,6 +1,6 @@
 [package]
 name = "bevy_northstar"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 authors = ["John Mullins"]
@@ -19,27 +19,27 @@ stats = []
 
 [dependencies]
 thiserror = "2.0.12"
-indexmap = "2.7.1"
+indexmap = "2.9.0"
 ndarray = { version = "0.16.1", features=["rayon"] }
 rustc-hash = "2.1.1"
 strum = "0.27.1"
 slab = "0.4.9"
 
 [dependencies.bevy]
-version = "0.15"
+version = "0.16.1"
 default-features = false
-features=["bevy_render", "bevy_gizmos"]
+features=["bevy_render", "bevy_gizmos", "bevy_log"]
 
 [dev-dependencies]
-bevy = { version = "0.15.3", features=["bevy_dev_tools"] }
-bevy_ecs_tilemap = { version = "0.15" }
-bevy_ecs_tiled = { version = "0.5.1" }
+bevy = { version = "0.16.1", features=["bevy_dev_tools"] }
+bevy_ecs_tilemap = { version = "0.16" }
+bevy_ecs_tiled = { version = "0.7" }
 
 [target.'cfg(not(target_os = "windows"))'.dev-dependencies]
-criterion = { version = "0.5.1", features = ["html_reports"] }
-pprof = { version = "0.14.0", features = ["flamegraph"] }
+criterion = { version = "0.6.0", features = ["html_reports"] }
+pprof = { version = "0.15.0", features = ["flamegraph"] }
 
-rand = "0.8.5"
+rand = "0.9.1"
 
 [target.'cfg(not(target_os = "windows"))']
 [[bench]]
@@ -51,4 +51,8 @@ name = "demo"
 required-features = ["stats"]
 
 [[examples]]
-name = "collision"
+name = "collision_testing"
+required-features = ["stats"]
+
+[[examples]]
+name = "basic"

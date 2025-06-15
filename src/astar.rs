@@ -1,17 +1,27 @@
-use std::collections::BinaryHeap;
-
-use bevy::log;
-use bevy::math::UVec3;
-use bevy::prelude::Entity;
-use bevy::utils::hashbrown::HashMap;
+//! A* algorithms used by the crate.
+use bevy::{log, math::UVec3, platform::collections::HashMap, prelude::Entity};
 use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
+use std::collections::BinaryHeap;
 
-use crate::graph::Graph;
-use crate::{neighbor::Neighborhood, path::Path, FxIndexMap, Point, SmallestCostHolder};
+use crate::{
+    graph::Graph, grid::Point, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder,
+};
 
-/// A* search algorithm for a 3D grid
-pub fn astar_grid<N: Neighborhood>(
+/// A* search algorithm for a [`crate::grid::Grid`] of [`crate::grid::Point`]s.
+///
+/// # Arguments
+/// * `neighborhood` - Reference to the [`Neighborhood`] to use.
+/// * `grid` - A reference to a 3D array representing the grid.
+/// * `start` - The starting position in the grid.
+/// * `goal` - The goal position in the grid.
+/// * `size_hint` - A hint for the size of the binary heap.
+/// * `partial` - A boolean indicating whether to return a partial path if the goal is not reachable.
+/// * `blocking` - A reference to a map of positions that are blocked.
+///
+/// # Returns
+/// * [`Option<Path>`] - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
+pub(crate) fn astar_grid<N: Neighborhood>(
     neighborhood: &N,
     grid: &ArrayView3<Point>,
     start: UVec3,
@@ -128,7 +138,7 @@ pub fn astar_grid<N: Neighborhood>(
         }
 
         if steps.is_empty() {
-            log::info!("Steps is empty, so there's actually no path?");
+            log::error!("Steps is empty, so there's actually no path?");
             return None;
         }
 
@@ -139,8 +149,19 @@ pub fn astar_grid<N: Neighborhood>(
     }
 }
 
-/// A* search algorithm for a graph of nodes with connected edges
-pub fn astar_graph<N: Neighborhood>(
+/// A* search algorithm for a graph of nodes with connected edges.
+/// This function is primarily to be used for the crate, but can be used directly if desired.
+///
+/// # Arguments
+/// * `neighborhood` - Reference to the `Neighborhood` to use.
+/// * `graph` - A reference to the `Graph` object.
+/// * `start` - The starting position in the graph.
+/// * `goal` - The goal position in the graph.
+/// * `size_hint` - A hint for the size of the binary heap.
+///
+/// # Returns
+/// * `Option<Path>` - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
+pub(crate) fn astar_graph<N: Neighborhood>(
     neighborhood: &N,
     graph: &Graph,
     start: UVec3,
@@ -178,19 +199,19 @@ pub fn astar_graph<N: Neighborhood>(
                 continue;
             }
 
-            let node = graph.get_node(*current_pos).unwrap();
-            let neighbors = node.get_edges();
+            let node = graph.node_at(*current_pos).unwrap();
+            let neighbors = node.edges();
 
-            (neighbors, current_pos.clone())
+            (neighbors, *current_pos)
         };
 
         for neighbor in neighbors.iter() {
-            let neighbor_node = graph.get_node(*neighbor).unwrap();
+            let neighbor_node = graph.node_at(*neighbor).unwrap();
             if neighbor_node.edges.is_empty() {
                 continue;
             }
 
-            let new_cost = cost + graph.get_edge_cost(current_pos, *neighbor).unwrap();
+            let new_cost = cost + graph.edge_cost(current_pos, *neighbor).unwrap();
 
             let h;
             let n;
@@ -281,7 +302,7 @@ mod tests {
         assert_eq!(path.path()[0], start);
         // Ensure last position is the goal position
         assert_eq!(path.path()[3], goal);
-        assert_eq!(path.is_position_in_path(UVec3::new(1, 1, 1)), false);
+        assert!(!path.is_position_in_path(UVec3::new(1, 1, 1)));
     }
 
     #[test]
