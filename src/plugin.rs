@@ -2,12 +2,12 @@
 #[cfg(feature = "stats")]
 use std::time::Instant;
 
-use bevy::{log, prelude::*, platform::collections::HashMap};
+use bevy::{log, platform::collections::HashMap, prelude::*};
 
-use crate::prelude::*;
+use crate::{prelude::*, WithoutPathingFailures};
 
 /// NorthstarPlugin is the main plugin for the Northstar pathfinding and collision avoidance systems.
-/// 
+///
 #[derive(Default)]
 pub struct NorthstarPlugin<N: Neighborhood> {
     _neighborhood: std::marker::PhantomData<N>,
@@ -125,8 +125,7 @@ fn pathfind<N: Neighborhood + 'static>(
     mut query: Query<(Entity, &GridPos, &Pathfind), Changed<Pathfind>>,
     blocking: Res<BlockingMap>,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) 
-{
+) {
     let grid = grid.into_inner();
 
     query.iter_mut().for_each(|(entity, start, pathfind)| {
@@ -157,7 +156,10 @@ fn pathfind<N: Neighborhood + 'static>(
             #[cfg(feature = "stats")]
             stats.add_pathfinding(elapsed_time, path.cost() as f64);
 
-            commands.entity(entity).insert(path).remove::<PathfindingFailed>();
+            commands
+                .entity(entity)
+                .insert(path)
+                .remove::<PathfindingFailed>();
             // We remove PathfindingFailed even if it's not there.
         } else {
             #[cfg(feature = "stats")]
@@ -170,7 +172,7 @@ fn pathfind<N: Neighborhood + 'static>(
                     Pathfind {
                         goal: pathfind.goal,
                         use_astar: false,
-                    }
+                    },
                 ))
                 .remove::<NextPos>(); // Just to be safe
         }
@@ -180,22 +182,14 @@ fn pathfind<N: Neighborhood + 'static>(
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
 fn next_position<N: Neighborhood + 'static>(
-    mut query: Query<
-        (Entity, &mut Path, &GridPos, &Pathfind),
-        (
-            Without<NextPos>,
-            Without<AvoidanceFailed>,
-            Without<RerouteFailed>,
-        ),
-    >,
+    mut query: Query<(Entity, &mut Path, &GridPos, &Pathfind), WithoutPathingFailures>,
     //TODO: We probably need to do an optional single here if someone configures error handling
     grid: Single<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) 
-{
+) {
     let grid = grid.into_inner();
 
     for (entity, mut path, position, pathfind) in &mut query {
@@ -210,7 +204,7 @@ fn next_position<N: Neighborhood + 'static>(
             let start = Instant::now();
 
             let success = avoidance(
-                &grid,
+                grid,
                 entity,
                 &mut path,
                 pathfind,
@@ -269,7 +263,8 @@ fn next_position<N: Neighborhood + 'static>(
 
 // The `avoidance` function does a lookahead on the path, if any blocking entities are found
 // that are moving in the opposite relateive direciton it will attempt a short astar reroute.
-fn avoidance<N: Neighborhood>(
+#[allow(clippy::too_many_arguments)]
+fn avoidance<N: Neighborhood + 'static>(
     grid: &Grid<N>,
     entity: Entity,
     path: &mut Path,
@@ -278,10 +273,7 @@ fn avoidance<N: Neighborhood>(
     blocking: &HashMap<UVec3, Entity>,
     direction: &HashMap<Entity, Vec3>,
     avoidance_distance: usize,
-) -> bool
-where
-    N: 'static + Neighborhood,
-{
+) -> bool {
     if path.is_empty() {
         log::error!("Path is empty for entity: {:?}", entity);
         return false;
@@ -339,12 +331,12 @@ where
             path.path
                 .iter()
                 .skip(count)
-                .find(|pos| blocking.contains_key(&**pos) == false)
+                .find(|pos| !blocking.contains_key(&**pos))
         };
 
         // If we have an avoidance goal, astar path to that
         if let Some(avoidance_goal) = avoidance_goal {
-            let new_path = grid.pathfind_astar(position, *avoidance_goal, &blocking, false);
+            let new_path = grid.pathfind_astar(position, *avoidance_goal, blocking, false);
 
             // Replace the first few positions of path until the avoidance goal
             if let Some(new_path) = new_path {
@@ -360,7 +352,7 @@ where
                 let mut combined_path = new_path.path().to_vec();
                 combined_path.extend(old_path);
 
-                if combined_path.len() == 0 {
+                if combined_path.is_empty() {
                     log::error!("Combined path is empty for entity: {:?}", entity);
                     return false;
                 }
@@ -387,7 +379,7 @@ where
             return false;
         }
 
-        let new_path = grid.pathfind(position, pathfind.goal, &blocking, false);
+        let new_path = grid.pathfind(position, pathfind.goal, blocking, false);
 
         if let Some(new_path) = new_path {
             *path = new_path;
@@ -410,8 +402,7 @@ fn reroute_path<N: Neighborhood + 'static>(
     blocking: Res<BlockingMap>,
     mut commands: Commands,
     #[cfg(feature = "stats")] mut stats: ResMut<Stats>,
-) 
-{
+) {
     let grid = grid.into_inner();
 
     for (entity, position, pathfind, path) in query.iter_mut() {
@@ -449,10 +440,7 @@ fn reroute_path<N: Neighborhood + 'static>(
     }
 }
 
-fn update_blocking_map(
-    mut blocking_set: ResMut<BlockingMap>,
-    query: Query<(Entity, &GridPos)>,
-) {
+fn update_blocking_map(mut blocking_set: ResMut<BlockingMap>, query: Query<(Entity, &GridPos)>) {
     blocking_set.0.clear();
 
     query.iter().for_each(|(entity, position)| {

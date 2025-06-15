@@ -31,18 +31,24 @@ pub struct Pathfind {
 impl Pathfind {
     /// Creates a new `Pathfind` component with the given goal. HPA* will be used to pathfind.
     pub fn new(goal: UVec3) -> Self {
-        Pathfind { goal, use_astar: false }
+        Pathfind {
+            goal,
+            use_astar: false,
+        }
     }
 
     /// Creates a new `Pathfind` component with the given goal. Traditional A* will be used to pathfind.
     pub fn new_astar(goal: UVec3) -> Self {
-        Pathfind { goal, use_astar: true }
+        Pathfind {
+            goal,
+            use_astar: true,
+        }
     }
 }
 
-/// The next position in the path. 
+/// The next position in the path.
 /// The `pathfind` system will insert this into the entity when a path is found.
-/// Remove `NextPos` after you've moved the entity to the next position and 
+/// Remove `NextPos` after you've moved the entity to the next position and
 /// a new `NextPos` will be inserted.
 #[derive(Component, Default, Debug)]
 pub struct NextPos(pub UVec3);
@@ -54,7 +60,7 @@ pub struct NextPos(pub UVec3);
 *****************************************/
 
 /// Collision marker for moving entities.
-/// This is used for moving enities to check for collisions and shouldn't be used for 
+/// This is used for moving enities to check for collisions and shouldn't be used for
 /// static blocking tiles such as walls.
 #[derive(Component, Default)]
 pub struct Blocking;

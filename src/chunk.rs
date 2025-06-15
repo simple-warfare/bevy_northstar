@@ -82,7 +82,7 @@ impl Chunk {
     }
 
     /// Returns the chunk corner `Point` for the given ordinal direction.
-    pub(crate) fn corner<'a>(&self, grid: &'a Array3<Point>, dir: Dir) -> Point {
+    pub(crate) fn corner(&self, grid: &Array3<Point>, dir: Dir) -> Point {
         match dir {
             Dir::NORTHEAST => {
                 grid[[

@@ -184,6 +184,7 @@ pub fn setup_hud(mut commands: Commands) {
         ));
 }
 
+#[allow(clippy::type_complexity)]
 pub fn entity_under_cursor(
     mut query: Query<&mut TextSpan, With<EntityDebugText>>,
     windows: Single<&Window>,
@@ -274,7 +275,7 @@ pub fn update_pathfind_type_text(
 }
 
 // Shared input system for all examples.
-
+#[allow(clippy::too_many_arguments)]
 pub fn input<N: Neighborhood + 'static>(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
@@ -288,77 +289,74 @@ pub fn input<N: Neighborhood + 'static>(
     let mut grid = grid.into_inner();
 
     let (mut transform, mut projection) = camera.into_inner();
-    match &mut *projection {
-        Projection::Orthographic(ref mut ortho) => {
-            let mut direction = Vec3::ZERO;
+    if let Projection::Orthographic(ref mut ortho) = &mut *projection {
+        let mut direction = Vec3::ZERO;
 
-            if keyboard_input.pressed(KeyCode::KeyA) {
-                direction -= Vec3::new(1.0, 0.0, 0.0);
-            }
-
-            if keyboard_input.pressed(KeyCode::KeyD) {
-                direction += Vec3::new(1.0, 0.0, 0.0);
-            }
-
-            if keyboard_input.pressed(KeyCode::KeyW) {
-                direction += Vec3::new(0.0, 1.0, 0.0);
-            }
-
-            if keyboard_input.pressed(KeyCode::KeyS) {
-                direction -= Vec3::new(0.0, 1.0, 0.0);
-            }
-
-            if keyboard_input.pressed(KeyCode::KeyZ) {
-                ortho.scale += 0.1;
-            }
-
-            if keyboard_input.pressed(KeyCode::KeyX) {
-                ortho.scale -= 0.1;
-            }
-
-            if keyboard_input.just_pressed(KeyCode::Space) {
-                config.paused = !config.paused;
-            }
-
-            if keyboard_input.just_pressed(KeyCode::KeyP) {
-                config.use_astar = !config.use_astar;
-                stats.reset_pathfinding();
-                stats.reset_collision();
-
-                // Remove pathfind from all pathfinders
-                for (entity, _) in pathfinders.iter_mut() {
-                    commands
-                        .entity(entity)
-                        .remove::<Pathfind>()
-                        .remove::<NextPos>()
-                        .remove::<Path>();
-                }
-            }
-
-            if keyboard_input.just_pressed(KeyCode::KeyC) {
-                let current_collision = grid.collision();
-                grid.set_collision(!current_collision);
-                stats.reset_collision();
-                // Remove pathfind from all pathfinders
-                for (entity, _) in pathfinders.iter_mut() {
-                    commands
-                        .entity(entity)
-                        .remove::<Pathfind>()
-                        .remove::<NextPos>()
-                        .remove::<Path>();
-                }
-            }
-
-            if ortho.scale < 0.3 {
-                ortho.scale = 0.3;
-            }
-
-            let z = transform.translation.z;
-            transform.translation += time.delta_secs() * direction * 500.;
-            // Important! We need to restore the Z values when moving the camera around.
-            // Bevy has a specific camera setup and this can mess with how our layers are shown.
-            transform.translation.z = z;
+        if keyboard_input.pressed(KeyCode::KeyA) {
+            direction -= Vec3::new(1.0, 0.0, 0.0);
         }
-        _ => {}
+
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            direction += Vec3::new(1.0, 0.0, 0.0);
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyW) {
+            direction += Vec3::new(0.0, 1.0, 0.0);
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyS) {
+            direction -= Vec3::new(0.0, 1.0, 0.0);
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyZ) {
+            ortho.scale += 0.1;
+        }
+
+        if keyboard_input.pressed(KeyCode::KeyX) {
+            ortho.scale -= 0.1;
+        }
+
+        if keyboard_input.just_pressed(KeyCode::Space) {
+            config.paused = !config.paused;
+        }
+
+        if keyboard_input.just_pressed(KeyCode::KeyP) {
+            config.use_astar = !config.use_astar;
+            stats.reset_pathfinding();
+            stats.reset_collision();
+
+            // Remove pathfind from all pathfinders
+            for (entity, _) in pathfinders.iter_mut() {
+                commands
+                    .entity(entity)
+                    .remove::<Pathfind>()
+                    .remove::<NextPos>()
+                    .remove::<Path>();
+            }
+        }
+
+        if keyboard_input.just_pressed(KeyCode::KeyC) {
+            let current_collision = grid.collision();
+            grid.set_collision(!current_collision);
+            stats.reset_collision();
+            // Remove pathfind from all pathfinders
+            for (entity, _) in pathfinders.iter_mut() {
+                commands
+                    .entity(entity)
+                    .remove::<Pathfind>()
+                    .remove::<NextPos>()
+                    .remove::<Path>();
+            }
+        }
+
+        if ortho.scale < 0.3 {
+            ortho.scale = 0.3;
+        }
+
+        let z = transform.translation.z;
+        transform.translation += time.delta_secs() * direction * 500.;
+        // Important! We need to restore the Z values when moving the camera around.
+        // Bevy has a specific camera setup and this can mess with how our layers are shown.
+        transform.translation.z = z;
     }
 }

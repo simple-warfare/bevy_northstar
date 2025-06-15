@@ -169,11 +169,18 @@ impl Dir {
 
     /// Returns true if the direction is up or down.
     pub fn is_verticle(self) -> bool {
-        match self {
-            UP | DOWN | NORTHEASTUP | SOUTHEASTUP | SOUTHWESTUP | NORTHWESTUP | NORTHEASTDOWN
-            | SOUTHEASTDOWN | SOUTHWESTDOWN | NORTHWESTDOWN => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            UP | DOWN
+                | NORTHEASTUP
+                | SOUTHEASTUP
+                | SOUTHWESTUP
+                | NORTHWESTUP
+                | NORTHEASTDOWN
+                | SOUTHEASTDOWN
+                | SOUTHWESTDOWN
+                | NORTHWESTDOWN
+        )
     }
 }
 

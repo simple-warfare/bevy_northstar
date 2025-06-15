@@ -14,7 +14,7 @@ fn main() {
 }
 
 fn startup(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn(Camera2d);
 
     // Spawn the grid used for pathfinding.
     commands.spawn(CardinalGrid::new(&GridSettings {

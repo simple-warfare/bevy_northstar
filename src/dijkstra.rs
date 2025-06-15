@@ -1,8 +1,8 @@
 //! Dijkstra's algorithm implementation for pathfinding in a grid or graph.
 use bevy::{
     math::UVec3,
-    prelude::Entity,
     platform::collections::{HashMap, HashSet},
+    prelude::Entity,
 };
 
 use indexmap::map::Entry::{Occupied, Vacant};

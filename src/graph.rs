@@ -1,5 +1,5 @@
 //! Graph module for managing nodes and edges in relative space.
-use bevy::{platform::collections::HashMap, math::UVec3};
+use bevy::{math::UVec3, platform::collections::HashMap};
 
 use crate::{chunk::Chunk, dir::Dir, node::Node, path::Path, NodeId};
 
@@ -151,7 +151,6 @@ impl Graph {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
 

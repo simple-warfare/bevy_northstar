@@ -202,7 +202,7 @@ pub(crate) fn astar_graph<N: Neighborhood>(
             let node = graph.node_at(*current_pos).unwrap();
             let neighbors = node.edges();
 
-            (neighbors, current_pos.clone())
+            (neighbors, *current_pos)
         };
 
         for neighbor in neighbors.iter() {
@@ -302,7 +302,7 @@ mod tests {
         assert_eq!(path.path()[0], start);
         // Ensure last position is the goal position
         assert_eq!(path.path()[3], goal);
-        assert_eq!(path.is_position_in_path(UVec3::new(1, 1, 1)), false);
+        assert!(!path.is_position_in_path(UVec3::new(1, 1, 1)));
     }
 
     #[test]

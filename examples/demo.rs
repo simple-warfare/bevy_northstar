@@ -146,15 +146,9 @@ fn layer_created(
                         let tile_id = tile.id();
 
                         if tile_id == 14 {
-                            grid.set_point(
-                                UVec3::new(x as u32, height - 1 - y as u32, 0),
-                                Point::new(1, false),
-                            );
+                            grid.set_point(UVec3::new(x, height - 1 - y, 0), Point::new(1, false));
                         } else {
-                            grid.set_point(
-                                UVec3::new(x as u32, height - 1 - y as u32, 0),
-                                Point::new(0, true),
-                            );
+                            grid.set_point(UVec3::new(x, height - 1 - y, 0), Point::new(0, true));
                         }
                     }
                 }
@@ -187,7 +181,7 @@ fn spawn_minions(
     walkable.tiles = Vec::new();
     for x in 0..grid.width() {
         for y in 0..grid.height() {
-            if grid.point(UVec3::new(x, y, 0)).wall == false {
+            if !grid.point(UVec3::new(x, y, 0)).wall {
                 let position = Vec3::new(x as f32 * 8.0, y as f32 * 8.0, 0.0);
 
                 walkable.tiles.push(position);
@@ -213,7 +207,7 @@ fn spawn_minions(
         commands
             .spawn(Sprite {
                 image: asset_server.load("tile_0018_edit.png"),
-                color: color,
+                color,
                 ..Default::default()
             })
             .insert(Name::new(format!("{:?}", color)))
@@ -221,7 +215,7 @@ fn spawn_minions(
                 tile_width: 8,
                 tile_height: 8,
                 map_type: DebugMapType::Square,
-                color: color,
+                color,
                 draw_unrefined: false,
             })
             .insert(Blocking)

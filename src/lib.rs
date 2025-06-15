@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 
+use bevy::ecs::query::Without;
 use indexmap::IndexMap;
 use rustc_hash::FxHasher;
 use std::cmp::Ordering;
@@ -41,6 +42,13 @@ pub type CardinalGrid3d = grid::Grid<neighbor::CardinalNeighborhood3d>;
 pub type OrdinalGrid = grid::Grid<neighbor::OrdinalNeighborhood>;
 /// Alias for a 3d OrdinalNeighborhood grid. Allows all 26 directions.
 pub type OrdinalGrid3d = grid::Grid<neighbor::OrdinalNeighborhood3d>;
+
+/// No pathing failure markers
+pub type WithoutPathingFailures = (
+    Without<components::NextPos>,
+    Without<components::AvoidanceFailed>,
+    Without<components::RerouteFailed>,
+);
 
 pub(crate) type NodeId = usize;
 

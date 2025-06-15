@@ -10,13 +10,16 @@ use crate::{
     grid::{Grid, Point},
     path::Path,
     prelude::Neighborhood,
-    raycast::{bresenham_path, generate_path_segment_cardinal, generate_path_segment_ordinal, line_of_sight},
+    raycast::{
+        bresenham_path, generate_path_segment_cardinal, generate_path_segment_ordinal,
+        line_of_sight,
+    },
 };
 
 /// AStar pathfinding
-/// 
+///
 /// This function is provided if you want to supply your own grid.
-/// If you're using the built in [`Grid`] you can use the pathfinding helper functions 
+/// If you're using the built in [`Grid`] you can use the pathfinding helper functions
 /// provided in the [`Grid`] struct.
 ///
 /// # Arguments
@@ -51,9 +54,9 @@ pub fn pathfind_astar<N: Neighborhood>(
 
     if let Some(mut path) = path {
         path.path.pop_front();
-        return Some(path);
+        Some(path)
     } else {
-        return None;
+        None
     }
 }
 
@@ -224,7 +227,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
 
     // Move goal_nodes that are farther from the goal in the direction of the starting point to the end of the list
     goal_nodes.sort_by_key(|(_, distance)| {
-        let distance = *distance as i32 - start_distance;
+        let distance = *distance - start_distance;
         if distance < 0 {
             distance.abs()
         } else {
@@ -241,7 +244,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
         for (goal_node, _) in goal_nodes.clone() {
             let node_path = astar_graph(
                 &grid.neighborhood,
-                &grid.graph(),
+                grid.graph(),
                 start_node.pos,
                 goal_node.pos,
                 100,
@@ -276,7 +279,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 );
                 cost += end_path.cost();
 
-                if path.len() == 0 {
+                if path.is_empty() {
                     return None;
                 }
 
@@ -335,12 +338,7 @@ pub fn optimize_path<N: Neighborhood>(
 
     while i < path.len() {
         // Check if we can go directly to the goal
-        let path_to_goal = bresenham_path(
-            grid,
-            path.path[i],
-            goal,
-            neighborhood.is_ordinal(),
-        );
+        let path_to_goal = bresenham_path(grid, path.path[i], goal, neighborhood.is_ordinal());
 
         if let Some(path_to_goal) = path_to_goal {
             refined_path.extend(path_to_goal.into_iter().skip(1)); // Add intermediate points
@@ -361,9 +359,7 @@ pub fn optimize_path<N: Neighborhood>(
 
             if let Some(path_to_farthest) = path_to_farthest {
                 let shortcut_length = farthest - i; // Reward longer shortcuts
-                let goal_proximity = neighborhood
-                    .heuristic(path.path[farthest], goal)
-                    as f32; // Reward shortcuts closer to the goal
+                let goal_proximity = neighborhood.heuristic(path.path[farthest], goal) as f32; // Reward shortcuts closer to the goal
 
                 // Base score: encourage longer shortcuts
                 let mut score = shortcut_length as f32 - goal_proximity * 4.0;
@@ -388,7 +384,7 @@ pub fn optimize_path<N: Neighborhood>(
                 }
             }
         }
-        
+
         if let Some(path_to_farthest) = best_farthest_path {
             refined_path.extend(path_to_farthest.into_iter().skip(1)); // Avoid duplicate start points
         }
@@ -397,7 +393,6 @@ pub fn optimize_path<N: Neighborhood>(
             path.path[best_farthest].as_vec3(),
         ));
         i = best_farthest; // Move to the best shortcut
-
     }
 
     // Calculate the cost of the refined path
@@ -406,7 +401,7 @@ pub fn optimize_path<N: Neighborhood>(
         cost += grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
     }
 
-    let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
+    let mut path = Path::new(refined_path.to_vec(), cost);
     path.graph_path = path.path.clone();
     path
 }
@@ -510,7 +505,7 @@ pub fn optimize_path_old<N: Neighborhood>(
         cost += grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost;
     }
 
-    let mut path = Path::new(refined_path.iter().cloned().collect(), cost);
+    let mut path = Path::new(refined_path.to_vec(), cost);
     path.graph_path = path.path.clone();
 
     path
@@ -537,12 +532,26 @@ pub(crate) fn reroute_path<N: Neighborhood>(
 
     if path.graph_path.is_empty() {
         // Our only option here is to astar path to the goal
-        return pathfind_astar(&grid.neighborhood, &grid.view(), start, goal, blocking, false);
+        return pathfind_astar(
+            &grid.neighborhood,
+            &grid.view(),
+            start,
+            goal,
+            blocking,
+            false,
+        );
     }
 
     let new_path = path.graph_path.iter().find_map(|pos| {
-        let new_path = pathfind_astar(&grid.neighborhood, &grid.view(), start, *pos, blocking, false);
-        if new_path.is_some() && new_path.as_ref().unwrap().len() > 0 {
+        let new_path = pathfind_astar(
+            &grid.neighborhood,
+            &grid.view(),
+            start,
+            *pos,
+            blocking,
+            false,
+        );
+        if new_path.is_some() && !new_path.as_ref().unwrap().is_empty() {
             new_path
         } else {
             None

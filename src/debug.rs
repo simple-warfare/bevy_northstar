@@ -75,10 +75,9 @@ impl<N: Neighborhood + 'static> Default for NorthstarDebugPlugin<N> {
 
 impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_systems(Update, (draw_debug_map::<N>, draw_debug_paths::<N>))
+        app.add_systems(Update, (draw_debug_map::<N>, draw_debug_paths))
             .register_type::<DebugMap>()
             .register_type::<DebugMapType>();
-            //.register_type::<DebugMapAnchor>();
     }
 }
 
@@ -125,8 +124,10 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                                 ((y + 1) * chunk_size) as f32 * debug_map.tile_height as f32,
                             );
 
-                            let bottom_left = bottom_left + offset - debug_map.tile_width as f32 * 0.5;
-                            let bottom_right = bottom_right + offset - debug_map.tile_height as f32 * 0.5;
+                            let bottom_left =
+                                bottom_left + offset - debug_map.tile_width as f32 * 0.5;
+                            let bottom_right =
+                                bottom_right + offset - debug_map.tile_height as f32 * 0.5;
                             let top_left = top_left + offset - debug_map.tile_width as f32 * 0.5;
                             let top_right = top_right + offset - debug_map.tile_height as f32 * 0.5;
 
@@ -255,10 +256,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 
             // Draw cached paths
             for path in grid.graph().all_paths() {
-                if debug_map.draw_entrances && !debug_map.draw_cached_paths {
-                    if path.len() > 2 {
-                        continue;
-                    }
+                if debug_map.draw_entrances && !debug_map.draw_cached_paths && path.len() > 2 {
+                    continue;
                 }
 
                 // Iterate over path.path() drawing a line from one point to the next point until completed
@@ -294,11 +293,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                         color = path_colors[color_index % path_colors.len()];
                     }
 
-                    gizmos.line_2d(
-                        prev_position + offset,
-                        next_position + offset,
-                        color,
-                    );
+                    gizmos.line_2d(prev_position + offset, next_position + offset, color);
 
                     prev = next;
                 }
@@ -310,7 +305,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 }
 
 // Draw the debug gizmos for [`DebugPath`]s.
-fn draw_debug_paths<N: Neighborhood + 'static>(
+fn draw_debug_paths(
     query: Query<(&DebugPath, &Path)>,
     debug_map: Single<&Transform, With<DebugMap>>,
     mut gizmos: Gizmos,

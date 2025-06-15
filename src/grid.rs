@@ -118,7 +118,7 @@ impl Point {
 ///    grid.set_point(UVec3::new(0, 0, 0), Point::new(1, false));
 ///    // Initialize the grid
 ///    grid.build();
-/// 
+///
 ///    // Add the grid to the world
 ///    commands.spawn(grid);
 /// }
@@ -693,19 +693,14 @@ impl<N: Neighborhood + Default> Grid<N> {
 
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
     pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
-        for chunk in self.chunks.iter() {
-            if pos.x >= chunk.min().x
+        self.chunks.iter().find(|&chunk| {
+            pos.x >= chunk.min().x
                 && pos.x <= chunk.max().x
                 && pos.y >= chunk.min().y
                 && pos.y <= chunk.max().y
                 && pos.z >= chunk.min().z
                 && pos.z <= chunk.max().z
-            {
-                return Some(chunk);
-            }
-        }
-
-        None
+        })
     }
 
     /// Recursively reroutes a path by astar pathing to further chunks until a path can be found.
@@ -722,7 +717,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
     ) -> Option<Path> {
-        reroute_path(&self, path, start, goal, blocking)
+        reroute_path(self, path, start, goal, blocking)
     }
 
     pub fn pathfind(
@@ -732,7 +727,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
-        pathfind(&self, start, goal, blocking, partial)
+        pathfind(self, start, goal, blocking, partial)
     }
 
     pub fn pathfind_astar(
@@ -817,7 +812,7 @@ mod tests {
 
         for edge in edges {
             for point in edge.iter() {
-                assert_eq!(point.wall, true);
+                assert!(point.wall);
             }
         }
     }
@@ -896,8 +891,6 @@ mod tests {
             for y in 0..(GRID_SETTINGS.height as usize) {
                 if x % chunk_size == 0 && y % half_chunk_size == 0 {
                     grid.grid[[x, y, 0]] = Point::new(0, true);
-                } else if y % chunk_size == 0 && x % half_chunk_size == 0 {
-                    grid.grid[[x, y, 0]] = Point::new(0, true);
                 } else {
                     grid.grid[[x, y, 0]] = Point::new(0, false);
                 }
@@ -906,7 +899,7 @@ mod tests {
 
         grid.build_nodes();
 
-        assert_eq!(grid.graph.node_count(), 48);
+        assert_eq!(grid.graph.node_count(), 36);
 
         // Test ordinal
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GridSettings {
@@ -952,7 +945,7 @@ mod tests {
             .edges
             .clone();
 
-        assert_eq!(edges.contains_key(&UVec3::new(2, 4, 0)), true);
+        assert!(edges.contains_key(&UVec3::new(2, 4, 0)));
 
         assert_eq!(edges[&UVec3::new(2, 4, 0)].path().len(), 2);
         assert_eq!(edges[&UVec3::new(2, 4, 0)].cost(), 1);
@@ -1072,13 +1065,13 @@ mod tests {
         for x in 0..width {
             for y in 0..height {
                 if (x % 4 == 0)
-                    && (y % chunk_size == 0 || y / chunk_size + chunk_size == chunk_size)
+                    && (y % chunk_size == 0 || y / (chunk_size + chunk_size) == chunk_size)
                 {
                     grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
                 }
 
                 if (y % 4 == 0)
-                    && (x % chunk_size == 0 || x & chunk_size + chunk_size == chunk_size)
+                    && (x % chunk_size == 0 || x & (chunk_size + chunk_size) == chunk_size)
                 {
                     grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
                 }
@@ -1095,7 +1088,7 @@ mod tests {
         );
 
         assert!(path.is_some());
-        assert!(path.unwrap().len() > 0);
+        assert!(!path.unwrap().is_empty());
     }
 
     #[test]

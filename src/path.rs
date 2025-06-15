@@ -32,7 +32,7 @@ impl Path {
         let path = path.iter().cloned().collect();
 
         Path {
-            path: path,
+            path,
             graph_path: VecDeque::new(),
             cost,
             is_reversed: false,
@@ -57,7 +57,7 @@ impl Path {
     /// assert_eq!(path.path(), &[UVec3::new(1, 2, 3), UVec3::new(4, 5, 6)]);
     /// ```
     pub fn path(&self) -> &[UVec3] {
-        &self.path.as_slices().0
+        self.path.as_slices().0
     }
 
     /// Returns the cost of the path

@@ -5,30 +5,30 @@ use ndarray::ArrayView3;
 use crate::grid::Point;
 
 /// Check if there is a line of sight between two points in the grid allowing diagonal movement.
-/// 
+///
 /// Arguments:
 /// * `grid` - A 3D array view of [`Point`]s representing the grid.
 /// * `start` - The starting [`UVec3`].
 /// * `end` - The ending point [`UVec3`].
-/// 
+///
 /// Returns:
 /// * `true` if there is a line of sight between the two points.
 /// * `false` if there is an obstacle between the two points.
-/// 
+///
 /// # Example
-/// 
+///
 /// ```
 /// use bevy::math::UVec3;
 /// use ndarray::Array3;
 /// use bevy_northstar::grid::Point;
 /// use bevy_northstar::raycast::line_of_sight;
-/// 
+///
 /// let mut grid = Array3::from_elem((10, 10, 1), Point::new(1, false));
 /// grid[[5, 5, 0]] = Point::new(1, true);
-/// 
+///
 /// let start = UVec3::new(0, 0, 0);
 /// let end = UVec3::new(9, 9, 0);
-/// 
+///
 /// assert_eq!(line_of_sight(&grid.view(), start, end), false);
 /// ```
 pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
@@ -144,16 +144,23 @@ pub(crate) fn generate_path_segment_cardinal(start: UVec3, end: UVec3) -> Vec<UV
     segment
 }
 
-
-
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid
 #[allow(dead_code)]
-pub(crate) fn bresenham_path(grid: &ArrayView3<Point>, start: UVec3, goal: UVec3, ordinal: bool) -> Option<Vec<UVec3>> {
+pub(crate) fn bresenham_path(
+    grid: &ArrayView3<Point>,
+    start: UVec3,
+    goal: UVec3,
+    ordinal: bool,
+) -> Option<Vec<UVec3>> {
     let mut path = Vec::new();
     let mut current = start;
 
-    let (width, height, depth) = (grid.shape()[0] as u32, grid.shape()[1] as u32, grid.shape()[2] as u32);
+    let (width, height, depth) = (
+        grid.shape()[0] as u32,
+        grid.shape()[1] as u32,
+        grid.shape()[2] as u32,
+    );
 
     // Differences in each dimension
     let dx = (goal.x as i32 - start.x as i32).abs();
@@ -166,11 +173,7 @@ pub(crate) fn bresenham_path(grid: &ArrayView3<Point>, start: UVec3, goal: UVec3
 
     let sx: i32 = if start.x < goal.x { 1 } else { -1 };
     let sy: i32 = if start.y < goal.y { 1 } else { -1 };
-    let sz: i32 = if depth > 1 && start.z < goal.z {
-        1
-    } else {
-        -1
-    };
+    let sz: i32 = if depth > 1 && start.z < goal.z { 1 } else { -1 };
 
     let mut err_xy = dx - dy;
     let mut err_xz = dx - dz;
@@ -213,26 +216,24 @@ pub(crate) fn bresenham_path(grid: &ArrayView3<Point>, start: UVec3, goal: UVec3
                 err_xz += dx;
                 current.z = current.z.saturating_add_signed(sz);
             }
-        } else {
-            if double_err_xy >= -dy && double_err_xz >= -dz {
-                // Move along x-axis
-                err_xy -= dy;
-                err_xz -= dz;
-                current.x = current.x.saturating_add_signed(sx);
-            } else if double_err_xy < dx {
-                // Move along y-axis
-                err_xy += dx;
-                current.y = current.y.saturating_add_signed(sy);
-            } else if depth > 1 && double_err_xz < dx {
-                // Move along z-axis (if applicable)
-                err_xz += dx;
-                current.z = current.z.saturating_add_signed(sz);
-            }
+        } else if double_err_xy >= -dy && double_err_xz >= -dz {
+            // Move along x-axis
+            err_xy -= dy;
+            err_xz -= dz;
+            current.x = current.x.saturating_add_signed(sx);
+        } else if double_err_xy < dx {
+            // Move along y-axis
+            err_xy += dx;
+            current.y = current.y.saturating_add_signed(sy);
+        } else if depth > 1 && double_err_xz < dx {
+            // Move along z-axis (if applicable)
+            err_xz += dx;
+            current.z = current.z.saturating_add_signed(sz);
         }
     }
 
     path.push(goal);
-    
+
     Some(path)
 }
 
@@ -301,7 +302,10 @@ mod tests {
     use bevy::math::UVec3;
     use ndarray::Array3;
 
-    use crate::{prelude::*, raycast::{bresenham_path, line_of_sight}};
+    use crate::{
+        prelude::*,
+        raycast::{bresenham_path, line_of_sight},
+    };
 
     const GRID_SETTINGS: GridSettings = GridSettings {
         width: 12,
@@ -324,7 +328,7 @@ mod tests {
         let start = UVec3::new(0, 0, 0);
         let end = UVec3::new(9, 9, 0);
 
-        assert_eq!(line_of_sight(&grid.view(), start, end), false);
+        assert!(!line_of_sight(&grid.view(), start, end));
     }
 
     #[test]
@@ -333,7 +337,12 @@ mod tests {
 
         grid.build();
 
-        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(
+            &grid.view(),
+            UVec3::new(0, 0, 0),
+            UVec3::new(10, 10, 0),
+            grid.neighborhood.is_ordinal(),
+        );
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 11);
@@ -342,7 +351,12 @@ mod tests {
 
         grid.build();
 
-        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(
+            &grid.view(),
+            UVec3::new(0, 0, 0),
+            UVec3::new(10, 10, 0),
+            grid.neighborhood.is_ordinal(),
+        );
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 21);
@@ -352,7 +366,12 @@ mod tests {
         grid.set_point(UVec3::new(5, 5, 0), Point::new(1, true));
         grid.build();
 
-        let path = bresenham_path(&grid.view(), UVec3::new(0, 0, 0), UVec3::new(10, 10, 0), grid.neighborhood.is_ordinal());
+        let path = bresenham_path(
+            &grid.view(),
+            UVec3::new(0, 0, 0),
+            UVec3::new(10, 10, 0),
+            grid.neighborhood.is_ordinal(),
+        );
 
         assert!(path.is_none());
     }
