@@ -4,6 +4,7 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/jtothethree/bevy_northstar/blob/main/LICENSE)
 [![Crates.io](https://img.shields.io/crates/d/bevy_northstar)](https://crates.io/crates/bevy_northstar)
 [![Following released Bevy versions](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://bevyengine.org/learn/quick-start/plugin-development/#main-branch-tracking)
+
 ## A 2d/3d hierarchical pathfinding crate for Bevy. 
 
 `bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal point it's refined to get a more accurate path.
@@ -22,8 +23,6 @@ The crate provides:
 
 - **Bevy Systems Integration** – Bevy systems and components for pathfinding as well as collision markers when avoidance paths fail.
 
-
-
 ## Demo
 cargo run --example demo --features stats --release
 
@@ -32,6 +31,11 @@ Press C to disable/enable collision
 
 ![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
 
+## Documentation
+
+* API Reference on [`docs.rs`](https://docs.rs/bevy_northstar/latest/bevy_northstar/)
+* Usage guide and explanations in the [`book`](https://jtothethree.github.io/bevy_northstar/)
+* Examples in the repository
 
 ## Feature Flags
 This crate has the following Cargo features:
