@@ -30,7 +30,8 @@ cargo run --example demo --features stats --release
 Press P to switch between HPA* and traditional A*
 Press C to disable/enable collision
 
-![2024-12-02_08-44](https://github.com/user-attachments/assets/18778c4e-43bf-4e4c-8031-8a5974610f9c)
+![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
+
 
 ## Feature Flags
 This crate has the following Cargo features:
