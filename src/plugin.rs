@@ -167,13 +167,7 @@ fn pathfind<N: Neighborhood + 'static>(
 
             commands
                 .entity(entity)
-                .insert((
-                    PathfindingFailed,
-                    Pathfind {
-                        goal: pathfind.goal,
-                        use_astar: false,
-                    },
-                ))
+                .insert(PathfindingFailed)
                 .remove::<NextPos>(); // Just to be safe
         }
     });

@@ -3,7 +3,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::{
     grid::{Grid, GridSettings},
-    prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d},
+    prelude::{CardinalNeighborhood, OrdinalNeighborhood, OrdinalNeighborhood3d},
 };
 
 mod profiler;
@@ -24,7 +24,7 @@ fn benchmarks(c: &mut Criterion) {
         avoidance_distance: 4,
     };
 
-    let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
+    let mut grid: Grid<CardinalNeighborhood> = Grid::new(&grid_settings);
 
     group.sample_size(10);
 

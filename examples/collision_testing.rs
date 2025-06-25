@@ -169,16 +169,19 @@ fn layer_created(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Query<&Grid<CardinalNeighborhood>>,
+    grid: Single<&Grid<CardinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
+    tilemap: Single<(
+        &TilemapSize,
+        &TilemapTileSize,
+        &TilemapGridSize,
+        &TilemapAnchor,
+    )>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<shared::Walkable>,
 ) {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let grid = grid.into_inner();
+    let (map_size, tile_size, grid_size, anchor) = tilemap.into_inner();
 
     let layer_entity = layer_entity.iter().next().unwrap();
 
@@ -193,13 +196,15 @@ fn spawn_minions(
         }
     }
 
+    let offset = anchor.as_offset(map_size, grid_size, tile_size, &TilemapType::Square);
+
     let mut count = 0;
     let mut rng = rand::rng();
 
     while count < 6 {
         let position = walkable.tiles.choose(&mut rng).unwrap();
 
-        let transform = Vec3::new(position.x + 4.0, position.y + 4.0, 4.0);
+        let transform = Vec3::new(position.x, position.y, 4.0) + offset.extend(0.0);
 
         // Generate random color
         let color = Color::srgb(

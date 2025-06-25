@@ -28,6 +28,7 @@ pub mod prelude {
     pub use crate::grid::{Grid, GridSettings, Point};
     pub use crate::neighbor::*;
     pub use crate::path::Path;
+    pub use crate::plugin::BlockingMap;
     pub use crate::plugin::NorthstarPlugin;
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;

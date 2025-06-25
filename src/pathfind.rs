@@ -103,14 +103,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
         );
 
         if let Some(mut path) = path {
-            // We should still refine this path since AStar wasn't requested
-            path = optimize_path(
-                &grid.neighborhood,
-                &grid.view(),
-                &path,
-                grid.neighborhood.is_ordinal(),
-            );
-
             path.path.pop_front();
             return Some(path);
         } else {
