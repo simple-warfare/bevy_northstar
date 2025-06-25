@@ -34,11 +34,11 @@ fn main() {
         .add_plugins((TilemapPlugin, TiledMapPlugin::default()))
         // bevy_northstar plugins
         .add_plugins((
-            NorthstarPlugin::<OrdinalNeighborhood>::default(),
-            NorthstarDebugPlugin::<OrdinalNeighborhood>::default(),
+            NorthstarPlugin::<CardinalNeighborhood>::default(),
+            NorthstarDebugPlugin::<CardinalNeighborhood>::default(),
         ))
         // Add the SharedPlugin for unrelated pathfinding systems shared by the examples
-        .add_plugins(shared::SharedPlugin::<OrdinalNeighborhood>::default())
+        .add_plugins(shared::SharedPlugin::<CardinalNeighborhood>::default())
         // Observe the LayerCreated event to build the grid from the Tiled layer
         .add_observer(layer_created)
         // Startup and State Systems
@@ -88,6 +88,13 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let mut map_entity = commands.spawn((TiledMapHandle(map_handle), anchor));
 
+    let grid_settings = GridSettingsBuilder::new_2d(128, 128)
+        .chunk_size(16)
+        .allow_corner_clipping()
+        .enable_collision()
+        .avoidance_distance(4)
+        .build();
+
     // Insert the grid as a child of the map entity. This won't currently affect anything, but in the future
     // we may want to have the grid as a child of the map entity so that multiple grids can be supported.
     map_entity.insert((
@@ -95,18 +102,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
-        Grid::<OrdinalNeighborhood>::new(&GridSettings {
-            width: 128,
-            height: 128,
-            depth: 1,
-            chunk_size: 16,
-            chunk_depth: 1,
-            chunk_ordinal: false,
-            default_cost: 1,
-            default_wall: true,
-            collision: true,
-            avoidance_distance: 4,
-        }),
+        Grid::<CardinalNeighborhood>::new(&grid_settings),
     ));
 
     // Add the debug map as a child of the map entity
@@ -121,14 +117,14 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             draw_entrances: true,
             draw_cached_paths: false,
         },
-        Transform::from_translation(offset.extend(0.0)),
+        DebugOffset(offset.extend(0.0)),
     ));
 }
 
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
     map_asset: Res<Assets<TiledMap>>,
-    grid: Single<&mut Grid<OrdinalNeighborhood>>,
+    grid: Single<&mut Grid<CardinalNeighborhood>>,
     mut state: ResMut<NextState<shared::State>>,
 ) {
     let mut grid = grid.into_inner();
@@ -164,7 +160,7 @@ fn layer_created(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Query<&Grid<OrdinalNeighborhood>>,
+    grid: Query<&Grid<CardinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<shared::Walkable>,
@@ -181,7 +177,7 @@ fn spawn_minions(
     walkable.tiles = Vec::new();
     for x in 0..grid.width() {
         for y in 0..grid.height() {
-            if !grid.point(UVec3::new(x, y, 0)).wall {
+            if !grid.point(UVec3::new(x, y, 0)).solid {
                 let position = Vec3::new(x as f32 * 8.0, y as f32 * 8.0, 0.0);
 
                 walkable.tiles.push(position);

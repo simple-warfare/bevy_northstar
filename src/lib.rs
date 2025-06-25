@@ -1,6 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use bevy::ecs::query::Without;
+use bevy::math::UVec3;
 use indexmap::IndexMap;
 use rustc_hash::FxHasher;
 use std::cmp::Ordering;
@@ -25,7 +26,7 @@ pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{DebugMapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
-    pub use crate::grid::{Grid, GridSettings, Point};
+    pub use crate::grid::{Grid, GridSettingsBuilder, Point};
     pub use crate::neighbor::*;
     pub use crate::path::Path;
     pub use crate::plugin::NorthstarPlugin;
@@ -81,4 +82,11 @@ impl<Id: Ord> Ord for SmallestCostHolder<Id> {
             s => s,
         }
     }
+}
+
+#[inline(always)]
+pub(crate) fn in_bounds_3d(pos: UVec3, min: UVec3, max: UVec3) -> bool {
+    pos.x.wrapping_sub(min.x) < (max.x - min.x) &&
+    pos.y.wrapping_sub(min.y) < (max.y - min.y) &&
+    pos.z.wrapping_sub(min.z) < (max.z - min.z)
 }

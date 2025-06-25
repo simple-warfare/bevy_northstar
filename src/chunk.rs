@@ -89,84 +89,84 @@ impl Chunk {
                     self.max.x as usize,
                     self.max.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHEAST => {
                 grid[[
                     self.max.x as usize,
                     self.min.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHWEST => {
                 grid[[
                     self.min.x as usize,
                     self.min.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::NORTHWEST => {
                 grid[[
                     self.min.x as usize,
                     self.max.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::NORTHEASTUP => {
                 grid[[
                     self.max.x as usize,
                     self.max.y as usize,
                     self.max.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHEASTUP => {
                 grid[[
                     self.max.x as usize,
                     self.min.y as usize,
                     self.max.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHWESTUP => {
                 grid[[
                     self.min.x as usize,
                     self.min.y as usize,
                     self.max.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::NORTHWESTUP => {
                 grid[[
                     self.min.x as usize,
                     self.max.y as usize,
                     self.max.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::NORTHEASTDOWN => {
                 grid[[
                     self.max.x as usize,
                     self.max.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHEASTDOWN => {
                 grid[[
                     self.max.x as usize,
                     self.min.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::SOUTHWESTDOWN => {
                 grid[[
                     self.min.x as usize,
                     self.min.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             Dir::NORTHWESTDOWN => {
                 grid[[
                     self.min.x as usize,
                     self.max.y as usize,
                     self.min.z as usize,
-                ]]
+                ]].clone()
             }
             _ => panic!("Cardinal directions have no corner."),
         }

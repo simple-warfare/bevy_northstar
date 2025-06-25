@@ -16,13 +16,13 @@ fn main() {
 fn startup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
+    // Create the grid settings.
+    let grid_settings = GridSettingsBuilder::new_2d(16, 16)
+        .chunk_size(4)
+        .build();
+
     // Spawn the grid used for pathfinding.
-    commands.spawn(CardinalGrid::new(&GridSettings {
-        width: 16,
-        height: 16,
-        chunk_size: 4,
-        ..Default::default()
-    }));
+    commands.spawn(CardinalGrid::new(&grid_settings));
 }
 
 fn build_grid(grid: Single<&mut CardinalGrid>) {

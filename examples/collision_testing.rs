@@ -96,24 +96,20 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let mut map_entity = commands.spawn((TiledMapHandle(map_handle), anchor));
 
+    let grid_settings = GridSettingsBuilder::new_2d(16, 16)
+        .chunk_size(8)
+        .default_solid()
+        .enable_collision()
+        .avoidance_distance(4)
+        .build();
+
     // You can eventually add some extra settings to your map
     map_entity.insert((
         TilemapRenderSettings {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
-        Grid::<CardinalNeighborhood>::new(&GridSettings {
-            width: 16,
-            height: 16,
-            depth: 1,
-            chunk_size: 8,
-            chunk_depth: 1,
-            chunk_ordinal: false,
-            default_cost: 1,
-            default_wall: true,
-            collision: true,
-            avoidance_distance: 4,
-        }),
+        Grid::<CardinalNeighborhood>::new(&grid_settings),
     ));
 
     map_entity.with_child((
@@ -185,7 +181,7 @@ fn spawn_minions(
     walkable.tiles = Vec::new();
     for x in 0..grid.width() {
         for y in 0..grid.height() {
-            if !grid.point(UVec3::new(x, y, 0)).wall {
+            if !grid.point(UVec3::new(x, y, 0)).solid {
                 let position = Vec3::new(x as f32 * 8.0, y as f32 * 8.0, 0.0);
 
                 walkable.tiles.push(position);

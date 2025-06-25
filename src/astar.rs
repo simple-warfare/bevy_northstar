@@ -5,7 +5,7 @@ use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
 use crate::{
-    graph::Graph, grid::Point, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder,
+    graph::Graph, grid::Point, in_bounds_3d, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder
 };
 
 /// A* search algorithm for a [`crate::grid::Grid`] of [`crate::grid::Point`]s.
@@ -43,6 +43,14 @@ pub(crate) fn astar_grid<N: Neighborhood>(
     let mut closest_node = start;
     let mut closest_distance = neighborhood.heuristic(start, goal);
 
+    let shape = grid.shape();
+    let min = UVec3::new(0, 0, 0);
+    let max = UVec3::new(
+        shape[0] as u32,
+        shape[1] as u32,
+        shape[2] as u32,
+    );
+
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
@@ -72,19 +80,29 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 continue;
             }
 
-            let mut neighbors = vec![];
-            neighborhood.neighbors(grid, *current_pos, &mut neighbors);
-            neighbors
+            let point = &grid[[
+                current_pos.x as usize,
+                current_pos.y as usize,
+                current_pos.z as usize,
+            ]];
+
+            //let mut neighbors = SmallVec::new();
+            //neighborhood.neighbors(grid, *current_pos, &mut neighbors);
+            point.neighbor_iter(*current_pos)
         };
 
-        for &neighbor in neighbors.iter() {
+        for neighbor in neighbors {
+            if !in_bounds_3d(neighbor, min, max) {
+                continue;
+            }
+
             let neighbor_point = &grid[[
                 neighbor.x as usize,
                 neighbor.y as usize,
                 neighbor.z as usize,
             ]];
 
-            if neighbor_point.wall || neighbor_point.cost == 0 {
+            if neighbor_point.solid {
                 continue;
             }
 
@@ -247,12 +265,20 @@ pub(crate) fn astar_graph<N: Neighborhood>(
 mod tests {
     use super::*;
     use crate::chunk::Chunk;
+    use crate::grid::{Grid, GridSettingsBuilder};
     use crate::neighbor::OrdinalNeighborhood3d;
 
     #[test]
     fn test_astar_grid() {
-        let mut grid = ndarray::Array3::from_elem((3, 3, 3), Point::new(1, false));
-        grid[[1, 1, 1]].cost = 1;
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
+            .chunk_size(3)
+            .build();
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        
+        grid.build();
+
+        //let mut grid = ndarray::Array3::from_elem((3, 3, 3), Point::new(1, false));
+        //grid[[1, 1, 1]].cost = 1;
 
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
@@ -278,9 +304,15 @@ mod tests {
 
     #[test]
     fn test_astar_grid_with_wall() {
-        let mut grid = ndarray::Array3::from_elem((3, 3, 3), Point::new(1, false));
-        grid[[1, 1, 1]].cost = 1;
-        grid[[1, 1, 1]].wall = true;
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
+            .chunk_size(3)
+            .build();
+
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        
+        grid.set_point(UVec3::new(1, 1, 1), Point::new(1, true));
+
+        grid.build();
 
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
@@ -307,8 +339,12 @@ mod tests {
 
     #[test]
     fn test_astar_grid_8x8() {
-        let grid = ndarray::Array3::from_elem((8, 8, 8), Point::new(1, false));
-
+        let grid_settings = crate::grid::GridSettingsBuilder::new_3d(8, 8, 8)
+            .chunk_size(4)
+            .build();
+        let mut grid = crate::grid::Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        grid.build();
+        
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(7, 7, 7);
 

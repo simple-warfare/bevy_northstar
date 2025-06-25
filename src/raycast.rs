@@ -58,7 +58,7 @@ pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool
         let grid_y = y.round() as usize;
         let grid_z = z.round() as usize;
 
-        if grid[[grid_x, grid_y, grid_z]].wall {
+        if grid[[grid_x, grid_y, grid_z]].solid {
             return false; // Hit an obstacle
         }
 
@@ -146,12 +146,12 @@ pub(crate) fn generate_path_segment_cardinal(start: UVec3, end: UVec3) -> Vec<UV
 
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid
-#[allow(dead_code)]
 pub(crate) fn bresenham_path(
     grid: &ArrayView3<Point>,
     start: UVec3,
     goal: UVec3,
     ordinal: bool,
+    allow_corner_clipping: bool,
 ) -> Option<Vec<UVec3>> {
     let mut path = Vec::new();
     let mut current = start;
@@ -186,7 +186,7 @@ pub(crate) fn bresenham_path(
 
         path.push(current);
 
-        if grid[[current.x as usize, current.y as usize, current.z as usize]].wall {
+        if grid[[current.x as usize, current.y as usize, current.z as usize]].solid {
             return None;
         }
 
@@ -200,6 +200,68 @@ pub(crate) fn bresenham_path(
         let double_err_xz = 2 * err_xz;
 
         if ordinal {
+            /*if !allow_corner_clipping {
+                // Determine the tentative next cell (but do NOT update current yet)
+                let mut next = current;
+
+                if double_err_xy >= -dy && double_err_xz >= -dz {
+                    next.x = next.x.saturating_add_signed(sx);
+                }
+                if double_err_xy < dx {
+                    next.y = next.y.saturating_add_signed(sy);
+                }
+                if depth > 1 && double_err_xz < dx {
+                    next.z = next.z.saturating_add_signed(sz);
+                }
+
+                let delta = next.as_ivec3() - current.as_ivec3();
+
+                // Check 2D XY corner clipping
+                if delta.x != 0 && delta.y != 0 {
+                    let step_x = UVec3::new((current.x as i32 + delta.x) as u32, current.y, current.z);
+                    let step_y = UVec3::new(current.x, (current.y as i32 + delta.y) as u32, current.z);
+                    if grid[[step_x.x as usize, step_x.y as usize, step_x.z as usize]].solid ||
+                       grid[[step_y.x as usize, step_y.y as usize, step_y.z as usize]].solid {
+                        return None;
+                    }
+                }
+
+                // Check XZ
+                if depth > 1 && delta.x != 0 && delta.z != 0 {
+                    let step_x = UVec3::new((current.x as i32 + delta.x) as u32, current.y, current.z);
+                    let step_z = UVec3::new(current.x, current.y, (current.z as i32 + delta.z) as u32);
+                    
+                    if grid[[step_x.x as usize, step_x.y as usize, step_x.z as usize]].solid ||
+                       grid[[step_z.x as usize, step_z.y as usize, step_z.z as usize]].solid {
+                        return None;
+                    }
+                }
+
+                // Check YZ
+                if depth > 1 && delta.y != 0 && delta.z != 0 {
+                    let step_y = UVec3::new(current.x, (current.y as i32 + delta.y) as u32, current.z);
+                    let step_z = UVec3::new(current.x, current.y, (current.z as i32 + delta.z) as u32);
+
+                    if grid[[step_y.x as usize, step_y.y as usize, step_y.z as usize]].solid ||
+                       grid[[step_z.x as usize, step_z.y as usize, step_z.z as usize]].solid {
+                        return None;
+                    }
+                }
+
+                // Optional: XYZ diagonal clipping (for full 3D corner case)
+                if depth > 1 && delta.x != 0 && delta.y != 0 && delta.z != 0 {
+                    let xy = UVec3::new((current.x as i32 + delta.x) as u32, (current.y as i32 + delta.y) as u32, current.z);
+                    let xz = UVec3::new((current.x as i32 + delta.x) as u32, current.y, (current.z as i32 + delta.z) as u32);
+                    let yz = UVec3::new(current.x, (current.y as i32 + delta.y) as u32, (current.z as i32 + delta.z) as u32);
+                    
+                    if grid[[xy.x as usize, xy.y as usize, xy.z as usize]].solid ||
+                       grid[[xz.x as usize, xz.y as usize, xz.z as usize]].solid ||
+                       grid[[yz.x as usize, yz.y as usize, yz.z as usize]].solid {
+                        return None;
+                    }
+                }
+            }*/
+
             if double_err_xy >= -dy && double_err_xz >= -dz {
                 // Move along x-axis
                 err_xy -= dy;
@@ -303,22 +365,34 @@ mod tests {
     use ndarray::Array3;
 
     use crate::{
+        grid::{
+            ChunkSettings, CollisionSettings, CostSettings, GridInternalSettings, GridSettings,
+            NeighborhoodSettings,
+        },
         prelude::*,
         raycast::{bresenham_path, line_of_sight},
     };
 
-    const GRID_SETTINGS: GridSettings = GridSettings {
-        width: 12,
-        height: 12,
-        depth: 1,
-        chunk_size: 4,
-        chunk_depth: 1,
-        chunk_ordinal: false,
-        default_cost: 1,
-        default_wall: false,
-        collision: true,
-        avoidance_distance: 4,
-    };
+    const GRID_SETTINGS: GridSettings = GridSettings(GridInternalSettings {
+        dimensions: UVec3::new(12, 12, 1),
+        chunk_settings: ChunkSettings {
+            size: 4,
+            depth: 1,
+            diagonal_connections: false,
+        },
+        cost_settings: CostSettings {
+            default_cost: 1,
+            default_solid: false,
+        },
+        collision_settings: CollisionSettings {
+            enabled: true,
+            avoidance_distance: 4,
+        },
+        neighborhood_settings: NeighborhoodSettings {
+            allow_corner_clipping: true,
+            smooth_corner_paths: false,
+        },
+    });
 
     #[test]
     fn test_line_of_sight() {
@@ -342,6 +416,7 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
+            false,
         );
 
         assert!(path.is_some());
@@ -356,6 +431,7 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
+            false,
         );
 
         assert!(path.is_some());
@@ -371,6 +447,7 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
+            false,
         );
 
         assert!(path.is_none());

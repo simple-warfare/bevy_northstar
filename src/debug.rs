@@ -5,7 +5,7 @@ use crate::{
     components::{DebugMap, DebugPath},
     grid::Grid,
     neighbor::Neighborhood,
-    path::Path,
+    path::Path, prelude::DebugOffset,
 };
 
 /// Required to calculate how to draw the debug gizmos
@@ -83,7 +83,7 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
 
 // / Draw the debug gizmos for the chunks, points, entrances, and cached paths.
 fn draw_debug_map<N: Neighborhood + 'static>(
-    query: Query<(&Transform, &DebugMap)>,
+    query: Query<(&DebugOffset, &DebugMap)>,
     grid: Query<&Grid<N>>,
     mut gizmos: Gizmos,
 ) {
@@ -93,9 +93,12 @@ fn draw_debug_map<N: Neighborhood + 'static>(
         return;
     };
 
-    for (transform, debug_map) in query.iter() {
+    for (debug_offset, debug_map) in query.iter() {
         //let offset = transform.translation.truncate();
-        let offset = transform.translation.truncate();
+        let offset = debug_offset.0.truncate();
+
+        let half_tile_width = debug_map.tile_width as f32 * 0.5;
+        let half_tile_height = debug_map.tile_height as f32 * 0.5;
 
         if debug_map.draw_chunks {
             // Draw chunk boundaries
@@ -125,11 +128,11 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                             );
 
                             let bottom_left =
-                                bottom_left + offset - debug_map.tile_width as f32 * 0.5;
+                                bottom_left + offset - half_tile_width;
                             let bottom_right =
-                                bottom_right + offset - debug_map.tile_height as f32 * 0.5;
-                            let top_left = top_left + offset - debug_map.tile_width as f32 * 0.5;
-                            let top_right = top_right + offset - debug_map.tile_height as f32 * 0.5;
+                                bottom_right + offset - half_tile_height;
+                            let top_left = top_left + offset - half_tile_width;
+                            let top_right = top_right + offset - half_tile_height;
 
                             gizmos.line_2d(bottom_left, bottom_right, css::WHITE);
                             gizmos.line_2d(bottom_right, top_right, css::WHITE);
@@ -143,10 +146,10 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                         for y in 1..chunk_height {
                             let position = Vec2::new(
                                 (y as f32 + x as f32)
-                                    * (debug_map.tile_width as f32 * 0.5)
+                                    * half_tile_width
                                     * chunk_size as f32,
                                 (y as f32 - x as f32)
-                                    * (debug_map.tile_height as f32 * 0.5)
+                                    * half_tile_height
                                     * chunk_size as f32,
                             );
 
@@ -159,6 +162,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                             let left = position
                                 - Vec2::new(debug_map.tile_width as f32 * chunk_size as f32, 0.0);
 
+                            let offset = offset - Vec2::new(half_tile_width, half_tile_height);
+                            
                             gizmos.line_2d(top + offset, right + offset, css::WHITE);
                             gizmos.line_2d(right + offset, bottom + offset, css::WHITE);
                             gizmos.line_2d(bottom + offset, left + offset, css::WHITE);
@@ -174,7 +179,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
             for x in 0..grid.width() {
                 for y in 0..grid.height() {
                     let point = grid.point(UVec3::new(x, y, 0));
-                    let color = if point.wall { css::RED } else { css::WHITE };
+                    let color = if point.solid { css::RED } else { css::WHITE };
 
                     let position = match debug_map.map_type {
                         DebugMapType::Square => Vec2::new(
@@ -182,8 +187,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                             (y * debug_map.tile_height) as f32,
                         ),
                         DebugMapType::Isometric => Vec2::new(
-                            (y as f32 + x as f32) * (debug_map.tile_width as f32 * 0.5),
-                            (y as f32 - x as f32) * (debug_map.tile_height as f32 * 0.5),
+                            (y as f32 + x as f32) * half_tile_width,
+                            (y as f32 - x as f32) * half_tile_height - half_tile_height,
                         ),
                     };
 
@@ -202,9 +207,9 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                     ),
                     DebugMapType::Isometric => Vec2::new(
                         (node.pos.y as f32 + node.pos.x as f32)
-                            * (debug_map.tile_width as f32 * 0.5),
+                            * half_tile_width,
                         (node.pos.y as f32 - node.pos.x as f32)
-                            * (debug_map.tile_height as f32 * 0.5),
+                            * half_tile_height - half_tile_height,
                     ),
                 };
 
@@ -222,9 +227,9 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                                 ),
                                 DebugMapType::Isometric => Vec2::new(
                                     (neighbor.pos.y as f32 + neighbor.pos.x as f32)
-                                        * (debug_map.tile_width as f32 * 0.5),
+                                        * half_tile_width,
                                     (neighbor.pos.y as f32 - neighbor.pos.x as f32)
-                                        * (debug_map.tile_height as f32 * 0.5),
+                                        * half_tile_height - half_tile_height,
                                 ),
                             };
                             gizmos.line_2d(
@@ -307,25 +312,19 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 // Draw the debug gizmos for [`DebugPath`]s.
 fn draw_debug_paths(
     query: Query<(&DebugPath, &Path)>,
-    debug_map: Single<&Transform, With<DebugMap>>,
+    debug_offset: Single<&DebugOffset, With<DebugMap>>,
     mut gizmos: Gizmos,
 ) {
-    let transform = debug_map.into_inner();
+    let debug_offset = debug_offset.into_inner();
+    let center_offset = debug_offset.0.truncate();
 
     for (debug_path, path) in query.iter() {
         if path.is_empty() {
             continue;
         }
 
-        /*let center_offset = match debug_path.map_type {
-            DebugMapType::Square => Vec2::new(
-                debug_path.tile_width as f32 * 0.5,
-                debug_path.tile_height as f32 * 0.5,
-            ),
-            DebugMapType::Isometric => Vec2::new(debug_path.tile_width as f32 * 0.5, 0.0),
-        };*/
-
-        let center_offset = transform.translation.truncate();
+        let half_tile_width = debug_path.tile_width as f32 * 0.5;
+        let half_tile_height = debug_path.tile_height as f32 * 0.5;
 
         // Iterate over path.path() drawing a line from one point to the next point until completed
         let mut iter = path.path().iter();
@@ -338,8 +337,8 @@ fn draw_debug_paths(
                     (prev.y * debug_path.tile_height) as f32,
                 ),
                 DebugMapType::Isometric => Vec2::new(
-                    (prev.y as f32 + prev.x as f32) * (debug_path.tile_width as f32 * 0.5),
-                    (prev.y as f32 - prev.x as f32) * (debug_path.tile_height as f32 * 0.5),
+                    (prev.y as f32 + prev.x as f32) * half_tile_width,
+                    (prev.y as f32 - prev.x as f32) * half_tile_height - half_tile_height,
                 ),
             };
 
@@ -349,8 +348,8 @@ fn draw_debug_paths(
                     (next.y * debug_path.tile_height) as f32,
                 ),
                 DebugMapType::Isometric => Vec2::new(
-                    (next.y as f32 + next.x as f32) * (debug_path.tile_width as f32 * 0.5),
-                    (next.y as f32 - next.x as f32) * (debug_path.tile_height as f32 * 0.5),
+                    (next.y as f32 + next.x as f32) * half_tile_width,
+                    (next.y as f32 - next.x as f32) * half_tile_height - half_tile_height,
                 ),
             };
 

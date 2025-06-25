@@ -1,8 +1,10 @@
+use std::time::Duration;
+
 use bevy::{math::UVec3, platform::collections::HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::{
-    grid::{Grid, GridSettings},
+    grid::{Grid, GridSettingsBuilder},
     prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d},
 };
 
@@ -11,18 +13,9 @@ mod profiler;
 fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("pathfinding");
 
-    let grid_settings = GridSettings {
-        width: 64,
-        height: 64,
-        depth: 1,
-        chunk_size: 32,
-        chunk_depth: 1,
-        chunk_ordinal: false,
-        default_cost: 1,
-        default_wall: false,
-        collision: false,
-        avoidance_distance: 4,
-    };
+    let grid_settings = GridSettingsBuilder::new_2d(64, 64)
+        .chunk_size(32)
+        .build();
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
@@ -52,21 +45,13 @@ fn benchmarks(c: &mut Criterion) {
         })
     });
 
-    let grid_settings = GridSettings {
-        width: 512,
-        height: 512,
-        depth: 1,
-        chunk_depth: 1,
-        chunk_size: 32,
-        chunk_ordinal: false,
-        default_cost: 1,
-        default_wall: false,
-        collision: false,
-        avoidance_distance: 4,
-    };
+    let grid_settings = GridSettingsBuilder::new_2d(512, 512)
+        .chunk_size(32)
+        .build();
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
+    group.measurement_time(Duration::from_secs(10));
     group.bench_function("build_grid_512x512", |b| b.iter(|| grid.build()));
 
     group.bench_function("pathfind_512x512", |b| {
@@ -80,6 +65,7 @@ fn benchmarks(c: &mut Criterion) {
         })
     });
 
+    group.measurement_time(Duration::from_secs(5));
     group.bench_function("raw_pathfind_512x512", |b| {
         b.iter(|| {
             grid.pathfind_astar(
@@ -91,22 +77,15 @@ fn benchmarks(c: &mut Criterion) {
         })
     });
 
-    let grid_settings = GridSettings {
-        width: 128,
-        height: 128,
-        depth: 4,
-        chunk_depth: 1,
-        chunk_size: 16,
-        chunk_ordinal: false,
-        default_cost: 1,
-        default_wall: false,
-        collision: false,
-        avoidance_distance: 4,
-    };
+    let grid_settings = GridSettingsBuilder::new_3d(128, 128, 4)
+        .chunk_size(16)
+        .build();
 
     let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
 
+    group.measurement_time(Duration::from_secs(10));
     group.bench_function("build_grid_128x128x4", |b| b.iter(|| grid.build()));
+    group.measurement_time(Duration::from_secs(5));
 
     group.bench_function("pathfind_128x128x4", |b| {
         b.iter(|| {

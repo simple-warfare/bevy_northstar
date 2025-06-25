@@ -38,8 +38,8 @@ pub fn pathfind_astar<N: Neighborhood>(
     blocking: &HashMap<UVec3, Entity>,
     partial: bool,
 ) -> Option<Path> {
-    if grid[[start.x as usize, start.y as usize, start.z as usize]].wall
-        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
+    if grid[[start.x as usize, start.y as usize, start.z as usize]].solid
+        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].solid
     {
         return None;
     }
@@ -71,8 +71,8 @@ pub(crate) fn pathfind<N: Neighborhood>(
     blocking: &HashMap<UVec3, Entity>,
     partial: bool,
 ) -> Option<Path> {
-    if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].wall
-        || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
+    if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].solid
+        || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].solid
     {
         return None;
     }
@@ -125,7 +125,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
 
     // Get the djikstra paths to all starting nodes, ruling any that don't have paths
     let start_paths = dijkstra_grid(
-        &grid.neighborhood,
         &grid.chunk_view(start_chunk),
         start - start_chunk.min(),
         &start_nodes
@@ -183,7 +182,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
     .collect::<HashMap<_, _>>();*/
 
     let goal_paths = dijkstra_grid(
-        &grid.neighborhood,
         &grid.chunk_view(goal_chunk),
         goal - goal_chunk.min(),
         &goal_nodes
@@ -336,9 +334,14 @@ pub fn optimize_path<N: Neighborhood>(
 
     refined_path.push(path.path[i]); // Always keep the first node
 
+    let allow_corner_clipping = neighborhood
+        .settings()
+        .map(|settings| settings.allow_corner_clipping)
+        .unwrap_or(false);
+
     while i < path.len() {
         // Check if we can go directly to the goal
-        let path_to_goal = bresenham_path(grid, path.path[i], goal, neighborhood.is_ordinal());
+        let path_to_goal = bresenham_path(grid, path.path[i], goal, neighborhood.is_ordinal(), allow_corner_clipping);
 
         if let Some(path_to_goal) = path_to_goal {
             refined_path.extend(path_to_goal.into_iter().skip(1)); // Add intermediate points
@@ -355,6 +358,7 @@ pub fn optimize_path<N: Neighborhood>(
                 path.path[i],
                 path.path[farthest],
                 neighborhood.is_ordinal(),
+                allow_corner_clipping
             );
 
             if let Some(path_to_farthest) = path_to_farthest {

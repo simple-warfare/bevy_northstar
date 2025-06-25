@@ -1,7 +1,7 @@
 //! Components for pathfinding and collision
 use bevy::{
     color::palettes::css,
-    math::UVec3,
+    math::{UVec3, Vec3},
     prelude::{Color, Component},
     reflect::Reflect,
     transform::components::Transform,
@@ -86,8 +86,13 @@ pub struct RerouteFailed;
     DEBUGGING COMPONENTS
 *****************************************/
 
+/// Insert this component to offset the debugging gizmo positions.
+#[derive(Component, Default)]
+pub struct DebugOffset(pub Vec3);
+
 /// Component for debugging an entity's pathfinding.
 #[derive(Component)]
+#[require(DebugOffset)]
 pub struct DebugPath {
     /// The width of a tile in pixels.
     pub tile_width: u32,
