@@ -167,13 +167,7 @@ fn pathfind<N: Neighborhood + 'static>(
 
             commands
                 .entity(entity)
-                .insert((
-                    PathfindingFailed,
-                    Pathfind {
-                        goal: pathfind.goal,
-                        use_astar: false,
-                    },
-                ))
+                .insert(PathfindingFailed)
                 .remove::<NextPos>(); // Just to be safe
         }
     });
@@ -440,7 +434,10 @@ fn reroute_path<N: Neighborhood + 'static>(
     }
 }
 
-fn update_blocking_map(mut blocking_set: ResMut<BlockingMap>, query: Query<(Entity, &GridPos), With<Blocking>>) {
+fn update_blocking_map(
+    mut blocking_set: ResMut<BlockingMap>,
+    query: Query<(Entity, &GridPos), With<Blocking>>,
+) {
     blocking_set.0.clear();
 
     query.iter().for_each(|(entity, position)| {

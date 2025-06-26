@@ -1,6 +1,6 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, math::UVec3, platform::collections::HashMap};
+use bevy::{ecs::entity::Entity, log, math::UVec3, platform::collections::HashMap};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -70,7 +70,18 @@ pub(crate) fn pathfind<N: Neighborhood>(
     goal: UVec3,
     blocking: &HashMap<UVec3, Entity>,
     partial: bool,
+    refined: bool,
 ) -> Option<Path> {
+    // Test if start and goal are in grid bounds
+    if !grid.in_bounds(start) {
+        log::error!("Start position {:?} is out of bounds", start);
+        return None;
+    }
+    if !grid.in_bounds(goal) {
+        log::error!("Goal position {:?} is out of bounds", goal);
+        return None;
+    }
+
     if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].wall
         || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].wall
     {
@@ -92,14 +103,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
         );
 
         if let Some(mut path) = path {
-            // We should still refine this path since AStar wasn't requested
-            path = optimize_path(
-                &grid.neighborhood,
-                &grid.view(),
-                &path,
-                grid.neighborhood.is_ordinal(),
-            );
-
             path.path.pop_front();
             return Some(path);
         } else {
@@ -281,6 +284,13 @@ pub(crate) fn pathfind<N: Neighborhood>(
 
                 if path.is_empty() {
                     return None;
+                }
+
+                if !refined {
+                    // If we're not refining the path, return it as is
+                    let mut path = Path::new(path, cost);
+                    path.graph_path = node_path.path.clone();
+                    return Some(path);
                 }
 
                 let mut refined_path = optimize_path(
@@ -568,7 +578,7 @@ pub(crate) fn reroute_path<N: Neighborhood>(
 
         let last_pos = *new_path.path().last().unwrap();
 
-        let hpa = pathfind(grid, last_pos, goal, blocking, false);
+        let hpa = pathfind(grid, last_pos, goal, blocking, false, true);
 
         if let Some(hpa) = hpa {
             for pos in hpa.path() {

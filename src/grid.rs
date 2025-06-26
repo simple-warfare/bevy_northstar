@@ -214,6 +214,10 @@ impl<N: Neighborhood + Default> Grid<N> {
 
     /// Set the `Point` at the given position in the grid.
     pub fn set_point(&mut self, pos: UVec3, point: Point) {
+        if !self.in_bounds(pos) {
+            panic!("Position {:?} is out of bounds for the grid", pos);
+        }
+
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = point;
     }
 
@@ -255,6 +259,11 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Set the avoidance distance for collision avoidance
     pub fn set_avoidance_distance(&mut self, distance: u32) {
         self.avoidance_distance = distance;
+    }
+
+    /// Test if a position is in grid bounds.
+    pub fn in_bounds(&self, pos: UVec3) -> bool {
+        pos.x < self.width && pos.y < self.height && pos.z < self.depth
     }
 
     /// Builds the entire grid. This includes creating nodes for each edge of each chunk, caching
@@ -727,7 +736,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
-        pathfind(self, start, goal, blocking, partial)
+        pathfind(self, start, goal, blocking, partial, true)
     }
 
     pub fn pathfind_astar(
@@ -745,6 +754,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             blocking,
             partial,
         )
+    }
+
+    pub fn is_path_viable(&self, start: UVec3, goal: UVec3) -> bool {
+        pathfind(self, start, goal, &HashMap::new(), false, false).is_some()
     }
 }
 
@@ -1134,5 +1147,30 @@ mod tests {
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 10);
+    }
+
+    #[test]
+    pub fn test_is_path_viable() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        // Block off a section of the grid to make sure the path is not viable
+        for x in 0..12 {
+            grid.set_point(
+                UVec3::new(x, 5, 0),
+                Point::new(1, true), // Set as wall
+            );
+        }
+
+        grid.build();
+
+        let viable = grid.is_path_viable(UVec3::new(0, 0, 0), UVec3::new(10, 0, 0));
+        assert!(viable);
+
+        let not_viable = grid.is_path_viable(UVec3::new(0, 0, 0), UVec3::new(8, 8, 0));
+        assert!(!not_viable);
+
+        let out_of_bounds_not_viable =
+            grid.is_path_viable(UVec3::new(100, 100, 0), UVec3::new(200, 200, 0));
+        assert!(!out_of_bounds_not_viable);
     }
 }

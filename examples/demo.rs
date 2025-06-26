@@ -34,11 +34,11 @@ fn main() {
         .add_plugins((TilemapPlugin, TiledMapPlugin::default()))
         // bevy_northstar plugins
         .add_plugins((
-            NorthstarPlugin::<OrdinalNeighborhood>::default(),
-            NorthstarDebugPlugin::<OrdinalNeighborhood>::default(),
+            NorthstarPlugin::<CardinalNeighborhood>::default(),
+            NorthstarDebugPlugin::<CardinalNeighborhood>::default(),
         ))
         // Add the SharedPlugin for unrelated pathfinding systems shared by the examples
-        .add_plugins(shared::SharedPlugin::<OrdinalNeighborhood>::default())
+        .add_plugins(shared::SharedPlugin::<CardinalNeighborhood>::default())
         // Observe the LayerCreated event to build the grid from the Tiled layer
         .add_observer(layer_created)
         // Startup and State Systems
@@ -95,7 +95,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
-        Grid::<OrdinalNeighborhood>::new(&GridSettings {
+        Grid::<CardinalNeighborhood>::new(&GridSettings {
             width: 128,
             height: 128,
             depth: 1,
@@ -128,7 +128,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
     map_asset: Res<Assets<TiledMap>>,
-    grid: Single<&mut Grid<OrdinalNeighborhood>>,
+    grid: Single<&mut Grid<CardinalNeighborhood>>,
     mut state: ResMut<NextState<shared::State>>,
 ) {
     let mut grid = grid.into_inner();
@@ -164,17 +164,22 @@ fn layer_created(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Query<&Grid<OrdinalNeighborhood>>,
+    grid: Single<&Grid<CardinalNeighborhood>>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
+    tilemap: Single<(
+        &TilemapSize,
+        &TilemapTileSize,
+        &TilemapGridSize,
+        &TilemapAnchor,
+    )>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<shared::Walkable>,
     config: Res<shared::Config>,
 ) {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let grid = grid.into_inner();
+    let (map_size, tile_size, grid_size, anchor) = tilemap.into_inner();
+
+    let offset = anchor.as_offset(map_size, grid_size, tile_size, &TilemapType::Square);
 
     let layer_entity = layer_entity.iter().next().unwrap();
 
@@ -195,7 +200,7 @@ fn spawn_minions(
         let position = walkable.tiles.choose(&mut rand::rng()).unwrap();
         let goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
 
-        let transform = Vec3::new(position.x + 4.0, position.y + 4.0, 4.0);
+        let transform = Vec3::new(position.x, position.y, 4.0) + offset.extend(0.0);
 
         // Generate random color
         let color = Color::srgb(
