@@ -51,7 +51,6 @@ fn main() {
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
                 handle_reroute_failed.run_if(in_state(shared::State::Playing)),
-                handle_pathfind_failed.run_if(in_state(shared::State::Playing)),
             ),
         )
         .run();
@@ -270,34 +269,6 @@ fn move_pathfinders(
                 .entity(entity)
                 .insert(Transform::from_translation(translation))
                 .remove::<NextPos>();
-        }
-    }
-}
-
-fn handle_pathfind_failed(
-    mut commands: Commands,
-    mut query: Query<(Entity, &GridPos, &Pathfind), With<PathfindingFailed>>,
-    grid: Single<&Grid<CardinalNeighborhood>>,
-    blocking: Res<BlockingMap>,
-    mut tick_reader: EventReader<shared::Tick>,
-) {
-    let grid = grid.into_inner();
-
-    for _ in tick_reader.read() {
-        for (entity, grid_pos, pathfind) in query.iter_mut() {
-            let path = grid.pathfind(
-                UVec3::new(grid_pos.0.x, grid_pos.0.y, 0),
-                pathfind.goal,
-                &blocking.0,
-                pathfind.use_astar,
-            );
-
-            if let Some(new_path) = path {
-                commands.entity(entity).insert(new_path);
-                commands.entity(entity).remove::<PathfindingFailed>();
-            } else {
-                commands.entity(entity).insert(RerouteFailed);
-            }
         }
     }
 }
