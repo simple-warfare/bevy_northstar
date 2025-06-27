@@ -5,7 +5,7 @@ use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
 use crate::{
-    graph::Graph, grid::Point, in_bounds_3d, neighbor::Neighborhood, path::Path, FxIndexMap, SmallestCostHolder
+    graph::Graph, in_bounds_3d, neighbor::Neighborhood, path::Path, point::Point, FxIndexMap, SmallestCostHolder
 };
 
 /// A* search algorithm for a [`crate::grid::Grid`] of [`crate::grid::Point`]s.

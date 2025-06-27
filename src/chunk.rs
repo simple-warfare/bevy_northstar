@@ -2,7 +2,7 @@
 use bevy::math::UVec3;
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
-use crate::{dir::Dir, grid::Point};
+use crate::{dir::Dir, point::Point};
 
 /// A chunk is a 3D region of the grid.
 #[derive(Debug, Clone)]
@@ -33,6 +33,15 @@ impl Chunk {
 
     pub(crate) fn max(&self) -> UVec3 {
         self.max
+    }
+
+    // Adjusts a position to the local coordinates of the chunk.
+    pub(crate) fn to_local(&self, pos: &UVec3) -> UVec3 {
+        UVec3::new(
+            pos.x.saturating_sub(self.min().x),
+            pos.y.saturating_sub(self.min().y),
+            pos.z.saturating_sub(self.min().z),
+        )
     }
 
     /// Returns a 3D `ArrayView3`` of `Point`s of the chunk from the grid.

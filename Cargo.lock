@@ -967,6 +967,7 @@ dependencies = [
  "rand 0.9.1",
  "rustc-hash 2.1.1",
  "slab",
+ "smallvec",
  "strum 0.27.1",
  "thiserror 2.0.12",
 ]

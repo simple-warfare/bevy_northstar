@@ -2,7 +2,7 @@
 use bevy::math::UVec3;
 use ndarray::ArrayView3;
 
-use crate::grid::Point;
+use crate::point::Point;
 
 /// Check if there is a line of sight between two points in the grid allowing diagonal movement.
 ///
@@ -70,78 +70,236 @@ pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool
     true
 }
 
-// Generates the positions of a path segment between two points in a 3D grid.
-pub(crate) fn generate_path_segment_ordinal(start: UVec3, end: UVec3) -> Vec<UVec3> {
-    // TODO: This can be optimized using integers I believe
-    let mut segment = Vec::new();
-
+pub(crate) fn path_line_trace(
+    grid: &ArrayView3<Point>,
+    start: UVec3,
+    goal: UVec3,
+) -> Option<Vec<UVec3>> {
+    let mut path = vec![start];
     let mut current = start;
-    segment.push(current);
 
-    let dx = (end.x as isize - start.x as isize).abs();
-    let dy = (end.y as isize - start.y as isize).abs();
-    let dz = (end.z as isize - start.z as isize).abs();
+    // Max steps to prevent infinite loops
+    let max_steps = (goal.as_ivec3() - start.as_ivec3()).abs().max_element() * 2;
 
-    let steps = dx.max(dy).max(dz); // Longest axis determines the number of steps
-
-    if steps == 0 {
-        return segment; // Start and end are the same
+    if max_steps == 0 {
+        return Some(path); // Already at the goal
     }
 
-    let step_x = (end.x as isize - start.x as isize) as f32 / steps as f32;
-    let step_y = (end.y as isize - start.y as isize) as f32 / steps as f32;
-    let step_z = (end.z as isize - start.z as isize) as f32 / steps as f32;
+    for _ in 0..=max_steps {
+        if current == goal {
+            return Some(path);
+        }
 
-    let mut x = start.x as f32;
-    let mut y = start.y as f32;
-    let mut z = start.z as f32;
+        let dir_to_goal = (goal.as_ivec3() - current.as_ivec3()).as_vec3().normalize();
 
-    for _ in 0..steps {
-        x += step_x;
-        y += step_y;
-        z += step_z;
+        let point = &grid[[current.x as usize, current.y as usize, current.z as usize]];
 
-        let next = UVec3 {
-            x: x.round() as u32,
-            y: y.round() as u32,
-            z: z.round() as u32,
-        };
+        let mut best = None;
+        let mut best_dot = -f32::INFINITY;
 
-        if next != current {
-            segment.push(next);
+        for neighbor in point.neighbor_iter(current) {
+            let to_neighbor = (neighbor.as_ivec3() - current.as_ivec3()).as_vec3().normalize();
+            let dot = dir_to_goal.dot(to_neighbor);
+            if dot > best_dot {
+                best = Some(neighbor);
+                best_dot = dot;
+            }
+        }
+
+        if let Some(next) = best {
+            path.push(next);
             current = next;
+        } else {
+            return None; // no valid step toward goal
         }
     }
 
-    segment
+    None
 }
 
-// Generates the positions of a path segment between two points in a 3D grid using cardinal movement.
-pub(crate) fn generate_path_segment_cardinal(start: UVec3, end: UVec3) -> Vec<UVec3> {
-    let mut segment = Vec::new();
-    segment.push(start);
+// Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
+// This should take into account the Neighborhood and the grid
+pub(crate) fn bresenham_path_filtered(
+    grid: &ArrayView3<Point>,
+    start: UVec3,
+    goal: UVec3,
+    ordinal: bool,
+) -> Option<Vec<UVec3>> {
+    let mut path = Vec::new();
+    let mut current = start;
 
-    let mut pos = start.as_ivec3();
-    let end = end.as_ivec3();
+    let (width, height, depth) = (
+        grid.shape()[0] as u32,
+        grid.shape()[1] as u32,
+        grid.shape()[2] as u32,
+    );
 
-    while (pos.x, pos.y, pos.z) != (end.x, end.y, end.z) {
-        if pos.x != end.x {
-            pos.x += (end.x - pos.x).signum();
-        } else if pos.y != end.y {
-            pos.y += (end.y - pos.y).signum();
-        } else if pos.z != end.z {
-            pos.z += (end.z - pos.z).signum();
+    // Differences in each dimension
+    let dx = (goal.x as i32 - start.x as i32).abs();
+    let dy = (goal.y as i32 - start.y as i32).abs();
+    let dz = if depth > 1 {
+        (goal.z as i32 - start.z as i32).abs()
+    } else {
+        0 // Ignore z axis if grid depth is 1
+    };
+
+    let sx: i32 = if start.x < goal.x { 1 } else { -1 };
+    let sy: i32 = if start.y < goal.y { 1 } else { -1 };
+    let sz: i32 = if depth > 1 && start.z < goal.z { 1 } else { -1 };
+
+    let mut err_xy = dx - dy;
+    let mut err_xz = dx - dz;
+
+    while current != goal {
+        // Bounds check
+        if current.x >= width || current.y >= height || current.z >= depth {
+            return None;
         }
 
-        let next = UVec3 {
-            x: pos.x as u32,
-            y: pos.y as u32,
-            z: pos.z as u32,
-        };
-        segment.push(next);
+        path.push(current);
+
+        if grid[[current.x as usize, current.y as usize, current.z as usize]].solid {
+            return None;
+        }
+
+        // Error-based stepping
+        let double_err_xy = 2 * err_xy;
+        let double_err_xz = 2 * err_xz;
+
+        if ordinal {
+            let mut moved = false;
+
+            if double_err_xy >= -dy && double_err_xz >= -dz {
+                // Move along x-axis
+                err_xy -= dy;
+                err_xz -= dz;
+
+                let next = UVec3::new(
+                    current.x.saturating_add_signed(sx),
+                    current.y,
+                    current.z,
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.x = next.x;
+                    moved = true;
+                } else {
+                    return None; // No valid step along x-axis
+                }
+            }
+            if double_err_xy < dx {
+                // Move along y-axis
+                err_xy += dx;
+
+                let next = UVec3::new(
+                    current.x,
+                    current.y.saturating_add_signed(sy),
+                    current.z,
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.y = next.y;
+                    moved = true;
+                } else {
+                    return None; // No valid step along x-axis
+                }
+            }
+            if depth > 1 && double_err_xz < dx {
+                // Move along z-axis (if applicable)
+                err_xz += dx;
+            
+                let next = UVec3::new(
+                    current.x,
+                    current.y,
+                    current.z.saturating_add_signed(sz),
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.z = next.z;
+                    moved = true;
+                } else {
+                    return None; // No valid step along x-axis
+                }
+            }
+
+            if !moved {
+                return None; // No valid step found
+            }
+        } else {
+            let mut moved = false;
+
+            if double_err_xy >= -dy && double_err_xz >= -dz {
+                // Move along x-axis
+                err_xy -= dy;
+                err_xz -= dz;
+
+                let next = UVec3::new(
+                    current.x.saturating_add_signed(sx),
+                    current.y,
+                    current.z,
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.x = next.x;
+                    moved = true;
+                } else {
+                    return None; // No valid step along x-axis
+                }
+            } else if double_err_xy < dx {
+                // Move along y-axis
+                err_xy += dx;
+
+                let next = UVec3::new(
+                    current.x,
+                    current.y.saturating_add_signed(sy),
+                    current.z,
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.y = next.y;
+                    moved = true;
+                } else {
+                    return None; // No valid step along y-axis
+                }
+            } else if depth > 1 && double_err_xz < dx {
+                // Move along z-axis (if applicable)
+                err_xz += dx;
+
+                let next = UVec3::new(
+                    current.x,
+                    current.y,
+                    current.z.saturating_add_signed(sz),
+                );
+
+                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+
+                if neighbors.any(|n| n == next) {
+                    current.z = next.z;
+                    moved = true;
+                } else {
+                    return None; // No valid step along z-axis
+                }
+            }
+
+            if !moved {
+                return None; // No valid step found
+            }
+        }
     }
 
-    segment
+    path.push(goal);
+
+    Some(path)
 }
 
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
@@ -151,7 +309,6 @@ pub(crate) fn bresenham_path(
     start: UVec3,
     goal: UVec3,
     ordinal: bool,
-    allow_corner_clipping: bool,
 ) -> Option<Vec<UVec3>> {
     let mut path = Vec::new();
     let mut current = start;
@@ -389,8 +546,7 @@ mod tests {
             avoidance_distance: 4,
         },
         neighborhood_settings: NeighborhoodSettings {
-            allow_corner_clipping: true,
-            smooth_corner_paths: false,
+            filters: Vec::new(),
         },
     });
 
@@ -416,7 +572,6 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
-            false,
         );
 
         assert!(path.is_some());
@@ -431,7 +586,6 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
-            false,
         );
 
         assert!(path.is_some());
@@ -447,7 +601,6 @@ mod tests {
             UVec3::new(0, 0, 0),
             UVec3::new(10, 10, 0),
             grid.neighborhood.is_ordinal(),
-            false,
         );
 
         assert!(path.is_none());

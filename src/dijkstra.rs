@@ -9,9 +9,7 @@ use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
-use crate::{
-    graph::Graph, grid::Point, in_bounds_3d, path::Path, FxIndexMap, SmallestCostHolder
-};
+use crate::{graph::Graph, in_bounds_3d, path::Path, point::Point, FxIndexMap, SmallestCostHolder};
 
 /// Dijkstra's algorithm for pathfinding in a grid.
 ///
@@ -49,11 +47,7 @@ pub(crate) fn dijkstra_grid(
 
     let shape = grid.shape();
     let min = UVec3::new(0, 0, 0);
-    let max = UVec3::new(
-        shape[0] as u32,
-        shape[1] as u32,
-        shape[2] as u32,
-    );
+    let max = UVec3::new(shape[0] as u32, shape[1] as u32, shape[2] as u32);
 
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
@@ -86,7 +80,7 @@ pub(crate) fn dijkstra_grid(
                 neighbor.z as usize,
             ]];
 
-            if neighbor_point.solid  {
+            if neighbor_point.solid {
                 continue;
             }
 
@@ -240,7 +234,11 @@ pub fn dijkstra_graph(
 
 #[cfg(test)]
 mod tests {
-    use crate::{chunk::Chunk, grid::{Grid, GridSettingsBuilder}, neighbor::OrdinalNeighborhood3d};
+    use crate::{
+        chunk::Chunk,
+        grid::{Grid, GridSettingsBuilder},
+        neighbor::OrdinalNeighborhood3d,
+    };
 
     use super::*;
 

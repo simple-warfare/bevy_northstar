@@ -19,6 +19,7 @@ pub mod neighbor;
 mod node;
 pub mod path;
 pub mod pathfind;
+pub mod point;
 pub mod plugin;
 pub mod raycast;
 
@@ -26,9 +27,10 @@ pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{DebugMapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
-    pub use crate::grid::{Grid, GridSettingsBuilder, Point};
+    pub use crate::grid::{Grid, GridSettingsBuilder};
     pub use crate::neighbor::*;
     pub use crate::path::Path;
+    pub use crate::point::Point;
     pub use crate::plugin::NorthstarPlugin;
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;

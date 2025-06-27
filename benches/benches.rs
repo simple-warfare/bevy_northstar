@@ -4,8 +4,7 @@ use bevy::{math::UVec3, platform::collections::HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::{
-    grid::{Grid, GridSettingsBuilder},
-    prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d},
+    grid::{Grid, GridSettingsBuilder}, prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d}
 };
 
 mod profiler;

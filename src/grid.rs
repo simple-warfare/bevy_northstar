@@ -1,6 +1,8 @@
 //! This module contains the `Grid` struct which is the primary `Resource` for the crate.
+use std::sync::Arc;
+
 use bevy::{
-    math::{IVec3, UVec3},
+    math::UVec3,
     platform::collections::HashMap,
     prelude::{Component, Entity},
 };
@@ -11,10 +13,10 @@ use crate::{
     dijkstra::*,
     dir::*,
     graph::Graph,
-    neighbor::{Neighborhood, ORDINAL_3D_OFFSETS},
+    neighbor::Neighborhood,
     node::Node,
     path::Path,
-    pathfind::{pathfind, pathfind_astar, reroute_path},
+    pathfind::{pathfind, pathfind_astar, reroute_path}, point::Point, prelude::NeighborFilter,
 };
 
 /// Settings for dividing the grid into chunks.
@@ -78,37 +80,22 @@ impl Default for CollisionSettings {
 }
 
 /// Settings for filtering determined neighbors.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 pub struct NeighborhoodSettings {
-    /// Prevents diagonal movement through solid corners. It is enabled by default for ordinal neighborhoods.
-    /// Enabling this prevents the following movement (x = solid, / = path):
-    /// |x|/|
-    /// |/|x|
-    pub allow_corner_clipping: bool,
-    /// Enabling this will prevent diagonal movement around solids.
-    /// For real-time movement you may want to enable this if your sprites are larger than a single tile as it will prevent the sprite from clipping through corners.
-    /// Will force the following movement (x = solid, / = path):
-    /// |o|/|
-    /// |/|x|
-    /// into:
-    /// |-|-|
-    /// |||x|
-    pub smooth_corner_paths: bool,
+    pub filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
 }
 
 impl Default for NeighborhoodSettings {
     fn default() -> Self {
         NeighborhoodSettings {
-            allow_corner_clipping: false,
-            smooth_corner_paths: false,
+            filters: Vec::new(),
         }
     }
 }
 
-#[derive(Debug)]
 pub struct GridSettings(pub(crate) GridInternalSettings);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 pub struct GridSettingsBuilder {
     dimensions: UVec3,
     chunk_settings: ChunkSettings,
@@ -160,15 +147,15 @@ impl GridSettingsBuilder {
         }
     }
 
-    pub fn chunk_settings(&mut self, chunk_settings: ChunkSettings) -> Self {
-        self.chunk_size(chunk_settings.size);
-        self.chunk_depth(chunk_settings.depth);
+    pub fn chunk_settings(mut self, chunk_settings: ChunkSettings) -> Self {
+        self = self.chunk_size(chunk_settings.size);
+        self = self.chunk_depth(chunk_settings.depth);
 
         if chunk_settings.diagonal_connections {
-            self.enable_diagonal_connections();
+            self = self.enable_diagonal_connections();
         }
 
-        *self
+        self
     }
 
     pub fn chunk_size(mut self, chunk_size: u32) -> Self {
@@ -200,11 +187,11 @@ impl GridSettingsBuilder {
         self
     }
 
-    pub fn cost_settings(self, cost_settings: CostSettings) -> Self {
-        self.default_cost(cost_settings.default_cost);
+    pub fn cost_settings(mut self, cost_settings: CostSettings) -> Self {
+        self = self.default_cost(cost_settings.default_cost);
         
         if cost_settings.default_solid {
-            self.default_solid();
+            self = self.default_solid();
         }
 
         self
@@ -235,18 +222,16 @@ impl GridSettingsBuilder {
         self
     }
 
+    pub fn add_neighbor_filter<F>(mut self, filter: F) -> Self
+    where
+        F: NeighborFilter + Send + Sync + 'static,
+    {
+        self.neighborhood_settings.filters.push(Arc::new(filter));
+        self
+    }
+
     pub fn neighborhood_settings(mut self, neighborhood_settings: NeighborhoodSettings) -> Self {
         self.neighborhood_settings = neighborhood_settings;
-        self
-    }
-
-    pub fn allow_corner_clipping(mut self) -> Self {
-        self.neighborhood_settings.allow_corner_clipping = true;
-        self
-    }
-
-    pub fn smooth_corner_paths(mut self) -> Self {
-        self.neighborhood_settings.smooth_corner_paths = true;
         self
     }
 
@@ -261,7 +246,7 @@ impl GridSettingsBuilder {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct GridInternalSettings {
     pub(crate) dimensions: UVec3,
     pub(crate) chunk_settings: ChunkSettings,
@@ -273,44 +258,6 @@ pub(crate) struct GridInternalSettings {
 impl Default for GridInternalSettings {
     fn default() -> Self {
         GridSettingsBuilder::default().build().0
-    }
-}
-
-/// [`Point`] represents a single position on the grid.
-#[derive(Debug, Default, Clone)]
-pub struct Point {
-    /// The movement cost associated with this point.
-    pub cost: u32,
-    /// Solid will block all movement, aka wall.
-    pub solid: bool,
-    /// Ramp will allow movement up or down.
-    pub ramp: bool,
-    // Cached neighbors to the point
-    pub(crate) neighbor_bits: u32,
-}
-
-impl Point {
-    pub fn new(cost: u32, solid: bool) -> Self {
-        Point {
-            cost,
-            solid,
-            ramp: false,
-            neighbor_bits: 0,
-        }
-    }
-
-    pub fn neighbor_iter(&self, pos: UVec3) -> impl Iterator<Item = UVec3> + '_ {
-        let origin = pos.as_ivec3();
-        ORDINAL_3D_OFFSETS
-            .iter()
-            .enumerate()
-            .filter_map(move |(i, offset)| {
-                if (self.neighbor_bits >> i) & 1 != 0 {
-                    Some((origin + *offset).as_uvec3())
-                } else {
-                    None
-                }
-            })
     }
 }
 
@@ -500,6 +447,24 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.build_nodes();
         self.connect_internal_chunk_nodes();
         self.connect_adjacent_chunk_nodes();
+    }
+
+
+    pub(crate) fn precompute_neighbors(&mut self) {
+        let grid_view = self.grid.view();
+
+        // Collect positions and neighbor bits first to avoid borrow checker issues
+        let mut neighbor_bits_vec = Vec::with_capacity(self.grid.len());
+        for ((x, y, z), _point) in self.grid.indexed_iter() {
+            let pos = UVec3::new(x as u32, y as u32, z as u32);
+            let bits = self.neighborhood.neighbors(&grid_view, pos);
+            neighbor_bits_vec.push(((x, y, z), bits));
+        }
+
+        // Now apply the neighbor bits with mutable access
+        for &((x, y, z), bits) in &neighbor_bits_vec {
+            self.grid[[x, y, z]].neighbor_bits = bits;
+        }
     }
 
     // Populates the graph with nodes for each edge of each chunk.
@@ -947,47 +912,6 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }*/
 
-    pub(crate) fn precompute_neighbors(&mut self) {
-        let positions: Vec<_> = self.grid.indexed_iter().map(|(pos, _)| pos).collect();
-        let shape = self.grid.dim(); // (x, y, z)
-        let grid_view = self.grid.view();
-
-        // First, collect all neighbor_bits for each position
-        let mut bitfields = Vec::with_capacity(positions.len());
-        for pos in &positions {
-            let uvec_pos = UVec3::new(pos.0 as u32, pos.1 as u32, pos.2 as u32);
-            let mut neighbor_bits = 0;
-
-            for (i, offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
-                let neighbor = uvec_pos.as_ivec3() + *offset;
-
-                // Bounds check — skip invalid neighbors
-                if neighbor.cmplt(IVec3::ZERO).any() {
-                    continue;
-                }
-                if neighbor.x >= shape.0 as i32 || neighbor.y >= shape.1 as i32 || neighbor.z >= shape.2 as i32 {
-                    continue;
-                }
-
-                // Add to bitmask only if the neighbor is not solid
-                let neighbor_uvec = UVec3::new(neighbor.x as u32, neighbor.y as u32, neighbor.z as u32);
-                let neighbor_point = &grid_view[[neighbor_uvec.x as usize, neighbor_uvec.y as usize, neighbor_uvec.z as usize]];
-
-                if !neighbor_point.solid {
-                    neighbor_bits |= 1 << i;
-                }
-            }
-
-            bitfields.push(neighbor_bits);
-        }
-
-        // Now, apply the neighbor_bits to the grid
-        for (i, pos) in positions.iter().enumerate() {
-            self.grid[[pos.0, pos.1, pos.2]].neighbor_bits = bitfields[i];
-        }
-    }
-
-
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
     pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
         self.chunks.iter().find(|&chunk| {
@@ -1074,8 +998,7 @@ mod tests {
             avoidance_distance: 4,
         },
         neighborhood_settings: NeighborhoodSettings {
-            allow_corner_clipping: true,
-            smooth_corner_paths: false,
+            filters: Vec::new(),
         },
     });
 
@@ -1402,61 +1325,5 @@ mod tests {
 
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 10);
-    }
-
-    #[test]
-    fn test_neighbor_iter_on_grid_edge() {
-        // Set up a dummy Point with all 26 neighbor bits enabled
-        let mut point = Point::default();
-        point.neighbor_bits = u32::MAX >> (32 - 26); // Only lower 26 bits set
-
-        // Use an edge position (e.g., corner of the grid)
-        let pos = UVec3::new(0, 0, 0);
-
-        // Collect neighbors
-        let neighbors: Vec<UVec3> = point.neighbor_iter(pos).collect();
-
-        // Should only include neighbors that are within bounds
-        // From (0,0,0), valid neighbors are ones with only positive offsets:
-        // i.e., (1, 0, 0), (0, 1, 0), (0, 0, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (1, 1, 1)
-        let expected = [
-            UVec3::new(1, 0, 0),
-            UVec3::new(0, 1, 0),
-            UVec3::new(0, 0, 1),
-            UVec3::new(1, 1, 0),
-            UVec3::new(1, 0, 1),
-            UVec3::new(0, 1, 1),
-            UVec3::new(1, 1, 1),
-        ];
-
-        assert_eq!(neighbors.len(), expected.len());
-        for expected_neighbor in expected {
-            assert!(
-                neighbors.contains(&expected_neighbor),
-                "Missing expected neighbor: {:?}",
-                expected_neighbor
-            );
-        }
-    }
-
-    #[test]
-    fn test_neighbor_iter_bounds_check() {
-        let mut point = Point::default();
-        point.neighbor_bits = u32::MAX; // Enable all 26 bits
-
-        let pos = UVec3::new(0, 0, 0);
-        let neighbors: Vec<_> = point.neighbor_iter(pos).collect();
-
-        // Only 7 neighbors should remain valid at (0,0,0)
-        assert_eq!(neighbors.len(), 7);
-
-        // Ensure no neighbor has any coordinate == u32::MAX (from underflow)
-        for neighbor in neighbors {
-            assert!(
-                neighbor.x < pos.x + 2 && neighbor.y < pos.y + 2 && neighbor.z < pos.z + 2,
-                "Invalid neighbor: {:?}",
-                neighbor
-            );
-        }
     }
 }
