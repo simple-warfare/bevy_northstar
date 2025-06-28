@@ -9,7 +9,7 @@ use indexmap::map::Entry::{Occupied, Vacant};
 use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
-use crate::{graph::Graph, in_bounds_3d, path::Path, point::Point, FxIndexMap, SmallestCostHolder};
+use crate::{graph::Graph, in_bounds_3d, nav::NavCell, path::Path, FxIndexMap, SmallestCostHolder};
 
 /// Dijkstra's algorithm for pathfinding in a grid.
 ///
@@ -25,7 +25,7 @@ use crate::{graph::Graph, in_bounds_3d, path::Path, point::Point, FxIndexMap, Sm
 /// ## Returns
 /// A `HashMap` of `UVec3` goal positions with their respective `Path`s.
 pub(crate) fn dijkstra_grid(
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goals: &[UVec3],
     only_closest_goal: bool,
@@ -60,13 +60,13 @@ pub(crate) fn dijkstra_grid(
                 }
             }
 
-            let point = &grid[[
+            let cell = &grid[[
                 current_pos.x as usize,
                 current_pos.y as usize,
                 current_pos.z as usize,
             ]];
 
-            point.neighbor_iter(*current_pos)
+            cell.neighbor_iter(*current_pos)
         };
 
         for neighbor in neighbors {
@@ -74,13 +74,13 @@ pub(crate) fn dijkstra_grid(
                 continue;
             }
 
-            let neighbor_point = &grid[[
+            let neighbor_cell = &grid[[
                 neighbor.x as usize,
                 neighbor.y as usize,
                 neighbor.z as usize,
             ]];
 
-            if neighbor_point.solid {
+            if neighbor_cell.is_impassable() {
                 continue;
             }
 
@@ -88,7 +88,7 @@ pub(crate) fn dijkstra_grid(
                 continue;
             }
 
-            let new_cost = cost + neighbor_point.cost;
+            let new_cost = cost + neighbor_cell.cost;
             let n;
 
             match visited.entry(neighbor) {

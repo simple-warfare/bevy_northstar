@@ -98,7 +98,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let grid_settings = GridSettingsBuilder::new_2d(16, 16)
         .chunk_size(8)
-        .default_solid()
+        .default_impassable()
         .enable_collision()
         .avoidance_distance(4)
         .build();
@@ -113,15 +113,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 
     map_entity.with_child((
-        DebugMap {
-            tile_width: 8,
-            tile_height: 8,
-            map_type: DebugMapType::Square,
-            draw_chunks: false,
-            draw_points: false,
-            draw_entrances: false,
-            draw_cached_paths: false,
-        },
+        DebugGridBuilder::new(8, 8).build(),
         Transform::from_translation(offset.extend(0.0)),
     ));
 }
@@ -147,9 +139,9 @@ fn layer_created(
                         let tile_id = tile.id();
 
                         if tile_id == 14 {
-                            grid.set_point(UVec3::new(x, height - 1 - y, 0), Point::new(1, false));
+                            grid.set_nav(UVec3::new(x, height - 1 - y, 0), Nav::Passable(1));
                         } else {
-                            grid.set_point(UVec3::new(x, height - 1 - y, 0), Point::new(0, true));
+                            grid.set_nav(UVec3::new(x, height - 1 - y, 0), Nav::Impassable);
                         }
                     }
                 }
@@ -165,23 +157,19 @@ fn layer_created(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Query<&Grid<CardinalNeighborhood>>,
+    grid: Single<(Entity, &Grid<CardinalNeighborhood>)>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     asset_server: Res<AssetServer>,
     mut walkable: ResMut<shared::Walkable>,
 ) {
-    let grid = if let Ok(grid) = grid.single() {
-        grid
-    } else {
-        return;
-    };
+    let (grid_entity, grid) = grid.into_inner();
 
     let layer_entity = layer_entity.iter().next().unwrap();
 
     walkable.tiles = Vec::new();
     for x in 0..grid.width() {
         for y in 0..grid.height() {
-            if !grid.point(UVec3::new(x, y, 0)).solid {
+            if grid.is_passable(UVec3::new(x, y, 0)) {
                 let position = Vec3::new(x as f32 * 8.0, y as f32 * 8.0, 0.0);
 
                 walkable.tiles.push(position);
@@ -212,15 +200,13 @@ fn spawn_minions(
             })
             .insert(Name::new(format!("{:?}", color)))
             .insert(DebugPath {
-                tile_width: 8,
-                tile_height: 8,
-                map_type: DebugMapType::Square,
                 color,
                 draw_unrefined: false,
             })
+            .insert(AgentOfGrid(grid_entity))
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
-            .insert(GridPos(UVec3::new(
+            .insert(AgentPos(UVec3::new(
                 (position.x / 8.0) as u32,
                 (position.y / 8.0) as u32,
                 0,
@@ -233,7 +219,7 @@ fn spawn_minions(
 
 fn move_pathfinders(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut GridPos, &NextPos)>,
+    mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
     tilemap: Single<(
         &TilemapSize,
         &TilemapTileSize,
@@ -281,15 +267,19 @@ fn move_pathfinders(
 fn set_new_goal(
     mut commands: Commands,
     mut minions: Query<Entity, (Without<Path>, Without<Pathfind>)>,
+    config: Res<shared::Config>,
     walkable: Res<shared::Walkable>,
 ) {
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
 
-        commands.entity(entity).insert(Pathfind {
-            goal: UVec3::new((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32, 0),
-            use_astar: false,
-        });
+        let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
+
+        if config.use_astar {
+            pathfind = pathfind.mode(PathfindMode::AStar);
+        }
+
+        commands.entity(entity).insert(pathfind);
     }
 }
 
@@ -302,10 +292,14 @@ fn handle_reroute_failed(
     for _ in tick_reader.read() {
         for (entity, pathfind, _) in query.iter_mut() {
             commands.entity(entity).remove::<RerouteFailed>();
-            commands.entity(entity).insert(Pathfind {
-                goal: pathfind.goal,
-                use_astar: config.use_astar,
-            });
+
+            let mut pathfind = Pathfind::new(pathfind.goal);
+
+            if config.use_astar {
+                pathfind = pathfind.mode(PathfindMode::AStar);
+            }
+
+            commands.entity(entity).insert(pathfind);
         }
     }
 }

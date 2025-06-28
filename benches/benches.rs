@@ -4,7 +4,8 @@ use bevy::{math::UVec3, platform::collections::HashMap};
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use bevy_northstar::{
-    grid::{Grid, GridSettingsBuilder}, prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d}
+    grid::{Grid, GridSettingsBuilder},
+    prelude::{OrdinalNeighborhood, OrdinalNeighborhood3d},
 };
 
 mod profiler;
@@ -12,9 +13,7 @@ mod profiler;
 fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("pathfinding");
 
-    let grid_settings = GridSettingsBuilder::new_2d(64, 64)
-        .chunk_size(32)
-        .build();
+    let grid_settings = GridSettingsBuilder::new_2d(64, 64).chunk_size(32).build();
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
@@ -44,9 +43,7 @@ fn benchmarks(c: &mut Criterion) {
         })
     });
 
-    let grid_settings = GridSettingsBuilder::new_2d(512, 512)
-        .chunk_size(32)
-        .build();
+    let grid_settings = GridSettingsBuilder::new_2d(512, 512).chunk_size(32).build();
 
     let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 

@@ -192,7 +192,7 @@ pub fn entity_under_cursor(
     minions: Query<(Entity, &GlobalTransform)>,
     troubleshooting: Query<(
         Entity,
-        &GridPos,
+        &AgentPos,
         Option<&Pathfind>,
         Option<&Path>,
         Option<&NextPos>,

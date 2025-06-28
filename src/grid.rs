@@ -1,25 +1,18 @@
-//! This module contains the `Grid` struct which is the primary `Resource` for the crate.
+//! This module contains the `Grid` component which is the main component for the crate.
 use std::sync::Arc;
 
 use bevy::{
-    math::UVec3,
+    math::{IVec3, UVec3},
     platform::collections::HashMap,
     prelude::{Component, Entity},
 };
-use ndarray::{Array3, ArrayView2, ArrayView3};
+use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    chunk::Chunk,
-    dijkstra::*,
-    dir::*,
-    graph::Graph,
-    neighbor::Neighborhood,
-    node::Node,
-    path::Path,
-    pathfind::{pathfind, pathfind_astar, reroute_path}, point::Point, prelude::NeighborFilter,
+    chunk::Chunk, dijkstra::*, dir::*, filter::NeighborFilter, graph::Graph, nav::{Nav, NavCell}, neighbor::Neighborhood, node::Node, path::Path, pathfind::{pathfind, pathfind_astar, reroute_path}, position_in_cubic_window, MovementCost
 };
 
-/// Settings for dividing the grid into chunks.
+/// Settings for how the grid is divided into chunks.
 #[derive(Copy, Clone, Debug)]
 pub struct ChunkSettings {
     /// The square size of each chunk in the grid.
@@ -43,20 +36,21 @@ impl Default for ChunkSettings {
     }
 }
 
-/// Defaults for initializing the grid points.
+/// Defaults movement cost and passability for initializing the grid cells.
+/// Useful if you're generating your a large map to reduce your initialization time.
 #[derive(Copy, Clone, Debug)]
-pub struct CostSettings {
-    /// The default cost for each point in the grid.
-    pub default_cost: u32,
-    /// If true, the default points will be solid and block movement.
-    pub default_solid: bool,
+pub struct NavSettings {
+    /// The default cost for each cell in the grid.
+    pub default_movement_cost: MovementCost,
+    /// If true, the default cells will be solid and block movement.
+    pub default_impassible: bool,
 }
 
-impl Default for CostSettings {
+impl Default for NavSettings {
     fn default() -> Self {
-        CostSettings {
-            default_cost: 1,
-            default_solid: false,
+        NavSettings {
+            default_movement_cost: 1,
+            default_impassible: false,
         }
     }
 }
@@ -66,7 +60,7 @@ impl Default for CostSettings {
 pub struct CollisionSettings {
     /// If true, collision avoidance is enabled.
     pub enabled: bool,
-    /// The plugin systems use collision avoidance, this is the look ahead for the path to check for blocking entities.
+    /// The plugin systems use collision avoidance, this is the look ahead distance for the path to check for blocking entities.
     pub avoidance_distance: u32,
 }
 
@@ -93,13 +87,31 @@ impl Default for NeighborhoodSettings {
     }
 }
 
+/// Holder for internal crate settings.
 pub struct GridSettings(pub(crate) GridInternalSettings);
 
+/// Builder for `GridSettings`.
+///
+/// Example usage:
+/// ```
+/// use bevy_northstar::prelude::*;
+///
+/// let grid_settings = GridSettingsBuilder::new_2d(128, 128)
+///     .chunk_size(16)
+///     .default_impassable()
+///     .add_neighbor_filter(filter::NoCornerClipping)
+///     .enable_collision()
+///     .avoidance_distance(5)
+///     .build();
+///
+/// let grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
+/// ```
+///
 #[derive(Clone)]
 pub struct GridSettingsBuilder {
     dimensions: UVec3,
     chunk_settings: ChunkSettings,
-    cost_settings: CostSettings,
+    cost_settings: NavSettings,
     collision_settings: CollisionSettings,
     neighborhood_settings: NeighborhoodSettings,
 }
@@ -109,7 +121,7 @@ impl Default for GridSettingsBuilder {
         GridSettingsBuilder {
             dimensions: UVec3::new(64, 64, 1),
             chunk_settings: ChunkSettings::default(),
-            cost_settings: CostSettings::default(),
+            cost_settings: NavSettings::default(),
             collision_settings: CollisionSettings::default(),
             neighborhood_settings: NeighborhoodSettings::default(),
         }
@@ -117,6 +129,7 @@ impl Default for GridSettingsBuilder {
 }
 
 impl GridSettingsBuilder {
+    /// Initalize a 2D [`Grid`] with the given width and height. Returns a [`GridSettingsBuilder`] that can be further configured.
     pub fn new_2d(width: u32, height: u32) -> Self {
         if width < 3 || height < 3 {
             panic!("Width and height must be at least 3");
@@ -132,6 +145,7 @@ impl GridSettingsBuilder {
         grid_settings
     }
 
+    /// Initalize a 3D [`Grid`] with the given width, height, and depth. Returns a [`GridSettingsBuilder`] that can be further configured.
     pub fn new_3d(width: u32, height: u32, depth: u32) -> Self {
         if width < 3 || height < 3 {
             panic!("Width and height must be at least 3");
@@ -147,17 +161,8 @@ impl GridSettingsBuilder {
         }
     }
 
-    pub fn chunk_settings(mut self, chunk_settings: ChunkSettings) -> Self {
-        self = self.chunk_size(chunk_settings.size);
-        self = self.chunk_depth(chunk_settings.depth);
-
-        if chunk_settings.diagonal_connections {
-            self = self.enable_diagonal_connections();
-        }
-
-        self
-    }
-
+    /// Size of each square chunk the grid is divided into.
+    /// Must be at least 3.
     pub fn chunk_size(mut self, chunk_size: u32) -> Self {
         if chunk_size < 3 {
             panic!("Chunk size must be at least 3");
@@ -167,6 +172,8 @@ impl GridSettingsBuilder {
         self
     }
 
+    /// Depth (Z) of each chunk in the grid when using 3D grids.
+    /// Must be at least 1 and the grid's depth must be divisible by the chunk depth.
     pub fn chunk_depth(mut self, chunk_depth: u32) -> Self {
         if chunk_depth < 1 {
             panic!("Chunk depth must be at least 1");
@@ -182,46 +189,42 @@ impl GridSettingsBuilder {
         self
     }
 
+    /// Enabling this will create extra HPA connections in the corners of the chunks if passable.
+    /// This can create better paths in some cases but at the cost of performance.
+    /// If you're only using refined HPA* (default) paths then this likely isn't needed.
     pub fn enable_diagonal_connections(mut self) -> Self {
         self.chunk_settings.diagonal_connections = true;
         self
     }
 
-    pub fn cost_settings(mut self, cost_settings: CostSettings) -> Self {
-        self = self.default_cost(cost_settings.default_cost);
-        
-        if cost_settings.default_solid {
-            self = self.default_solid();
-        }
-
+    /// Default movement cost for each cell in the grid.
+    pub fn default_movement_cost(mut self, default_movement_cost: MovementCost) -> Self {
+        self.cost_settings.default_movement_cost = default_movement_cost;
         self
     }
 
-    pub fn default_cost(mut self, default_cost: u32) -> Self {
-        self.cost_settings.default_cost = default_cost;
+    /// Sets the default cells in the grid to be impassable.
+    pub fn default_impassable(mut self) -> Self {
+        self.cost_settings.default_impassible = true;
         self
     }
 
-    pub fn default_solid(mut self) -> Self {
-        self.cost_settings.default_solid = true;
-        self
-    }
-
+    /// Enables collision avoidance in the [`NorthstarPlugin`] pathfinding systems.
     pub fn enable_collision(mut self) -> Self {
         self.collision_settings.enabled = true;
         self
     }
 
+    /// The look ahead distance for collision avoidance.
+    /// No need to set this if collision is not enabled.
     pub fn avoidance_distance(mut self, distance: u32) -> Self {
         self.collision_settings.avoidance_distance = distance;
         self
     }
 
-    pub fn collision_settings(mut self, collison_settings: CollisionSettings) -> Self {
-        self.collision_settings = collison_settings;
-        self
-    }
-
+    /// Adds a [`NeighborFilter`] to the grid settings to be applied when computing neighbors.
+    /// This lets you apply custom movement rules based on grid cell state.
+    /// Multiple filters can be added and will be applied in the order they are added.
     pub fn add_neighbor_filter<F>(mut self, filter: F) -> Self
     where
         F: NeighborFilter + Send + Sync + 'static,
@@ -230,11 +233,48 @@ impl GridSettingsBuilder {
         self
     }
 
+    /// Pass in a [`ChunkSettings`] to configure the grid's chunking behavior.
+    /// Or use the individual methods [`GridSettingsBuilder::chunk_size()`] and [`GridSettingsBuilder::chunk_depth()`] to set the chunk size and depth individually.
+    pub fn chunk_settings(mut self, chunk_settings: ChunkSettings) -> Self {
+        self = self.chunk_size(chunk_settings.size);
+        self = self.chunk_depth(chunk_settings.depth);
+
+        if chunk_settings.diagonal_connections {
+            self = self.enable_diagonal_connections();
+        }
+
+        self
+    }
+
+    /// Pass in [`NavSettings`] to configure the grid's default cell navigation data.
+    /// You can also use the individual methods [`GridSettingsBuilder::default_cost()`] and [`GridSettingsBuilder::default_impassable()`].
+    pub fn nav_settings(mut self, nav_settings: NavSettings) -> Self {
+        self = self.default_movement_cost(nav_settings.default_movement_cost);
+
+        if nav_settings.default_impassible {
+            self = self.default_impassable();
+        }
+
+        self
+    }
+
+    /// Pass in a [`CollisionSettings`] to configure the grid's collision avoidance behavior.
+    /// You can also use the individual methods [`GridSettingsBuilder::enable_collision()`] and [`GridSettingsBuilder::avoidance_distance()`].
+    pub fn collision_settings(mut self, collison_settings: CollisionSettings) -> Self {
+        self.collision_settings = collison_settings;
+        self
+    }
+
+    /// Pass in a [`NeighborhoodSettings`] to configure the grid's neighborhood behavior.
+    /// You can also use the individual method [`GridSettingsBuilder::add_neighbor_filter()`] to add a filter.
     pub fn neighborhood_settings(mut self, neighborhood_settings: NeighborhoodSettings) -> Self {
         self.neighborhood_settings = neighborhood_settings;
         self
     }
 
+    /// Builds the [`GridSettings`] from the current builder state.
+    /// Call this after you've configured the builder to your liking
+    /// and then pass the resulting [`GridSettings`] to the [`Grid::new()`] method.
     pub fn build(self) -> GridSettings {
         GridSettings(GridInternalSettings {
             dimensions: self.dimensions,
@@ -250,7 +290,7 @@ impl GridSettingsBuilder {
 pub(crate) struct GridInternalSettings {
     pub(crate) dimensions: UVec3,
     pub(crate) chunk_settings: ChunkSettings,
-    pub(crate) cost_settings: CostSettings,
+    pub(crate) cost_settings: NavSettings,
     pub(crate) collision_settings: CollisionSettings,
     pub(crate) neighborhood_settings: NeighborhoodSettings,
 }
@@ -277,22 +317,19 @@ impl Default for GridInternalSettings {
 ///
 /// fn startup(mut commands: Commands) {
 ///    // Populate the grid with, you'd usually do this after you load your tilemap
-///    // and then set the points in the grid to match the tilemap.
+///    // and then set the cells in the grid to match the tilemap.
 ///
-///    let mut grid: Grid<CardinalNeighborhood> = Grid::new(&GridSettings {
-///       width: 64,
-///       height: 64,
-///       depth: 1,
-///       chunk_size: 16,
-///       chunk_depth: 1,
-///       chunk_ordinal: false,
-///       default_cost: 1,
-///       default_wall: false,
-///       collision: true,
-///       avoidance_distance: 4,
-///    });
+///    let grid_settings = GridSettingsBuilder::new_2d(64, 64)
+///       .chunk_size(16)
+///       .enable_collision()
+///       .build();
 ///
-///    grid.set_point(UVec3::new(0, 0, 0), Point::new(1, false));
+///    let mut grid: Grid<CardinalNeighborhood> = Grid::new(&grid_settings);
+///
+///    // Set the cell at (0, 0, 0) to be passable with a cost of 1
+///    grid.set_nav(UVec3::new(0, 0, 0), Nav::Passable(1));
+///    // Set the cell at (1, 0, 0) to be impassable
+///    grid.set_nav(UVec3::new(1, 0, 0), Nav::Impassable);
 ///    // Initialize the grid
 ///    grid.build();
 ///
@@ -302,20 +339,21 @@ impl Default for GridInternalSettings {
 /// ```
 #[derive(Component)]
 pub struct Grid<N: Neighborhood> {
-    pub neighborhood: N,
+    pub(crate) neighborhood: N,
 
     dimensions: UVec3,
     chunk_settings: ChunkSettings,
     collision_settings: CollisionSettings,
 
-    grid: Array3<Point>,
+    grid: Array3<NavCell>,
     chunks: Array3<Chunk>,
 
     graph: Graph,
 }
 
 impl<N: Neighborhood + Default> Grid<N> {
-    /// Creates a new `Grid` instance with the given `GridSettings`.
+    /// Creates a new [`Grid`] instance with the given [`GridSettings`].
+    /// Use the [`GridSettingsBuilder`] to generate the settings.
     pub fn new(settings: &GridSettings) -> Self {
         let GridInternalSettings {
             dimensions,
@@ -331,10 +369,13 @@ impl<N: Neighborhood + Default> Grid<N> {
         let y_chunks = y / chunk_settings.size;
         let z_chunks = z / chunk_settings.depth;
 
-        let grid = Array3::from_elem(
-            (x as usize, y as usize, z as usize),
-            Point::new(cost_settings.default_cost, cost_settings.default_solid),
-        );
+        let default_navcell = if cost_settings.default_impassible {
+            NavCell::new(Nav::Impassable)
+        } else {
+            NavCell::new(Nav::Passable(cost_settings.default_movement_cost))
+        };
+
+        let grid = Array3::from_elem((x as usize, y as usize, z as usize), default_navcell);
 
         let chunks = Array3::from_shape_fn(
             (x_chunks as usize, y_chunks as usize, z_chunks as usize),
@@ -366,27 +407,51 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    /// Returns an `ArrayView3` reference to the grid.
-    pub fn view(&self) -> ArrayView3<Point> {
+    /// Returns the neighborhood used by this grid.
+    /// Useful if you want to call [`Neighborhood::is_ordinal()`] or similar methods.
+    pub fn neighborhood(&self) -> &N {
+        &self.neighborhood
+    }
+
+    /// Returns an [`ndarray::ArrayView3<NavCell>`] for read-only access to the grid data.
+    pub fn view(&self) -> ArrayView3<NavCell> {
         self.grid.view()
     }
 
-    pub(crate) fn chunk_view(&self, chunk: &Chunk) -> ArrayView3<Point> {
+    /// Returns an [`ndarray::ArrayView3<NavCell>`] for read-only access to the data within a given [`Chunk`].
+    pub(crate) fn chunk_view(&self, chunk: &Chunk) -> ArrayView3<NavCell> {
         chunk.view(&self.grid)
     }
 
+    /// Returns the [`Graph`] associated with this grid.
     pub(crate) fn graph(&self) -> &Graph {
         &self.graph
     }
 
-    /// Returns the `Point` at the given position in the grid.
-    pub fn point(&self, pos: UVec3) -> Point {
-        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].clone()
+    /// Test if a grid cell is passable at a given [`bevy::math::UVec3`] position.
+    pub fn is_passable(&self, pos: UVec3) -> bool {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].is_passable()
     }
 
-    /// Set the `Point` at the given position in the grid.
-    pub fn set_point(&mut self, pos: UVec3, point: Point) {
-        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = point;
+    /// Test if a grid cell is a ramp at a given [`bevy::math::UVec3`] position.
+    pub fn is_ramp(&self, pos: UVec3) -> bool {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].is_ramp()
+    }
+
+    /// Set the [`Nav`] settings at a given [`bevy::math::UVec3`] position in the grid.
+    pub fn set_nav(&mut self, pos: UVec3, nav: Nav) {
+        let navcell = NavCell::new(nav);
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = navcell;
+    }
+
+    /// Gets the [`Nav`] settings at a given [`bevy::math::UVec3`] position in the grid.
+    pub fn nav(&self, pos: UVec3) -> Nav {
+        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].nav()
+    }
+
+    /// Gets the [`NavCell`] at a given [`bevy::math::UVec3`] position in the grid.
+    pub(crate) fn navcell(&self, pos: UVec3) -> &NavCell {
+        &self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]]
     }
 
     /// Returns the dimensions of the grid.
@@ -409,7 +474,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.dimensions.z
     }
 
-    /// Returns the square width/height of the chunks in the grid.
+    /// Returns the square width/height dimensions of the chunks in the grid.
     pub fn chunk_size(&self) -> u32 {
         self.chunk_settings.size
     }
@@ -419,12 +484,12 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.chunk_settings
     }
 
-    /// Returns if collision is enabled or not
+    /// Test if collision is enabled.
     pub fn collision(&self) -> bool {
         self.collision_settings.enabled
     }
 
-    /// Set the collision flag on the graph
+    /// Set the collision settings for the grid.
     pub fn set_collision(&mut self, collision: bool) {
         self.collision_settings.enabled = collision;
     }
@@ -439,9 +504,14 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.collision_settings.avoidance_distance = distance;
     }
 
-    /// Builds the entire grid. This includes creating nodes for each edge of each chunk, caching
-    /// paths between internal nodes within each chunk, and connecting adjacent nodes between chunks.
-    /// This method should be called after the grid has been initialized.
+    /// Checks if a position is within the bounds of the grid.
+    pub fn in_bounds(&self, pos: UVec3) -> bool {
+        pos.x < self.dimensions.x && pos.y < self.dimensions.y && pos.z < self.dimensions.z
+    }
+
+    /// Builds the entire grid. This includes precomputing neighbors, creating nodes for each edge of each chunk,
+    /// caching paths between internal nodes within each chunk, and connecting adjacent nodes between chunks.
+    /// This method needs to be called after the grid has been initialized.
     pub fn build(&mut self) {
         self.precompute_neighbors();
         self.build_nodes();
@@ -449,13 +519,12 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.connect_adjacent_chunk_nodes();
     }
 
-
     pub(crate) fn precompute_neighbors(&mut self) {
         let grid_view = self.grid.view();
 
         // Collect positions and neighbor bits first to avoid borrow checker issues
         let mut neighbor_bits_vec = Vec::with_capacity(self.grid.len());
-        for ((x, y, z), _point) in self.grid.indexed_iter() {
+        for ((x, y, z), _cell) in self.grid.indexed_iter() {
             let pos = UVec3::new(x as u32, y as u32, z as u32);
             let bits = self.neighborhood.neighbors(&grid_view, pos);
             neighbor_bits_vec.push(((x, y, z), bits));
@@ -580,7 +649,8 @@ impl<N: Neighborhood + Default> Grid<N> {
                                 let neighbor_corner =
                                     neighbor_chunk.corner(&self.grid, dir.opposite());
 
-                                if current_corner.solid || neighbor_corner.solid {
+                                if current_corner.is_impassable() || neighbor_corner.is_impassable()
+                                {
                                     continue;
                                 }
 
@@ -660,30 +730,30 @@ impl<N: Neighborhood + Default> Grid<N> {
     // Calculates the edge nodes for a given edge in the grid.
     fn calculate_edge_nodes(
         &self,
-        start_edge: ArrayView2<Point>,
-        end_edge: ArrayView2<Point>,
+        start_edge: ArrayView2<NavCell>,
+        end_edge: ArrayView2<NavCell>,
         chunk: Chunk,
         dir: Dir,
     ) -> Vec<Node> {
         let mut nodes = Vec::new();
 
         // Iterate over the start edge and find connections that are walkable
-        for ((start_x, start_y), start_point) in start_edge.indexed_iter() {
-            if start_point.solid {
+        for ((start_x, start_y), start_cell) in start_edge.indexed_iter() {
+            if start_cell.is_impassable() {
                 continue;
             }
 
             let end_x = start_x;
             let mut end_y = start_y;
 
-            if start_point.ramp {
+            if start_cell.is_ramp() {
                 end_y = start_y + 1;
             }
 
-            let end_point = end_edge[[end_x, end_y]].clone();
+            let end_cell = end_edge[[end_x, end_y]].clone();
 
-            // If the end point is a wall, we can't connect the nodes
-            if !end_point.solid {
+            // If the end cell is impassable, we can't connect the nodes
+            if !end_cell.is_impassable() {
                 let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
                 let node = Node::new(pos, chunk.clone(), Some(dir));
@@ -741,21 +811,21 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut ordinal_nodes = Vec::new();
 
         // If we made it here that means no connection nodes were found, but we allow ordinal connections so let's build those if possible
-        for ((start_x, start_y), start_point) in start_edge.indexed_iter() {
-            if start_point.solid {
+        for ((start_x, start_y), start_cell) in start_edge.indexed_iter() {
+            if start_cell.is_impassable() {
                 continue;
             }
 
             let end_x = start_x;
             let mut end_y = start_y;
 
-            if start_point.ramp {
+            if start_cell.is_ramp() {
                 end_y = start_y + 1;
             }
 
             if end_x > 0 {
                 let left = end_edge[[end_x - 1, end_y]].clone();
-                if !left.solid {
+                if !left.is_impassable() {
                     let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
                     let node = Node::new(pos, chunk.clone(), Some(dir));
@@ -765,7 +835,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
             if end_x < end_edge.shape()[0] - 1 {
                 let right = end_edge[[end_x + 1, end_y]].clone();
-                if !right.solid {
+                if !right.is_impassable() {
                     let pos = UVec3::new(start_x as u32, start_y as u32, 0);
 
                     let node = Node::new(pos, chunk.clone(), Some(dir));
@@ -891,27 +961,6 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    /*pub(crate) fn precompute_neighbors(&mut self) {
-        // Collect all positions first to avoid borrow checker issues
-        let positions: Vec<_> = self.grid.indexed_iter().map(|(pos, _)| pos).collect();
-        let grid_view = self.grid.view();
-
-        // Compute the bitfield for each point
-        let mut bitfields = Vec::with_capacity(positions.len());
-        for pos in &positions {
-            let neighbor_bits = self.neighborhood.neighbors(
-                &grid_view,
-                UVec3::new(pos.0 as u32, pos.1 as u32, pos.2 as u32),
-            );
-            bitfields.push(neighbor_bits);
-        }
-
-        // Apply the bitfield to the grid
-        for (i, pos) in positions.iter().enumerate() {
-            self.grid[[pos.0, pos.1, pos.2]].neighbor_bits = bitfields[i];
-        }
-    }*/
-
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
     pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
         self.chunks.iter().find(|&chunk| {
@@ -924,23 +973,47 @@ impl<N: Neighborhood + Default> Grid<N> {
         })
     }
 
-    /// Recursively reroutes a path by astar pathing to further chunks until a path can be found.
+    /// Recursively reroutes a path using astar pathing to further away chunks until a path can be found.
     ///
     /// Useful if local collision avoidance is failing.
     ///
     /// If you're using the plugin pathing systems, you shouldn't need to call this directly.
     ///
     /// # Arguments
+    /// * `path` - The [`Path`] to reroute.
+    /// * `start` - The start position of the path.
+    /// * `goal` - The goal position of the path.
+    /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
+    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
+    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    /// * `refined` - Whether to use refined pathing or not.
+    ///
+    /// # Returns
+    /// A new rerouted [`Path`] if successful, or `None` if no viable path could be found.
+    ///
     pub fn reroute_path(
         &self,
         path: &Path,
         start: UVec3,
         goal: UVec3,
         blocking: &HashMap<UVec3, Entity>,
+        refined: bool,
     ) -> Option<Path> {
-        reroute_path(self, path, start, goal, blocking)
+        reroute_path(self, path, start, goal, blocking, refined)
     }
 
+    /// Generate an HPA* path from `start` to `goal`.
+    ///
+    /// # Arguments
+    /// * `start` - The starting position in the grid.
+    /// * `goal` - The goal position in the grid.
+    /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
+    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
+    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
+    /// # Returns
+    /// A [`Path`] if successful, or `None` if no viable path could be found.
+    ///
     pub fn pathfind(
         &self,
         start: UVec3,
@@ -948,9 +1021,47 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
-        pathfind(self, start, goal, blocking, partial)
+        pathfind(self, start, goal, blocking, partial, true)
     }
 
+    /// Generate a coarse (unrefined) HPA* path from `start` to `goal`.
+    ///
+    /// This method is useful for generating paths when the shortest viable path is not required.
+    ///
+    /// # Arguments
+    /// * `start` - The starting position in the grid.
+    /// * `goal` - The goal position in the grid.
+    /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
+    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
+    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
+    /// # Returns
+    /// A [`Path`] if successful, or `None` if no viable path could be found.
+    ///
+    pub fn pathfind_coarse(
+        &self,
+        start: UVec3,
+        goal: UVec3,
+        blocking: &HashMap<UVec3, Entity>,
+        partial: bool,
+    ) -> Option<Path> {
+        pathfind(self, start, goal, blocking, partial, false)
+    }
+
+    /// Generate a traditional A* path from `start` to `goal`.
+    /// This method is useful for generating paths that require precise navigation and CPU cost isn't a concern.
+    /// Great for a turn based game where movment cost is important.
+    ///
+    /// # Arguments
+    /// * `start` - The starting position in the grid.
+    /// * `goal` - The goal position in the grid.
+    /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
+    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
+    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
+    /// # Returns
+    /// A [`Path`] if successful, or `None` if no viable path could be found.
+    ///
     pub fn pathfind_astar(
         &self,
         start: UVec3,
@@ -967,6 +1078,89 @@ impl<N: Neighborhood + Default> Grid<N> {
             partial,
         )
     }
+
+    /// Generate an A* path within a cubic radius around the `start` position.
+    /// This can be used to limit an A* search to a confined search area.
+    /// You'll want to ensure your radius at least covers the distance to the goal.
+    /// 
+    /// # Arguments
+    /// * `start` - The starting position in the grid.
+    /// * `goal` - The goal position in the grid.
+    /// * `radius` - The radius around the start position to search for a path.
+    /// * `blocking` - A map of positions to entities that are blocking the path.
+    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
+    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
+    /// # Returns
+    /// A [`Path`] if successful, or `None` if no viable path could be found.
+    ///
+    pub fn pathfind_astar_radius(
+        &self,
+        start: UVec3,
+        goal: UVec3,
+        radius: u32,
+        blocking: &HashMap<UVec3, Entity>,
+        partial: bool,
+    ) -> Option<Path> {
+        let min = start.as_ivec3().saturating_sub(IVec3::splat(radius as i32));
+        let max = start.as_ivec3().saturating_add(IVec3::splat(radius as i32) + IVec3::ONE);
+
+        let grid_shape = self.grid.shape();
+        let min = min.max(IVec3::ZERO);
+        let max = max.min(IVec3::new(
+            grid_shape[0] as i32,
+            grid_shape[1] as i32,
+            grid_shape[2] as i32,
+        ));
+
+        let grid_shape_vec = IVec3::new(
+            grid_shape[0] as i32,
+            grid_shape[1] as i32,
+            grid_shape[2] as i32,
+        );
+        if !position_in_cubic_window(goal, start.as_ivec3(), radius as i32, grid_shape_vec) {
+            return None;
+        }
+
+        // Create a subview of the grid
+        let view = self.grid.slice(s![
+            min.x as usize..max.x as usize,
+            min.y as usize..max.y as usize,
+            min.z as usize..max.z as usize
+        ]);
+
+        // Remap start/goal into local view
+        let start_local = (start.as_ivec3() - min).as_uvec3();
+        let goal_local = (goal.as_ivec3() - min).as_uvec3();
+
+        // Remap blocking positions into local view
+        let blocking_local: HashMap<UVec3, Entity> = blocking
+            .iter()
+            .filter_map(|(pos, &ent)| {
+                let pos_i = pos.as_ivec3();
+                if pos_i.cmplt(min).any() || pos_i.cmpge(max).any() {
+                    return None;
+                }
+                Some(((pos_i - min).as_uvec3(), ent))
+            })
+            .collect();
+
+        // Run pathfinding on the subview
+        let result = pathfind_astar(
+            &self.neighborhood,
+            &view,
+            start_local,
+            goal_local,
+            &blocking_local,
+            partial,
+        );
+
+        // Convert path result back to global positions
+        result.map(|mut path| {
+            path.translate_by(min.as_uvec3());
+            path
+        })
+    }
 }
 
 #[cfg(test)]
@@ -976,9 +1170,10 @@ mod tests {
     use crate::{
         dir::Dir,
         grid::{
-            ChunkSettings, CollisionSettings, CostSettings, Grid, GridInternalSettings,
-            GridSettings, GridSettingsBuilder, NeighborhoodSettings, Point,
+            ChunkSettings, CollisionSettings, Grid, GridInternalSettings, GridSettings,
+            GridSettingsBuilder, NavCell, NavSettings, NeighborhoodSettings,
         },
+        nav::Nav,
         neighbor::OrdinalNeighborhood3d,
     };
 
@@ -989,9 +1184,9 @@ mod tests {
             depth: 1,
             diagonal_connections: false,
         },
-        cost_settings: CostSettings {
-            default_cost: 1,
-            default_solid: false,
+        cost_settings: NavSettings {
+            default_movement_cost: 1,
+            default_impassible: false,
         },
         collision_settings: CollisionSettings {
             enabled: false,
@@ -1021,7 +1216,7 @@ mod tests {
         for x in 0..4 {
             for y in 0..4 {
                 if x == 0 || x == 3 || y == 0 || y == 3 {
-                    grid.grid[[x, y, 0]] = Point::new(1, true);
+                    grid.grid[[x, y, 0]] = NavCell::new(Nav::Impassable);
                 }
             }
         }
@@ -1036,8 +1231,8 @@ mod tests {
         edges.push(chunk.edge(&grid.grid, Dir::WEST));
 
         for edge in edges {
-            for point in edge.iter() {
-                assert!(point.solid);
+            for cell in edge.iter() {
+                assert!(cell.is_impassable());
             }
         }
     }
@@ -1110,9 +1305,9 @@ mod tests {
         for x in 0..(GRID_SETTINGS.0.dimensions.x as usize) {
             for y in 0..(GRID_SETTINGS.0.dimensions.y as usize) {
                 if x % chunk_size == 0 && y % half_chunk_size == 0 {
-                    grid.grid[[x, y, 0]] = Point::new(0, true);
+                    grid.grid[[x, y, 0]] = NavCell::new(Nav::Impassable);
                 } else {
-                    grid.grid[[x, y, 0]] = Point::new(0, false);
+                    grid.grid[[x, y, 0]] = NavCell::new(Nav::Passable(1));
                 }
             }
         }
@@ -1215,9 +1410,9 @@ mod tests {
         );
 
         assert!(path.is_some());
-        // Ensure start point is the first point in the path
+        // Ensure start cell is the first cell in the path
         assert_ne!(path.clone().unwrap().path()[0], UVec3::new(10, 10, 0));
-        // Ensure end point is the last point in the path
+        // Ensure end cell is the last cell in the path
         assert_eq!(
             path.clone().unwrap().path().last().unwrap(),
             &UVec3::new(4, 4, 0)
@@ -1266,13 +1461,13 @@ mod tests {
                 if (x % 4 == 0)
                     && (y % chunk_size == 0 || y / (chunk_size + chunk_size) == chunk_size)
                 {
-                    grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
+                    grid.grid[[x as usize, y as usize, 0]] = NavCell::new(Nav::Impassable);
                 }
 
                 if (y % 4 == 0)
                     && (x % chunk_size == 0 || x & (chunk_size + chunk_size) == chunk_size)
                 {
-                    grid.grid[[x as usize, y as usize, 0]] = Point::new(1, true);
+                    grid.grid[[x as usize, y as usize, 0]] = NavCell::new(Nav::Impassable);
                 }
             }
         }

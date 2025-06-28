@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use bevy::ecs::query::Without;
-use bevy::math::UVec3;
+use bevy::math::{IVec3, UVec3};
 use indexmap::IndexMap;
 use rustc_hash::FxHasher;
 use std::cmp::Ordering;
@@ -13,29 +13,35 @@ pub mod components;
 pub mod debug;
 mod dijkstra;
 pub mod dir;
+pub mod filter;
 mod graph;
 pub mod grid;
+pub mod nav;
 pub mod neighbor;
 mod node;
 pub mod path;
 pub mod pathfind;
-pub mod point;
 pub mod plugin;
 pub mod raycast;
 
 pub mod prelude {
     pub use crate::components::*;
-    pub use crate::debug::{DebugMapType, NorthstarDebugPlugin};
+    pub use crate::debug::{DebugTilemapType, NorthstarDebugPlugin};
     pub use crate::dir::Dir;
+    pub use crate::filter;
     pub use crate::grid::{Grid, GridSettingsBuilder};
+    pub use crate::nav::Nav;
     pub use crate::neighbor::*;
     pub use crate::path::Path;
-    pub use crate::point::Point;
-    pub use crate::plugin::NorthstarPlugin;
+    pub use crate::plugin::{NorthstarPlugin, NorthstarPluginSettings};
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;
+    pub use crate::MovementCost;
     pub use crate::{CardinalGrid, CardinalGrid3d, OrdinalGrid, OrdinalGrid3d};
 }
+
+/// Alias for movement cost type.
+pub type MovementCost = u32;
 
 /// Alias for a 2d CardinalNeighborhood grid. Allows only 4 directions (N, S, E, W).
 pub type CardinalGrid = grid::Grid<neighbor::CardinalNeighborhood>;
@@ -88,7 +94,22 @@ impl<Id: Ord> Ord for SmallestCostHolder<Id> {
 
 #[inline(always)]
 pub(crate) fn in_bounds_3d(pos: UVec3, min: UVec3, max: UVec3) -> bool {
-    pos.x.wrapping_sub(min.x) < (max.x - min.x) &&
-    pos.y.wrapping_sub(min.y) < (max.y - min.y) &&
-    pos.z.wrapping_sub(min.z) < (max.z - min.z)
+    pos.x.wrapping_sub(min.x) < (max.x - min.x)
+        && pos.y.wrapping_sub(min.y) < (max.y - min.y)
+        && pos.z.wrapping_sub(min.z) < (max.z - min.z)
+}
+
+#[inline(always)]
+/// Returns the min and max corners of a cubic window around the given center position.
+/// This is inclusive on both ends.
+fn position_in_cubic_window(pos: UVec3, center: IVec3, radius: i32, grid_shape: IVec3) -> bool {
+    let min = (center - IVec3::splat(radius)).clamp(IVec3::ZERO, grid_shape - 1);
+    let max = (center + IVec3::splat(radius)).clamp(IVec3::ZERO, grid_shape - 1);
+    
+    // Check if position is in the cubic window
+    pos.as_ivec3().cmplt(min).any() || pos.as_ivec3().cmple(max).any()
+        || pos.as_ivec3().cmpeq(center).all()
+        || pos.as_ivec3().cmpeq(min).all()
+        || pos.as_ivec3().cmpeq(max).all()
+        || (pos.as_ivec3() - center).abs().max_element() <= radius
 }

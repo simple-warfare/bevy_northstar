@@ -5,25 +5,26 @@ use ndarray::ArrayView3;
 use std::collections::BinaryHeap;
 
 use crate::{
-    graph::Graph, in_bounds_3d, neighbor::Neighborhood, path::Path, point::Point, FxIndexMap, SmallestCostHolder
+    graph::Graph, in_bounds_3d, nav::NavCell, neighbor::Neighborhood, path::Path, FxIndexMap,
+    SmallestCostHolder,
 };
 
-/// A* search algorithm for a [`crate::grid::Grid`] of [`crate::grid::Point`]s.
+/// A* search algorithm for a [`crate::grid::Grid`] of [`crate::nav::NavCell`]s.
 ///
 /// # Arguments
 /// * `neighborhood` - Reference to the [`Neighborhood`] to use.
-/// * `grid` - A reference to a 3D array representing the grid.
-/// * `start` - The starting position in the grid.
-/// * `goal` - The goal position in the grid.
+/// * `grid` - A reference to a 3D array representing the grid, as an [`ndarray::ArrayView3`] of [`NavCell`].
+/// * `start` - The start position as [`bevy::math::UVec3`].
+/// * `goal` - The goal position as [`bevy::math::UVec3`].
 /// * `size_hint` - A hint for the size of the binary heap.
-/// * `partial` - A boolean indicating whether to return a partial path if the goal is not reachable.
-/// * `blocking` - A reference to a map of positions that are blocked.
+/// * `partial` - If `true`, the algorithm will return the closest node if the goal is not reachable.
+/// * `blocking` - Pass [`crate::plugin::BlockingMap`] or a new `HashMap<UVec3, Entity>` to indicate which positions are blocked by entities.
 ///
 /// # Returns
 /// * [`Option<Path>`] - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
 pub(crate) fn astar_grid<N: Neighborhood>(
     neighborhood: &N,
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goal: UVec3,
     size_hint: usize,
@@ -45,11 +46,7 @@ pub(crate) fn astar_grid<N: Neighborhood>(
 
     let shape = grid.shape();
     let min = UVec3::new(0, 0, 0);
-    let max = UVec3::new(
-        shape[0] as u32,
-        shape[1] as u32,
-        shape[2] as u32,
-    );
+    let max = UVec3::new(shape[0] as u32, shape[1] as u32, shape[2] as u32);
 
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
         let neighbors = {
@@ -80,7 +77,7 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 continue;
             }
 
-            let point = &grid[[
+            let cell = &grid[[
                 current_pos.x as usize,
                 current_pos.y as usize,
                 current_pos.z as usize,
@@ -88,7 +85,7 @@ pub(crate) fn astar_grid<N: Neighborhood>(
 
             //let mut neighbors = SmallVec::new();
             //neighborhood.neighbors(grid, *current_pos, &mut neighbors);
-            point.neighbor_iter(*current_pos)
+            cell.neighbor_iter(*current_pos)
         };
 
         for neighbor in neighbors {
@@ -96,13 +93,13 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 continue;
             }
 
-            let neighbor_point = &grid[[
+            let neighbor_cell = &grid[[
                 neighbor.x as usize,
                 neighbor.y as usize,
                 neighbor.z as usize,
             ]];
 
-            if neighbor_point.solid {
+            if neighbor_cell.is_impassable() {
                 continue;
             }
 
@@ -110,7 +107,7 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 continue;
             }
 
-            let new_cost = cost + neighbor_point.cost;
+            let new_cost = cost + neighbor_cell.cost;
             let h;
             let n;
             match visited.entry(neighbor) {
@@ -171,14 +168,14 @@ pub(crate) fn astar_grid<N: Neighborhood>(
 /// This function is primarily to be used for the crate, but can be used directly if desired.
 ///
 /// # Arguments
-/// * `neighborhood` - Reference to the `Neighborhood` to use.
-/// * `graph` - A reference to the `Graph` object.
-/// * `start` - The starting position in the graph.
-/// * `goal` - The goal position in the graph.
+/// * `neighborhood` - Reference to the [`Neighborhood`] to use.
+/// * `graph` - A reference to the [`Graph`] object.
+/// * `start` - The starting position as a [`bevy::math::UVec3`].
+/// * `goal` - The goal position as a [`bevy::math::UVec3`].
 /// * `size_hint` - A hint for the size of the binary heap.
 ///
 /// # Returns
-/// * `Option<Path>` - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
+/// * [`Option<Path>`] - An optional path object. If a path is found, it returns `Some(Path)`, otherwise it returns `None`.
 pub(crate) fn astar_graph<N: Neighborhood>(
     neighborhood: &N,
     graph: &Graph,
@@ -266,19 +263,15 @@ mod tests {
     use super::*;
     use crate::chunk::Chunk;
     use crate::grid::{Grid, GridSettingsBuilder};
+    use crate::nav::Nav;
     use crate::neighbor::OrdinalNeighborhood3d;
 
     #[test]
     fn test_astar_grid() {
-        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
-            .chunk_size(3)
-            .build();
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3).chunk_size(3).build();
         let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
-        
-        grid.build();
 
-        //let mut grid = ndarray::Array3::from_elem((3, 3, 3), Point::new(1, false));
-        //grid[[1, 1, 1]].cost = 1;
+        grid.build();
 
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(2, 2, 2);
@@ -304,13 +297,11 @@ mod tests {
 
     #[test]
     fn test_astar_grid_with_wall() {
-        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
-            .chunk_size(3)
-            .build();
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3).chunk_size(3).build();
 
         let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
-        
-        grid.set_point(UVec3::new(1, 1, 1), Point::new(1, true));
+
+        grid.set_nav(UVec3::new(1, 1, 1), Nav::Impassable);
 
         grid.build();
 
@@ -344,7 +335,7 @@ mod tests {
             .build();
         let mut grid = crate::grid::Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
         grid.build();
-        
+
         let start = UVec3::new(0, 0, 0);
         let goal = UVec3::new(7, 7, 7);
 

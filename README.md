@@ -7,7 +7,7 @@
 
 ## A 2d/3d hierarchical pathfinding crate for Bevy. 
 
-`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal point it's refined to get a more accurate path.
+`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal position it's refined to get a more accurate path.
 The crate provides:
 
 ## Features  
@@ -52,7 +52,7 @@ bevy = "0.16"
 bevy_northstar = "0.2"
 ```
 
-The basic requirements to use the crate are to spawn an entity with a `Grid` component, adjust the points, and then call `Grid::build()` so the chunk entrances and internal paths can be calculated. 
+The basic requirements to use the crate are to spawn an entity with a `Grid` component, adjust the grid cells, and then call `Grid::build()` so the chunk entrances and internal paths can be calculated. 
 
 To use the built-in pathfinding systems for the crate, insert the NorthstarPlugin specifying the `Neighborhood` to use.
 
@@ -78,24 +78,24 @@ fn main() {
 fn startup(mut commands: Commands) {
     commands.spawn(Camera2d::default());
 
-    // Spawn the grid used for pathfinding.
-    commands.spawn(Grid::<CardinalNeighborhood>::new(&GridSettings {
-        width: 16,
-        height: 16,
-        chunk_size: 4,
-        ..Default::default()
-    }));
+    // Build the grid settings.
+    let grid_settings = GridSettingsBuilder::new_2d(16, 16)
+        .chunk_size(4)
+        .build();
+
+    // Spawn the grid component
+    commands.spawn(CardinalGrid::new(&grid_settings));
 }
 
-fn build_grid(grid: Single<&mut Grid<CardinalNeighborhood>>) {
+fn build_grid(grid: Single<&mut CardinalGrid>) {
     let mut grid = grid.into_inner();
 
     // Let's set the position 8, 8 to a wall
-    grid.set_point(UVec3::new(8, 8, 0), Point::new(u32::MAX, true));
+    grid.set_nav(UVec3::new(8, 8, 0), Nav::Impassable);
 
     info!("Building the grid...");
 
-    // The grid needs to be built after setting the points.
+    // The grid needs to be built after setting the cells nav data.
     // Building the grid will calculate the chunk entrances and cache internal paths.
     grid.build();
 
@@ -107,7 +107,7 @@ fn build_grid(grid: Single<&mut Grid<CardinalNeighborhood>>) {
 
 |bevy|bevy_northstar|
 |---|---|
-|0.16|0.2|
+|0.16|0.2/0.3|
 
 
 ## Roadmap / TODO

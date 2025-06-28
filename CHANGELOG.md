@@ -1,14 +1,32 @@
-## v0.2.2
+## v0.3.0
 **BREAKING CHANGES**
 `GridSettings` has been replaced with a builder `GridSettingsBuilder`.
-`Point::wall` has been renamed to `Point::solid`. 
+`Pathfind` component has been reworked with a fluent/chain constructor pattern.
+`Point` has been removed and fully reworked as `Nav` and `NavCell`.
+`GridPos` component has been renamed to `AgentPos`.
+`DebugMap` component has been renamed to `DebugGrid` and reworked.
+`DebugMapType` has been renamed to `DebugTilemapType`.
+`DebugPath` has removed tile_width, tile_height, and map_type.
+
+See the migration guide for more details on how to migrate.
 
 ### Features
-* Added `GridSettingsBuilder` to make configuring `Grid` cleaner.
-* Added `NeighborFilter` trait. You can now apply filters to the neighbors to prevent things like corner clipping. They can be chained.
-* Added `NoCornerClippingFilter` neighbor filter to optionally prevent ordinal movement through wall corners.
-* Neighbors are now precomputed as bitmasks and cached when `Grid::build()` is called. This is a slight performance boost but when using filters it's huge performance boost.
-* All pathfinding HPA*, A*, Djikstra uses the cached neighbors instead of calculating neighbors.
+* Updated the basic example to demonstrate a very minimal visual example of using the crate.
+* `NorthstarPluginSettings` resource added to configure the maximum agents per frame that can be handled by the pathfinding systems.
+* `NorthstarPlugin` systems will now stagger agents defined by `NorthstarPluginSettings`.
+* Added `NeighborFilter` trait. You can now apply filters to the neighbors to prevent things like corner clipping. Filters can be chained.
+* Added `NoCornerClipping` neighbor filter to optionally prevent ordinal movement through wall corners.
+* Added `NoCornerCutting` neighbor filter to prevent all diagonal movement in the direction of an adjacent wall.
+* Neighbors are now precomputed as bitmasks and cached when `Grid::build()` is called. This is a slight performance boost in general but a large performance boost when filtering neighbors.
+* All pathfinding HPA*, A*, Djikstra uses the cached neighbors instead of calculating neighbors per neighbor call.
+* Added `PathfindMode::Coarse` which fetches a heirarchichal path without refining it with the line trace algorithm.
+* `AgentOfGrid` relationship has been created to relate an entity with a specific `Grid`. This will allow supporting multiple grids in the future.
+* HPA* path refinement has been optimized for performance.
+* Optimized collision `avoidance` system to confine collision to a local search area to prevent stutters from a full A* search.
+
+### Debug Features
+* `DebugPath` now uses the `AgentOfGrid` relationship and child relationships making it cleaner to instantiate.
+* `DebugGridBuilder` has been added to make creating the `DebugGrid` more ergonomic.
 
 ## v0.2.1
 **Fixes**

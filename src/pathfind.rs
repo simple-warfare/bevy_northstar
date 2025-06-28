@@ -1,6 +1,6 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, log::info, math::UVec3, platform::collections::HashMap};
+use bevy::{ecs::entity::Entity, math::UVec3, platform::collections::HashMap};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -8,9 +8,9 @@ use crate::{
     chunk::Chunk,
     dijkstra::dijkstra_grid,
     grid::Grid,
+    nav::NavCell,
     node::Node,
     path::Path,
-    point::Point,
     prelude::Neighborhood,
     raycast::{bresenham_path, bresenham_path_filtered, path_line_trace},
 };
@@ -23,22 +23,32 @@ use crate::{
 ///
 /// # Arguments
 /// * `neighborhood` - The [`Neighborhood`] to use for the pathfinding.
-/// * `grid` - The [`ArrayView3`] of [`Point`]s to use for the pathfinding.
+/// * `grid` - The [`ArrayView3`] of [`NavCell`]s to use for the pathfinding.
 /// * `start` - The starting position.
 /// * `goal` - The goal position.
 /// * `blocking` - A hashmap of blocked positions for dynamic obstacles.
 /// * `partial` - If true, the pathfinding will return a partial path if the goal is blocked.
 #[inline(always)]
-pub fn pathfind_astar<N: Neighborhood>(
+// This has to be moved internally since the base A* and Djikstra algorithms use precomputed neighbors now.
+pub(crate) fn pathfind_astar<N: Neighborhood>(
     neighborhood: &N,
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goal: UVec3,
     blocking: &HashMap<UVec3, Entity>,
     partial: bool,
 ) -> Option<Path> {
-    if grid[[start.x as usize, start.y as usize, start.z as usize]].solid
-        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].solid
+    // Ensure the goal is within bounds of the grid
+    let shape = grid.shape();
+    if goal.x as usize >= shape[0] || goal.y as usize >= shape[1] || goal.z as usize >= shape[2] {
+        //log::error!("Goal is out of bounds: {:?}", goal);
+        return None;
+    }    
+
+    // If the goal is impassibe and partial isn't set, return none
+    if grid[[start.x as usize, start.y as usize, start.z as usize]].is_impassable()
+        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].is_impassable() 
+        && !partial
     {
         return None;
     }
@@ -69,9 +79,18 @@ pub(crate) fn pathfind<N: Neighborhood>(
     goal: UVec3,
     blocking: &HashMap<UVec3, Entity>,
     partial: bool,
+    refined: bool,
 ) -> Option<Path> {
-    if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].solid
-        || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].solid
+    // Make sure the goal is in grid bounds
+    if !grid.in_bounds(goal) {
+        //log::error!("Goal is out of bounds: {:?}", goal);
+        return None;
+    }
+
+    // If the goal is impassable and partial isn't set, return none
+    if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].is_impassable()
+        || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].is_impassable()
+        && !partial
     {
         return None;
     }
@@ -99,8 +118,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
         }
     }
 
-    let start_time = std::time::Instant::now();
-
     // Find viable nodes in the start and goal chunks
     let Some((start_nodes, start_paths)) =
         filter_and_rank_chunk_nodes(grid, start_chunk, start, goal, blocking)
@@ -114,17 +131,8 @@ pub(crate) fn pathfind<N: Neighborhood>(
         return None;
     };
 
-    let end_time = std::time::Instant::now();
-    let elapsed = end_time.duration_since(start_time);
-    info!("Filtered nodes in start chunk: {}, goal chunk: {} in {:?}", 
-        start_nodes.len(), goal_nodes.len(), elapsed);
-
     let mut path: Vec<UVec3> = Vec::new();
     let mut cost = 0;
-
-    // Here is the problem. If the starting position can't get to the start node then this whole thing fails. Need to fix it.
-
-    let start_time = std::time::Instant::now();
 
     for start_node in start_nodes {
         for goal_node in goal_nodes.clone() {
@@ -137,13 +145,6 @@ pub(crate) fn pathfind<N: Neighborhood>(
             );
 
             if let Some(node_path) = node_path {
-                let end_time = std::time::Instant::now();
-                let elapsed = end_time.duration_since(start_time);
-                info!("Found path from start node {:?} to goal node {:?} in {:?}",
-                    start_node.pos, goal_node.pos, elapsed);
-
-
-                let start_time = std::time::Instant::now();
                 // Add start_path to the node_path
                 let start_path = start_paths
                     .get(&(start_node.pos - start_chunk.min()))
@@ -175,21 +176,21 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 if path.is_empty() {
                     return None;
                 }
-                let end_time = std::time::Instant::now();
-                let elapsed = end_time.duration_since(start_time);
-                info!("Built full path from graph cache in {:?}", elapsed);
 
-                let start_time = std::time::Instant::now();
+                if !refined {
+                    // If we're not refining, return the path as is
+                    let mut path = Path::new(path, cost);
+                    path.graph_path = node_path.path;
+                    return Some(path);
+                }
+
                 let mut refined_path = optimize_path(
                     &grid.neighborhood,
                     &grid.view(),
                     &Path::from_slice(&path, cost),
                 );
-                let end_time = std::time::Instant::now();
-                let elapsed = end_time.duration_since(start_time);
-                info!("Optimized path in {:?}", elapsed);
 
-                // remove the start point from the refined path
+                // remove the starting position from the refined path
                 refined_path.path.pop_front();
 
                 // add the graph path to the refined path
@@ -217,9 +218,9 @@ pub(crate) fn pathfind<N: Neighborhood>(
 /// * `ordinal` - If true, use ordinal movement. If false, use cardinal movement.
 ///
 #[inline(always)]
-pub fn optimize_path<N: Neighborhood>(
+pub(crate) fn optimize_path<N: Neighborhood>(
     neighborhood: &N,
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     path: &Path,
 ) -> Path {
     if path.is_empty() {
@@ -293,9 +294,10 @@ pub fn optimize_path<N: Neighborhood>(
     }
 
     // Recompute cost of new path
-    let cost = refined_path.iter().map(|pos| {
-        grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost
-    }).sum();
+    let cost = refined_path
+        .iter()
+        .map(|pos| grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost)
+        .sum();
 
     let mut path = Path::new(refined_path.clone(), cost);
     path.graph_path = refined_path.into();
@@ -375,6 +377,7 @@ pub(crate) fn reroute_path<N: Neighborhood>(
     start: UVec3,
     goal: UVec3,
     blocking: &HashMap<UVec3, Entity>,
+    refined: bool,
 ) -> Option<Path> {
     // When the starting chunks entrances are all blocked, this will try astar path to the NEXT chunk in the graph path
     // recursively until it can find a path out.
@@ -418,7 +421,7 @@ pub(crate) fn reroute_path<N: Neighborhood>(
 
         let last_pos = *new_path.path().last().unwrap();
 
-        let hpa = pathfind(grid, last_pos, goal, blocking, false);
+        let hpa = pathfind(grid, last_pos, goal, blocking, false, refined);
 
         if let Some(hpa) = hpa {
             for pos in hpa.path() {

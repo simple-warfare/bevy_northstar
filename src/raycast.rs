@@ -2,36 +2,36 @@
 use bevy::math::UVec3;
 use ndarray::ArrayView3;
 
-use crate::point::Point;
+use crate::nav::NavCell;
 
-/// Check if there is a line of sight between two points in the grid allowing diagonal movement.
+/// Check if there is a line of sight between two positions in the grid allowing diagonal movement.
 ///
 /// Arguments:
-/// * `grid` - A 3D array view of [`Point`]s representing the grid.
+/// * `grid` - A 3D array view of [`NavCell`]s representing the grid.
 /// * `start` - The starting [`UVec3`].
-/// * `end` - The ending point [`UVec3`].
+/// * `end` - The ending position [`UVec3`].
 ///
 /// Returns:
-/// * `true` if there is a line of sight between the two points.
-/// * `false` if there is an obstacle between the two points.
+/// * `true` if there is a line of sight between the two positions.
+/// * `false` if there is an obstacle between the two positions.
 ///
 /// # Example
 ///
 /// ```
 /// use bevy::math::UVec3;
 /// use ndarray::Array3;
-/// use bevy_northstar::grid::Point;
+/// use bevy_northstar::nav::{Nav, NavCell};
 /// use bevy_northstar::raycast::line_of_sight;
 ///
-/// let mut grid = Array3::from_elem((10, 10, 1), Point::new(1, false));
-/// grid[[5, 5, 0]] = Point::new(1, true);
+/// let mut grid = Array3::from_elem((10, 10, 1), NavCell::new(Nav::Passable(1)));
+/// grid[[5, 5, 0]] = NavCell::new(Nav::Impassable);
 ///
 /// let start = UVec3::new(0, 0, 0);
 /// let end = UVec3::new(9, 9, 0);
 ///
 /// assert_eq!(line_of_sight(&grid.view(), start, end), false);
 /// ```
-pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
+pub fn line_of_sight(grid: &ArrayView3<NavCell>, start: UVec3, end: UVec3) -> bool {
     // TDDO: This can be optimized using integers
     let start = start.as_vec3();
     let end = end.as_vec3();
@@ -58,7 +58,7 @@ pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool
         let grid_y = y.round() as usize;
         let grid_z = z.round() as usize;
 
-        if grid[[grid_x, grid_y, grid_z]].solid {
+        if grid[[grid_x, grid_y, grid_z]].is_impassable() {
             return false; // Hit an obstacle
         }
 
@@ -71,7 +71,7 @@ pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool
 }
 
 pub(crate) fn path_line_trace(
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goal: UVec3,
 ) -> Option<Vec<UVec3>> {
@@ -92,13 +92,15 @@ pub(crate) fn path_line_trace(
 
         let dir_to_goal = (goal.as_ivec3() - current.as_ivec3()).as_vec3().normalize();
 
-        let point = &grid[[current.x as usize, current.y as usize, current.z as usize]];
+        let cell = &grid[[current.x as usize, current.y as usize, current.z as usize]];
 
         let mut best = None;
         let mut best_dot = -f32::INFINITY;
 
-        for neighbor in point.neighbor_iter(current) {
-            let to_neighbor = (neighbor.as_ivec3() - current.as_ivec3()).as_vec3().normalize();
+        for neighbor in cell.neighbor_iter(current) {
+            let to_neighbor = (neighbor.as_ivec3() - current.as_ivec3())
+                .as_vec3()
+                .normalize();
             let dot = dir_to_goal.dot(to_neighbor);
             if dot > best_dot {
                 best = Some(neighbor);
@@ -120,7 +122,7 @@ pub(crate) fn path_line_trace(
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid
 pub(crate) fn bresenham_path_filtered(
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goal: UVec3,
     ordinal: bool,
@@ -158,7 +160,7 @@ pub(crate) fn bresenham_path_filtered(
 
         path.push(current);
 
-        if grid[[current.x as usize, current.y as usize, current.z as usize]].solid {
+        if grid[[current.x as usize, current.y as usize, current.z as usize]].is_impassable() {
             return None;
         }
 
@@ -174,13 +176,11 @@ pub(crate) fn bresenham_path_filtered(
                 err_xy -= dy;
                 err_xz -= dz;
 
-                let next = UVec3::new(
-                    current.x.saturating_add_signed(sx),
-                    current.y,
-                    current.z,
-                );
+                let next = UVec3::new(current.x.saturating_add_signed(sx), current.y, current.z);
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.x = next.x;
@@ -193,13 +193,11 @@ pub(crate) fn bresenham_path_filtered(
                 // Move along y-axis
                 err_xy += dx;
 
-                let next = UVec3::new(
-                    current.x,
-                    current.y.saturating_add_signed(sy),
-                    current.z,
-                );
+                let next = UVec3::new(current.x, current.y.saturating_add_signed(sy), current.z);
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.y = next.y;
@@ -211,14 +209,12 @@ pub(crate) fn bresenham_path_filtered(
             if depth > 1 && double_err_xz < dx {
                 // Move along z-axis (if applicable)
                 err_xz += dx;
-            
-                let next = UVec3::new(
-                    current.x,
-                    current.y,
-                    current.z.saturating_add_signed(sz),
-                );
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let next = UVec3::new(current.x, current.y, current.z.saturating_add_signed(sz));
+
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.z = next.z;
@@ -239,13 +235,11 @@ pub(crate) fn bresenham_path_filtered(
                 err_xy -= dy;
                 err_xz -= dz;
 
-                let next = UVec3::new(
-                    current.x.saturating_add_signed(sx),
-                    current.y,
-                    current.z,
-                );
+                let next = UVec3::new(current.x.saturating_add_signed(sx), current.y, current.z);
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.x = next.x;
@@ -257,13 +251,11 @@ pub(crate) fn bresenham_path_filtered(
                 // Move along y-axis
                 err_xy += dx;
 
-                let next = UVec3::new(
-                    current.x,
-                    current.y.saturating_add_signed(sy),
-                    current.z,
-                );
+                let next = UVec3::new(current.x, current.y.saturating_add_signed(sy), current.z);
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.y = next.y;
@@ -275,13 +267,11 @@ pub(crate) fn bresenham_path_filtered(
                 // Move along z-axis (if applicable)
                 err_xz += dx;
 
-                let next = UVec3::new(
-                    current.x,
-                    current.y,
-                    current.z.saturating_add_signed(sz),
-                );
+                let next = UVec3::new(current.x, current.y, current.z.saturating_add_signed(sz));
 
-                let mut neighbors = grid[[current.x as usize, current.y as usize, current.z as usize]].neighbor_iter(current);
+                let mut neighbors = grid
+                    [[current.x as usize, current.y as usize, current.z as usize]]
+                .neighbor_iter(current);
 
                 if neighbors.any(|n| n == next) {
                     current.z = next.z;
@@ -305,7 +295,7 @@ pub(crate) fn bresenham_path_filtered(
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid
 pub(crate) fn bresenham_path(
-    grid: &ArrayView3<Point>,
+    grid: &ArrayView3<NavCell>,
     start: UVec3,
     goal: UVec3,
     ordinal: bool,
@@ -343,7 +333,7 @@ pub(crate) fn bresenham_path(
 
         path.push(current);
 
-        if grid[[current.x as usize, current.y as usize, current.z as usize]].solid {
+        if grid[[current.x as usize, current.y as usize, current.z as usize]].is_impassable() {
             return None;
         }
 
@@ -387,7 +377,7 @@ pub(crate) fn bresenham_path(
                 if depth > 1 && delta.x != 0 && delta.z != 0 {
                     let step_x = UVec3::new((current.x as i32 + delta.x) as u32, current.y, current.z);
                     let step_z = UVec3::new(current.x, current.y, (current.z as i32 + delta.z) as u32);
-                    
+
                     if grid[[step_x.x as usize, step_x.y as usize, step_x.z as usize]].solid ||
                        grid[[step_z.x as usize, step_z.y as usize, step_z.z as usize]].solid {
                         return None;
@@ -410,7 +400,7 @@ pub(crate) fn bresenham_path(
                     let xy = UVec3::new((current.x as i32 + delta.x) as u32, (current.y as i32 + delta.y) as u32, current.z);
                     let xz = UVec3::new((current.x as i32 + delta.x) as u32, current.y, (current.z as i32 + delta.z) as u32);
                     let yz = UVec3::new(current.x, (current.y as i32 + delta.y) as u32, (current.z as i32 + delta.z) as u32);
-                    
+
                     if grid[[xy.x as usize, xy.y as usize, xy.z as usize]].solid ||
                        grid[[xz.x as usize, xz.y as usize, xz.z as usize]].solid ||
                        grid[[yz.x as usize, yz.y as usize, yz.z as usize]].solid {
@@ -456,66 +446,6 @@ pub(crate) fn bresenham_path(
     Some(path)
 }
 
-/*pub fn line_of_sight(grid: &ArrayView3<Point>, start: UVec3, end: UVec3) -> bool {
-    let (x0, y0, z0) = (start.x as isize, start.y as isize, start.z as isize);
-    let (x1, y1, z1) = (end.x as isize, end.y as isize, end.z as isize);
-
-    let dx = (x1 - x0).abs();
-    let dy = (y1 - y0).abs();
-    let dz = (z1 - z0).abs();
-
-    let sx = if x0 < x1 { 1 } else { -1 };
-    let sy = if y0 < y1 { 1 } else { -1 };
-    let sz = if z0 < z1 { 1 } else { -1 };
-
-    let mut x = x0;
-    let mut y = y0;
-    let mut z = z0;
-
-    let mut err_xy = dx - dy;
-    let mut err_xz = dx - dz;
-
-    loop {
-        // Check bounds and wall
-        if x < 0
-            || y < 0
-            || z < 0
-            || x >= grid.shape()[0] as isize
-            || y >= grid.shape()[1] as isize
-            || z >= grid.shape()[2] as isize
-        {
-            return false; // Out of bounds
-        }
-        if grid[(x as usize, y as usize, z as usize)].wall {
-            return false; // Wall blocks line of sight
-        }
-        if x == x1 && y == y1 && z == z1 {
-            return true; // Reached the target
-        }
-
-        // Update error terms and move in the direction of the ray
-        let e2_xy = 2 * err_xy;
-        let e2_xz = 2 * err_xz;
-
-        if e2_xy > -dy {
-            err_xy -= dy;
-            x += sx;
-        }
-        if e2_xy < dx {
-            err_xy += dx;
-            y += sy;
-        }
-        if e2_xz > -dz {
-            err_xz -= dz;
-            x += sx;
-        }
-        if e2_xz < dx {
-            err_xz += dx;
-            z += sz;
-        }
-    }
-}*/
-
 #[cfg(test)]
 mod tests {
     use bevy::math::UVec3;
@@ -523,9 +453,10 @@ mod tests {
 
     use crate::{
         grid::{
-            ChunkSettings, CollisionSettings, CostSettings, GridInternalSettings, GridSettings,
+            ChunkSettings, CollisionSettings, GridInternalSettings, GridSettings, NavSettings,
             NeighborhoodSettings,
         },
+        nav::NavCell,
         prelude::*,
         raycast::{bresenham_path, line_of_sight},
     };
@@ -537,9 +468,9 @@ mod tests {
             depth: 1,
             diagonal_connections: false,
         },
-        cost_settings: CostSettings {
-            default_cost: 1,
-            default_solid: false,
+        cost_settings: NavSettings {
+            default_movement_cost: 1,
+            default_impassible: false,
         },
         collision_settings: CollisionSettings {
             enabled: true,
@@ -552,8 +483,8 @@ mod tests {
 
     #[test]
     fn test_line_of_sight() {
-        let mut grid = Array3::from_elem((10, 10, 1), Point::new(1, false));
-        grid[[5, 5, 0]] = Point::new(1, true);
+        let mut grid = Array3::from_elem((10, 10, 1), NavCell::new(Nav::Passable(1)));
+        grid[[5, 5, 0]] = NavCell::new(Nav::Impassable);
 
         let start = UVec3::new(0, 0, 0);
         let end = UVec3::new(9, 9, 0);
@@ -593,7 +524,7 @@ mod tests {
 
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
 
-        grid.set_point(UVec3::new(5, 5, 0), Point::new(1, true));
+        grid.set_nav(UVec3::new(5, 5, 0), Nav::Impassable);
         grid.build();
 
         let path = bresenham_path(

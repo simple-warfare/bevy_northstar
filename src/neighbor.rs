@@ -3,7 +3,7 @@ use bevy::math::{IVec3, UVec3};
 use ndarray::ArrayView3;
 use std::{fmt::Debug, sync::Arc};
 
-use crate::{grid::NeighborhoodSettings, point::Point};
+use crate::{filter::NeighborFilter, grid::NeighborhoodSettings, nav::NavCell};
 
 /// The `Neighborhood` trait defines the interface for different neighborhood types.
 /// You can implement this trait to define custom neighborhoods and hueristics.
@@ -15,9 +15,9 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
     /// If you implement this method, you will need to ensure that the returned bit mask is in the correct order.
     /// The default implementation should handle almost all directional movement cases, you can likely use `filter_neighbors` instead
     /// if you want customer neighbor logic. It should handle most custom cases.
-    /// 
+    ///
     /// You will also need to ensure the neighbors are within the bounds of the grid.
-    /// 
+    ///
     /// Bit Mask Format:
     /// Index: Offset (x, y, z)
     /// ------ -----------------
@@ -47,7 +47,7 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
     ///  23     (-1,  1,  1) ← North-East-Up
     ///  24     ( 0,  1,  1) ← South-Up
     ///  25     ( 1,  1,  1) ← South-East-Up
-    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3) -> u32 {
+    fn neighbors(&self, grid: &ArrayView3<NavCell>, pos: UVec3) -> u32 {
         let shape = grid.shape();
         let mut bits = 0;
         let origin = pos.as_ivec3();
@@ -66,7 +66,7 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
                 let nz = neighbor.z as usize;
 
                 if nx < shape[0] && ny < shape[1] && nz < shape[2] {
-                    if !grid[[nx, ny, nz]].solid {
+                    if !grid[[nx, ny, nz]].is_impassable() {
                         bits |= 1 << i;
                     }
                 }
@@ -104,11 +104,6 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
     }
 }
 
-/// `NeighborFilter` is used to add custom filtering logic to the neighbors returned by the `Neighborhood::neighbors` method.
-pub trait NeighborFilter {
-    fn filter(&self, pos: UVec3, mask: u32, grid: &ArrayView3<Point>) -> u32;
-}
-
 /// Use `CardinalNeighborhood` for standard 2D pathfinding with no diagonal movement.
 #[derive(Clone, Default)]
 pub struct CardinalNeighborhood {
@@ -127,36 +122,6 @@ impl Neighborhood for CardinalNeighborhood {
         ];
         &DIRECTIONS
     }
-
-    /*#[inline(always)]
-    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3) -> u32 {
-        let x = pos.x as i32;
-        let y = pos.y as i32;
-        let z = pos.z as i32;
-
-        let mut bits: u32 = 0;
-
-        for (i, &(dx, dy, dz)) in self.directions().iter().enumerate() {
-            let nx = x + dx;
-            let ny = y + dy;
-            let nz = z + dz;
-
-            if nx >= 0 && ny >= 0 && nz >= 0 {
-                let nx = nx as usize;
-                let ny = ny as usize;
-                let nz = nz as usize;
-
-                let shape = grid.shape();
-                if nx < shape[0] && ny < shape[1] && nz < shape[2] {
-                    if !grid[[nx, ny, nz]].solid {
-                        bits |= 1 << i;
-                    }
-                }
-            }
-        }
-
-        bits
-    }*/
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
@@ -188,36 +153,6 @@ impl Neighborhood for CardinalNeighborhood3d {
         ];
         &DIRECTIONS
     }
-
-    /*#[inline(always)]
-    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3) -> u32 {
-        let x = pos.x as i32;
-        let y = pos.y as i32;
-        let z = pos.z as i32;
-
-        let mut bits: u32 = 0;
-
-        for (i, &(dx, dy, dz)) in self.directions().iter().enumerate() {
-            let nx = x + dx;
-            let ny = y + dy;
-            let nz = z + dz;
-
-            if nx >= 0 && ny >= 0 && nz >= 0 {
-                let nx = nx as usize;
-                let ny = ny as usize;
-                let nz = nz as usize;
-
-                let shape = grid.shape();
-                if nx < shape[0] && ny < shape[1] && nz < shape[2] {
-                    if !grid[[nx, ny, nz]].solid {
-                        bits |= 1 << i;
-                    }
-                }
-            }
-        }
-
-        bits
-    }*/
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
@@ -256,69 +191,6 @@ impl Neighborhood for OrdinalNeighborhood {
         ];
         &DIRECTIONS
     }
-
-    /*#[inline(always)]
-    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3) -> u32 {
-        let x = pos.x as i32;
-        let y = pos.y as i32;
-        let z = pos.z as usize;
-
-        let shape = grid.shape();
-        let (max_x, max_y) = (shape[0] as u32, shape[1] as u32);
-
-        let mut mask: u32 = 0;
-        let mut cardinal_mask: u32 = 0;
-
-        for (i, &(dx, dy, _)) in self.directions().iter().enumerate() {
-            let nx = x + dx;
-            let ny = y + dy;
-
-            if nx < 0 || ny < 0 {
-                continue;
-            }
-
-            let nxu = nx as u32;
-            let nyu = ny as u32;
-
-            if nxu >= max_x || nyu >= max_y {
-                continue;
-            }
-
-            let solid = grid[[nxu as usize, nyu as usize, z]].solid;
-            if solid {
-                continue;
-            }
-
-            let bit = 1u32 << i;
-            if i < 4 {
-                cardinal_mask |= bit;
-            } else {
-                mask |= bit;
-            }
-        }
-
-        // Filter diagonals using cardinal_mask
-        if !self.allow_corner_clipping {
-            // Diagonal 0 (NE): needs N (bit 0) and E (bit 1)
-            if (cardinal_mask & (1 << 0 | 1 << 1)) != (1 << 0 | 1 << 1) {
-                mask &= !(1 << 4);
-            }
-            // Diagonal 1 (SE): S and E
-            if (cardinal_mask & (1 << 2 | 1 << 1)) != (1 << 2 | 1 << 1) {
-                mask &= !(1 << 5);
-            }
-            // Diagonal 2 (SW): S and W
-            if (cardinal_mask & (1 << 2 | 1 << 3)) != (1 << 2 | 1 << 3) {
-                mask &= !(1 << 6);
-            }
-            // Diagonal 3 (NW): N and W
-            if (cardinal_mask & (1 << 0 | 1 << 3)) != (1 << 0 | 1 << 3) {
-                mask &= !(1 << 7);
-            }
-        }
-
-        cardinal_mask | mask
-    }*/
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
@@ -390,88 +262,7 @@ impl Neighborhood for OrdinalNeighborhood3d {
             (1, 1, 1),    // South-East-Up
         ];
         &DIRECTIONS
-
-        /*vec![
-            (-1, -1, -1),
-            (-1, -1, 0),
-            (-1, -1, 1),
-
-            (-1, 0, -1),
-            (-1, 0, 0),
-            (-1, 0, 1),
-
-            (-1, 1, -1),
-            (-1, 1, 0),
-            (-1, 1, 1),
-
-            (0, -1, -1),
-            (0, -1, 0),
-            (0, -1, 1),
-
-            (0, 0, -1),
-            (0, 0, 1),
-            (0, 1, -1),
-
-            (0, 1, 0),
-            (0, 1, 1),
-            (1, -1, -1),
-
-            (1, -1, 0),
-            (1, -1, 1),
-            (1, 0, -1),
-
-            (1, 0, 0),
-            (1, 0, 1),
-            (1, 1, -1),
-
-            (1, 1, 0),
-            (1, 1, 1),
-        ]*/
     }
-
-    /*#[inline(always)]
-    fn neighbors(&self, grid: &ArrayView3<Point>, pos: UVec3) -> u32 {
-        let x = pos.x as i32;
-        let y = pos.y as i32;
-        let z = pos.z as i32;
-
-        let shape = grid.shape();
-        let max_x = shape[0] as u32;
-        let max_y = shape[1] as u32;
-        let max_z = shape[2] as u32;
-
-        let mut bits: u32 = 0;
-        let mut index = 0;
-
-        for dz in -1..=1 {
-            for dy in -1..=1 {
-                for dx in -1..=1 {
-                    if dx == 0 && dy == 0 && dz == 0 {
-                        continue; // Skip center
-                    }
-
-                    let nx = x + dx;
-                    let ny = y + dy;
-                    let nz = z + dz;
-
-                    if nx >= 0 && ny >= 0 && nz >= 0 {
-                        let (nx, ny, nz) = (nx as u32, ny as u32, nz as u32);
-
-                        if nx < max_x && ny < max_y && nz < max_z {
-                            let neighbor = &grid[[nx as usize, ny as usize, nz as usize]];
-                            if !neighbor.solid {
-                                bits |= 1 << index;
-                            }
-                        }
-                    }
-
-                    index += 1;
-                }
-            }
-        }
-
-        bits
-    }*/
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
@@ -513,49 +304,6 @@ pub(crate) const ORDINAL_3D_OFFSETS: [IVec3; 26] = {
     offsets
 };
 
-#[derive(Copy, Clone, Debug, Default)]
-pub struct NoCornerClippingFilter;
-
-impl NeighborFilter for NoCornerClippingFilter {
-    fn filter(&self, pos: UVec3, mut mask: u32, grid: &ArrayView3<Point>) -> u32 {
-        let shape = grid.shape();
-        let origin = pos.as_ivec3();
-
-        for (i, &offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
-            // Skip if this neighbor isn't currently included
-            if (mask >> i) & 1 == 0 {
-                continue;
-            }
-
-            // Only apply filter for 2D diagonal moves
-            if offset.z == 0 && offset.x != 0 && offset.y != 0 {
-                // Get the adjacent cardinals
-                let cardinal1 = origin + IVec3::new(offset.x, 0, 0);
-                let cardinal2 = origin + IVec3::new(0, offset.y, 0);
-
-                let solid_cardinals = [cardinal1, cardinal2]
-                    .iter()
-                    .filter(|&&c| {
-                        c.cmplt(IVec3::ZERO).any()
-                            || c.x >= shape[0] as i32
-                            || c.y >= shape[1] as i32
-                            || c.z >= shape[2] as i32
-                            || grid[[c.x as usize, c.y as usize, c.z as usize]].solid
-                    })
-                    .count();
-
-                // Disallow diagonal if both cardinals are solid
-                if solid_cardinals == 2 {
-                    mask &= !(1 << i); // Clear the bit
-                }
-            }
-        }
-
-        mask
-    }
-}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,8 +313,8 @@ mod tests {
         let neighborhood = CardinalNeighborhood {
             filters: Vec::new(),
         };
-        let points: [Point; 9] = std::array::from_fn(|_| Point::default());
-        let grid = ArrayView3::from_shape((3, 3, 1), &points).unwrap();
+        let cells: [NavCell; 9] = std::array::from_fn(|_| NavCell::default());
+        let grid = ArrayView3::from_shape((3, 3, 1), &cells).unwrap();
 
         let neighbors = neighborhood.neighbors(&grid, UVec3::new(1, 1, 0));
 
@@ -576,8 +324,8 @@ mod tests {
     #[test]
     fn test_cardinal_neighbors_3d() {
         let neighborhood = CardinalNeighborhood3d;
-        let points: [Point; 27] = std::array::from_fn(|_| Point::default());
-        let grid = ArrayView3::from_shape((3, 3, 3), &points).unwrap();
+        let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
+        let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
         let neighbors = neighborhood.neighbors(&grid, UVec3::new(1, 1, 1));
 
@@ -587,8 +335,8 @@ mod tests {
     #[test]
     fn test_ordinal_neighbors_3d() {
         let neighborhood = OrdinalNeighborhood3d;
-        let points: [Point; 27] = std::array::from_fn(|_| Point::default());
-        let grid = ArrayView3::from_shape((3, 3, 3), &points).unwrap();
+        let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
+        let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
         let neighbors_mask = neighborhood.neighbors(&grid, UVec3::new(1, 1, 1));
 
@@ -628,8 +376,8 @@ mod tests {
     #[test]
     fn test_ordinal_neighors_at_0() {
         let neighborhood = OrdinalNeighborhood3d;
-        let points: [Point; 27] = std::array::from_fn(|_| Point::default());
-        let grid = ArrayView3::from_shape((3, 3, 3), &points).unwrap();
+        let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
+        let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
         let neighbors = neighborhood.neighbors(&grid, UVec3::new(0, 0, 0));
 
@@ -683,9 +431,9 @@ mod tests {
     #[test]
     fn test_ordinal_neighbors_no_depth() {
         let neighborhood = OrdinalNeighborhood3d;
-        let points: [Point; 9] = std::array::from_fn(|_| Point::default());
+        let cells: [NavCell; 9] = std::array::from_fn(|_| NavCell::default());
 
-        let grid = ArrayView3::from_shape((3, 3, 1), &points).unwrap();
+        let grid = ArrayView3::from_shape((3, 3, 1), &cells).unwrap();
 
         let neighbors = neighborhood.neighbors(&grid, UVec3::new(1, 1, 0));
 
