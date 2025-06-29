@@ -31,7 +31,7 @@ fn startup(mut commands: Commands) {
             DebugGridBuilder::new(12, 12) // 12x12 tile pixel size.
                 .enable_cells() // Draws every cell in the grid. We're using it to draw "tiles".
                 .build(),
-             // Offset the debug grid to the center of the world.
+            // Offset the debug grid to the center of the world.
             DebugOffset(Vec3::new(-384.0, -288.0, 0.0)),
         ));
 
@@ -41,7 +41,7 @@ fn startup(mut commands: Commands) {
         4.0 * 12.0 - 288.0,
         0.0,
     ));
-    
+
     // Let's spawn a player entity that will be used to demonstrate pathfinding.
     commands.spawn((
         Name::new("Player"),
@@ -60,7 +60,7 @@ fn build_grid(grid: Single<&mut CardinalGrid>) {
         for y in 0..grid.height() {
             // Create some staggered impassable cells.
             if x % 2 == 0 && y % 3 == 0 {
-                grid.set_nav(UVec3::new(x as u32, y as u32, 0), Nav::Impassable);
+                grid.set_nav(UVec3::new(x, y, 0), Nav::Impassable);
             }
         }
     }
@@ -74,15 +74,12 @@ fn build_grid(grid: Single<&mut CardinalGrid>) {
     info!("Grid built successfully!");
 }
 
-fn draw_player(
-    query: Query<&Transform, With<AgentPos>>,
-    mut gizmos: Gizmos,
-) {
+fn draw_player(query: Query<&Transform, With<AgentPos>>, mut gizmos: Gizmos) {
     for transform in &query {
         // Draw a simple circle at the agent's position.
         gizmos.circle_2d(
             Vec2::new(transform.translation.x, transform.translation.y),
-            4.0, // Radius of the circle.
+            4.0,                             // Radius of the circle.
             Color::srgba_u8(0, 255, 0, 255), // Color of the circle.
         );
     }

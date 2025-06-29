@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 /// The path struct and component containing the path result of a pathfinding operation.
 ///
 /// This is returned by pathfinding functions.
-/// If using [`NorthstarPlugin`] this is inserted as a component on an entity after the plugin
+/// If using [`crate::plugin::NorthstarPlugin`] this is inserted as a component on an entity after the plugin
 /// systems have pathfound to the goal position.
 ///
 #[derive(Debug, Clone, Component)]

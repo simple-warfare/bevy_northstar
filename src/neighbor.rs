@@ -65,10 +65,12 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
                 let ny = neighbor.y as usize;
                 let nz = neighbor.z as usize;
 
-                if nx < shape[0] && ny < shape[1] && nz < shape[2] {
-                    if !grid[[nx, ny, nz]].is_impassable() {
-                        bits |= 1 << i;
-                    }
+                if nx < shape[0]
+                    && ny < shape[1]
+                    && nz < shape[2]
+                    && !grid[[nx, ny, nz]].is_impassable()
+                {
+                    bits |= 1 << i;
                 }
             } else {
                 panic!("Direction {:?} not in ORDINAL_3D_OFFSETS!", offset);
@@ -374,7 +376,8 @@ mod tests {
     }
 
     #[test]
-    fn test_ordinal_neighors_at_0() {
+    #[allow(clippy::identity_op)]
+    fn test_ordinal_neighbors_at_0() {
         let neighborhood = OrdinalNeighborhood3d;
         let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
         let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
@@ -429,6 +432,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::identity_op)]
     fn test_ordinal_neighbors_no_depth() {
         let neighborhood = OrdinalNeighborhood3d;
         let cells: [NavCell; 9] = std::array::from_fn(|_| NavCell::default());

@@ -43,12 +43,11 @@ pub(crate) fn pathfind_astar<N: Neighborhood>(
     if goal.x as usize >= shape[0] || goal.y as usize >= shape[1] || goal.z as usize >= shape[2] {
         //log::error!("Goal is out of bounds: {:?}", goal);
         return None;
-    }    
+    }
 
     // If the goal is impassibe and partial isn't set, return none
     if grid[[start.x as usize, start.y as usize, start.z as usize]].is_impassable()
-        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].is_impassable() 
-        && !partial
+        || grid[[goal.x as usize, goal.y as usize, goal.z as usize]].is_impassable() && !partial
     {
         return None;
     }
@@ -90,7 +89,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
     // If the goal is impassable and partial isn't set, return none
     if grid.view()[[start.x as usize, start.y as usize, start.z as usize]].is_impassable()
         || grid.view()[[goal.x as usize, goal.y as usize, goal.z as usize]].is_impassable()
-        && !partial
+            && !partial
     {
         return None;
     }
@@ -119,17 +118,10 @@ pub(crate) fn pathfind<N: Neighborhood>(
     }
 
     // Find viable nodes in the start and goal chunks
-    let Some((start_nodes, start_paths)) =
-        filter_and_rank_chunk_nodes(grid, start_chunk, start, goal, blocking)
-    else {
-        return None;
-    };
-
-    let Some((goal_nodes, goal_paths)) =
-        filter_and_rank_chunk_nodes(grid, goal_chunk, goal, start, blocking)
-    else {
-        return None;
-    };
+    let (start_nodes, start_paths) =
+        filter_and_rank_chunk_nodes(grid, start_chunk, start, goal, blocking)?;
+    let (goal_nodes, goal_paths) =
+        filter_and_rank_chunk_nodes(grid, goal_chunk, goal, start, blocking)?;
 
     let mut path: Vec<UVec3> = Vec::new();
     let mut cost = 0;
@@ -269,18 +261,16 @@ pub(crate) fn optimize_path<N: Neighborhood>(
                     shortcut_taken = true;
                     break;
                 }
-            } else {
-                if let Some(shortcut) = bresenham_path_filtered(
-                    grid,
-                    path.path[i],
-                    path.path[farthest],
-                    neighborhood.is_ordinal(),
-                ) {
-                    refined_path.extend(shortcut.into_iter().skip(1));
-                    i = farthest;
-                    shortcut_taken = true;
-                    break;
-                }
+            } else if let Some(shortcut) = bresenham_path_filtered(
+                grid,
+                path.path[i],
+                path.path[farthest],
+                neighborhood.is_ordinal(),
+            ) {
+                refined_path.extend(shortcut.into_iter().skip(1));
+                i = farthest;
+                shortcut_taken = true;
+                break;
             }
         }
 

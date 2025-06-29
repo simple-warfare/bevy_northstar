@@ -9,7 +9,17 @@ use bevy::{
 use ndarray::{s, Array3, ArrayView2, ArrayView3};
 
 use crate::{
-    chunk::Chunk, dijkstra::*, dir::*, filter::NeighborFilter, graph::Graph, nav::{Nav, NavCell}, neighbor::Neighborhood, node::Node, path::Path, pathfind::{pathfind, pathfind_astar, reroute_path}, position_in_cubic_window, MovementCost
+    chunk::Chunk,
+    dijkstra::*,
+    dir::*,
+    filter::NeighborFilter,
+    graph::Graph,
+    nav::{Nav, NavCell},
+    neighbor::Neighborhood,
+    node::Node,
+    path::Path,
+    pathfind::{pathfind, pathfind_astar, reroute_path},
+    position_in_cubic_window, MovementCost,
 };
 
 /// Settings for how the grid is divided into chunks.
@@ -74,17 +84,9 @@ impl Default for CollisionSettings {
 }
 
 /// Settings for filtering determined neighbors.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct NeighborhoodSettings {
     pub filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
-}
-
-impl Default for NeighborhoodSettings {
-    fn default() -> Self {
-        NeighborhoodSettings {
-            filters: Vec::new(),
-        }
-    }
 }
 
 /// Holder for internal crate settings.
@@ -209,7 +211,7 @@ impl GridSettingsBuilder {
         self
     }
 
-    /// Enables collision avoidance in the [`NorthstarPlugin`] pathfinding systems.
+    /// Enables collision avoidance in the [`crate::plugin::NorthstarPlugin`] pathfinding systems.
     pub fn enable_collision(mut self) -> Self {
         self.collision_settings.enabled = true;
         self
@@ -247,7 +249,7 @@ impl GridSettingsBuilder {
     }
 
     /// Pass in [`NavSettings`] to configure the grid's default cell navigation data.
-    /// You can also use the individual methods [`GridSettingsBuilder::default_cost()`] and [`GridSettingsBuilder::default_impassable()`].
+    /// You can also use the individual methods [`GridSettingsBuilder::default_movement_cost()`] and [`GridSettingsBuilder::default_impassable()`].
     pub fn nav_settings(mut self, nav_settings: NavSettings) -> Self {
         self = self.default_movement_cost(nav_settings.default_movement_cost);
 
@@ -984,8 +986,8 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// * `start` - The start position of the path.
     /// * `goal` - The goal position of the path.
     /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
-    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
-    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    ///   Pass `&HasMap::new()` if you're not concerned with collision. If using [`crate::plugin::NorthstarPlugin`] you can pass it the [`crate::plugin::BlockingMap`] resource.
+    ///   If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
     /// * `refined` - Whether to use refined pathing or not.
     ///
     /// # Returns
@@ -1008,8 +1010,8 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// * `start` - The starting position in the grid.
     /// * `goal` - The goal position in the grid.
     /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
-    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
-    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    ///   Pass `&HasMap::new()` if you're not concerned with collision. If using [`crate::plugin::NorthstarPlugin`] you can pass it the [`crate::plugin::BlockingMap`] resource.
+    ///   If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
     /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
     /// # Returns
     /// A [`Path`] if successful, or `None` if no viable path could be found.
@@ -1032,8 +1034,8 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// * `start` - The starting position in the grid.
     /// * `goal` - The goal position in the grid.
     /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
-    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
-    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    ///   Pass `&HasMap::new()` if you're not concerned with collision. If using [`crate::plugin::NorthstarPlugin`] you can pass it the [`crate::plugin::BlockingMap`] resource.
+    ///   If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
     /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
     /// # Returns
     /// A [`Path`] if successful, or `None` if no viable path could be found.
@@ -1056,8 +1058,8 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// * `start` - The starting position in the grid.
     /// * `goal` - The goal position in the grid.
     /// * `blocking` - A map of positions to entities that are blocking the path. Pass `&HashMap::new()` if you're not concerned with collision.
-    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
-    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    ///   Pass `&HasMap::new()` if you're not concerned with collision. If using [`crate::plugin::NorthstarPlugin`] you can pass it the [`crate::plugin::BlockingMap`] resource.
+    ///   If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
     /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
     /// # Returns
     /// A [`Path`] if successful, or `None` if no viable path could be found.
@@ -1082,14 +1084,14 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Generate an A* path within a cubic radius around the `start` position.
     /// This can be used to limit an A* search to a confined search area.
     /// You'll want to ensure your radius at least covers the distance to the goal.
-    /// 
+    ///
     /// # Arguments
     /// * `start` - The starting position in the grid.
     /// * `goal` - The goal position in the grid.
     /// * `radius` - The radius around the start position to search for a path.
     /// * `blocking` - A map of positions to entities that are blocking the path.
-    /// Pass `&HasMap::new()` if you're not concerned with collision. If using [`NorthstarPlugin`] you can pass it the [`BlockingMap`] resource.
-    /// If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
+    ///   Pass `&HasMap::new()` if you're not concerned with collision. If using [`crate::plugin::NorthstarPlugin`] you can pass it the [`crate::plugin::BlockingMap`] resource.
+    ///   If not, build a [`HashMap<UVec3, Entity>`] with the positions of entities that should be blocking paths.
     /// * `partial` - Whether to allow partial paths (i.e., if the goal is unreachable, return the closest reachable point).
     /// # Returns
     /// A [`Path`] if successful, or `None` if no viable path could be found.
@@ -1103,7 +1105,9 @@ impl<N: Neighborhood + Default> Grid<N> {
         partial: bool,
     ) -> Option<Path> {
         let min = start.as_ivec3().saturating_sub(IVec3::splat(radius as i32));
-        let max = start.as_ivec3().saturating_add(IVec3::splat(radius as i32) + IVec3::ONE);
+        let max = start
+            .as_ivec3()
+            .saturating_add(IVec3::splat(radius as i32) + IVec3::ONE);
 
         let grid_shape = self.grid.shape();
         let min = min.max(IVec3::ZERO);

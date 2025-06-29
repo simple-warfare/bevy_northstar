@@ -33,9 +33,9 @@ pub mod prelude {
     pub use crate::nav::Nav;
     pub use crate::neighbor::*;
     pub use crate::path::Path;
-    pub use crate::plugin::{NorthstarPlugin, NorthstarPluginSettings};
     pub use crate::plugin::PathingSet;
     pub use crate::plugin::Stats;
+    pub use crate::plugin::{NorthstarPlugin, NorthstarPluginSettings};
     pub use crate::MovementCost;
     pub use crate::{CardinalGrid, CardinalGrid3d, OrdinalGrid, OrdinalGrid3d};
 }
@@ -105,9 +105,10 @@ pub(crate) fn in_bounds_3d(pos: UVec3, min: UVec3, max: UVec3) -> bool {
 fn position_in_cubic_window(pos: UVec3, center: IVec3, radius: i32, grid_shape: IVec3) -> bool {
     let min = (center - IVec3::splat(radius)).clamp(IVec3::ZERO, grid_shape - 1);
     let max = (center + IVec3::splat(radius)).clamp(IVec3::ZERO, grid_shape - 1);
-    
+
     // Check if position is in the cubic window
-    pos.as_ivec3().cmplt(min).any() || pos.as_ivec3().cmple(max).any()
+    pos.as_ivec3().cmplt(min).any()
+        || pos.as_ivec3().cmple(max).any()
         || pos.as_ivec3().cmpeq(center).all()
         || pos.as_ivec3().cmpeq(min).all()
         || pos.as_ivec3().cmpeq(max).all()

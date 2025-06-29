@@ -56,8 +56,8 @@ fn main() {
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
         // The default settings are 16 agents per frame for pathfinding and 32 for collision avoidance.
         .insert_resource(NorthstarPluginSettings {
-            max_pathfinding_agents_per_frame: 32,
-            max_collision_avoidance_agents_per_frame: 32,
+            max_pathfinding_agents_per_frame: 48,
+            max_collision_avoidance_agents_per_frame: 64,
         })
         .run();
 }
@@ -222,10 +222,10 @@ fn spawn_minions(
                 ..Default::default()
             })
             .insert(Name::new(format!("{:?}", color)))
-            /* .insert(DebugPath {
+            .insert(DebugPath {
                 color,
                 draw_unrefined: false,
-            })*/
+            })
             .insert(AgentOfGrid(grid_entity))
             .insert(Blocking)
             .insert(Transform::from_translation(transform))

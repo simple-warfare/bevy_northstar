@@ -225,11 +225,9 @@ fn pathfind<N: Neighborhood + 'static>(
 
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
+#[allow(clippy::too_many_arguments)]
 fn next_position<N: Neighborhood + 'static>(
-    mut query: Query<
-        (Entity, &mut Path, &AgentPos, &Pathfind),
-        WithoutPathingFailures,
-    >,
+    mut query: Query<(Entity, &mut Path, &AgentPos, &Pathfind), WithoutPathingFailures>,
     grid: Single<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
@@ -386,19 +384,13 @@ fn avoidance<N: Neighborhood + 'static>(
 
         // If we have an avoidance goal, astar path to that
         if let Some(avoidance_goal) = avoidance_goal {
-
             // Calculate a good radius from the current position to the avoidance goal
-            let radius = position.as_vec3().distance(avoidance_goal.as_vec3()) as u32 + 
-                grid.avoidance_distance() as u32;
+            let radius = position.as_vec3().distance(avoidance_goal.as_vec3()) as u32
+                + grid.avoidance_distance();
 
             //let new_path = grid.pathfind_astar(position, *avoidance_goal, blocking, false);
-            let new_path = grid.pathfind_astar_radius(
-                position,
-                *avoidance_goal,
-                radius,
-                blocking,
-                false,
-            );
+            let new_path =
+                grid.pathfind_astar_radius(position, *avoidance_goal, radius, blocking, false);
 
             // Replace the first few positions of path until the avoidance goal
             if let Some(new_path) = new_path {
@@ -468,9 +460,9 @@ fn reroute_path<N: Neighborhood + 'static>(
 ) {
     let grid = grid.into_inner();
 
-    let mut count = 0;
-
-    for (entity, position, pathfind, path) in query.iter_mut() {
+    for (count, (entity, position, pathfind, path)) in query.iter_mut().enumerate() {
+        // TODO: This doesn't really tie in with the main pathfinding agent counts. This will stil help limit how many are rereouting for now.
+        // There's no point bridging it for the moment since this really needs to be reworked into an async system to really prevent stutters.
         if count >= settings.max_pathfinding_agents_per_frame {
             return;
         }
@@ -509,8 +501,6 @@ fn reroute_path<N: Neighborhood + 'static>(
             #[cfg(feature = "stats")]
             stats.add_collision(elapsed, 0.0);
         }
-
-        count += 1;
     }
 }
 

@@ -47,13 +47,13 @@ rand = "0.9.1"
 name = "benches"
 harness = false
 
-[[examples]]
+[[example]]
 name = "demo"
 required-features = ["stats"]
 
-[[examples]]
+[[example]]
 name = "collision_testing"
 required-features = ["stats"]
 
-[[examples]]
+[[example]]
 name = "basic"

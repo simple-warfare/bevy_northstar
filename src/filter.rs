@@ -74,7 +74,7 @@ impl NeighborFilter for NoCornerCutting {
 
         // Build a lookup set of which cardinals are solid
         let mut solid_dirs = HashSet::new();
-        for (_, offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
+        for offset in ORDINAL_3D_OFFSETS.iter() {
             let neighbor = origin + *offset;
             if neighbor.cmplt(IVec3::ZERO).any()
                 || neighbor.x >= shape[0] as i32

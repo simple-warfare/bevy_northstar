@@ -1,9 +1,9 @@
 ## v0.3.0
 **BREAKING CHANGES**
 `GridSettings` has been replaced with a builder `GridSettingsBuilder`.
-`Pathfind` component has been reworked with a fluent/chain constructor pattern.
-`Point` has been removed and fully reworked as `Nav` and `NavCell`.
 `GridPos` component has been renamed to `AgentPos`.
+`Point` has been removed and fully reworked as `Nav` and `NavCell`.
+`Pathfind` component has been reworked with a fluent/chain constructor pattern.
 `DebugMap` component has been renamed to `DebugGrid` and reworked.
 `DebugMapType` has been renamed to `DebugTilemapType`.
 `DebugPath` has removed tile_width, tile_height, and map_type.

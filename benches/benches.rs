@@ -10,6 +10,10 @@ use bevy_northstar::{
 
 mod profiler;
 
+// TODO: These benches aren't great for for comparing HPA* performance to A* performance since A* is able to just drive straight to it's goals.
+// They're sufficient for testing that changes don't add significant overhead, but it'd be nice to get more realistic benchmarks.
+// We could probably use the demo map for this.
+
 fn benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("pathfinding");
 

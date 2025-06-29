@@ -162,6 +162,17 @@ pub struct DebugPath {
     pub draw_unrefined: bool,
 }
 
+impl DebugPath {
+    /// Creates a new [`DebugPath`] component with the specified color.
+    /// The default color is red.
+    pub fn new(color: Color) -> Self {
+        DebugPath {
+            color,
+            draw_unrefined: false,
+        }
+    }
+}
+
 impl Default for DebugPath {
     fn default() -> Self {
         DebugPath {
@@ -257,7 +268,7 @@ impl DebugGrid {
 pub struct DebugGridBuilder {
     tile_width: u32,
     tile_height: u32,
-    map_type: DebugTilemapType,
+    tilemap_type: DebugTilemapType,
     draw_chunks: bool,
     draw_cells: bool,
     draw_entrances: bool,
@@ -270,12 +281,25 @@ impl DebugGridBuilder {
         Self {
             tile_width,
             tile_height,
-            map_type: DebugTilemapType::Square,
+            tilemap_type: DebugTilemapType::Square,
             draw_chunks: false,
             draw_cells: false,
             draw_entrances: false,
             draw_cached_paths: false,
         }
+    }
+
+    /// Sets the draw type of the tilemap.
+    /// This is used to determine how the grid is visualized (e.g., square or isometric).
+    /// Use the shorthand methods [`DebugGridBuilder::isometric()`] to set this instead.
+    pub fn tilemap_type(mut self, tilemap_type: DebugTilemapType) -> Self {
+        self.tilemap_type = tilemap_type;
+        self
+    }
+
+    pub fn isometric(mut self) -> Self {
+        self.tilemap_type = DebugTilemapType::Isometric;
+        self
     }
 
     /// Enables drawing the outline of chunks the grid is divided into.
@@ -311,7 +335,7 @@ impl DebugGridBuilder {
         DebugGrid {
             tile_width: self.tile_width,
             tile_height: self.tile_height,
-            map_type: self.map_type,
+            map_type: self.tilemap_type,
             draw_chunks: self.draw_chunks,
             draw_cells: self.draw_cells,
             draw_entrances: self.draw_entrances,
