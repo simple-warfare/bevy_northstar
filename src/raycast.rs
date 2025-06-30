@@ -17,7 +17,7 @@ use crate::nav::NavCell;
 ///
 /// # Example
 ///
-/// ```
+/// ```rust,no_run
 /// use bevy::math::UVec3;
 /// use ndarray::Array3;
 /// use bevy_northstar::nav::{Nav, NavCell};

@@ -307,7 +307,7 @@ impl Default for GridInternalSettings {
 /// `Grid` is the main `Resource` struct for the crate.
 ///
 /// # Example
-/// ```
+/// ```rust,no_run
 /// use bevy::prelude::*;
 /// use bevy_northstar::prelude::*;
 ///

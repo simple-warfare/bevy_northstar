@@ -52,7 +52,7 @@ impl Pathfind {
     /// If you want to use a different pathfinding mode, use the [`Pathfind::mode()`] method.
     /// If you want to allow partial paths, use the [`Pathfind::partial()`] method.
     /// # Example
-    /// ```
+    /// ```rust,no_run
     /// use bevy::math::UVec3;
     /// use bevy_northstar::prelude::*;
     ///
