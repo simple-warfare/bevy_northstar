@@ -6,7 +6,7 @@ use bevy_northstar::prelude::*;
 
 #[derive(Resource, Debug, Default)]
 pub struct Config {
-    pub use_astar: bool,
+    pub mode: PathfindMode,
     pub paused: bool,
 }
 
@@ -200,7 +200,7 @@ pub fn under_cursor(
     )>,
     troubleshooting: Query<(
         Entity,
-        &GridPos,
+        &AgentPos,
         Option<&Pathfind>,
         Option<&Path>,
         Option<&NextPos>,
@@ -229,24 +229,24 @@ pub fn under_cursor(
             );
 
             // Prepend text with GridPos
-            text.push_str(&format!("Tile: {:?} ", tile_pos));
+            text.push_str(&format!("Tile: {tile_pos:?} "));
 
             for (entity, transform) in minions.iter() {
                 let distance = (transform.translation() - cursor_position.extend(0.0)).length();
 
                 if distance < 8.0 {
-                    text.push_str(&format!("{:?} ", entity));
+                    text.push_str(&format!("{entity:?} "));
 
                     // print all the data in the troubleshooting query
                     for (entity_other, position, pathfind, path, next, avoidance_failed) in
                         troubleshooting.iter()
                     {
                         if entity == entity_other {
-                            text.push_str(&format!("{:?} ", position));
-                            text.push_str(&format!("{:?} ", pathfind));
-                            text.push_str(&format!("{:?} ", path));
-                            text.push_str(&format!("{:?} ", next));
-                            text.push_str(&format!("{:?} ", avoidance_failed));
+                            text.push_str(&format!("{position:?} "));
+                            text.push_str(&format!("{pathfind:?} "));
+                            text.push_str(&format!("{path:?} "));
+                            text.push_str(&format!("{next:?} "));
+                            text.push_str(&format!("{avoidance_failed:?} "));
                         }
                     }
                 }
@@ -288,10 +288,10 @@ pub fn update_pathfind_type_text(
     mut query: Query<&mut TextSpan, With<PathfindTypeText>>,
 ) {
     for mut span in &mut query {
-        **span = if config.use_astar {
-            "A*".to_string()
-        } else {
-            "HPA*".to_string()
+        **span = match config.mode {
+            PathfindMode::AStar => "A*".to_string(),
+            PathfindMode::Coarse => "HPA* Coarse".to_string(),
+            PathfindMode::Refined => "HPA*".to_string(),
         };
     }
 }
@@ -343,7 +343,13 @@ pub fn input<N: Neighborhood + 'static>(
         }
 
         if keyboard_input.just_pressed(KeyCode::KeyP) {
-            config.use_astar = !config.use_astar;
+            // Cycle through pathfinding modes
+            config.mode = match config.mode {
+                PathfindMode::AStar => PathfindMode::Refined,
+                PathfindMode::Coarse => PathfindMode::AStar,
+                PathfindMode::Refined => PathfindMode::Coarse,
+            };
+
             stats.reset_pathfinding();
             stats.reset_collision();
 
