@@ -146,3 +146,21 @@ You can use the set to ensure that your systems dealing with pathfinding and ent
 ```rust,no_run
 app.add_systems(Update, move_pathfinders.before(PathingSet));
 ```
+
+## Staggering Pathfinding in the `NorthstarPlugin` Systems
+
+The systems provided by `NorthstarPlugin` are designed to stagger how many agents can process pathfinding and collision avoidance in a single frame.
+
+By default, both limits are set to `128` agents per frame. This may be too high if you actually have that many active agents. On the other hand, setting it too low can cause noticeable delays, with agents appearing to sit idle. You’ll want to tune these values based on your game’s performance needs.
+
+Currently the `reroute_path` system that attempts to reroute agents that have a failed path that local collision avoidance is unable to resolve can still cause stutter. In a future update it will be moved into any async call.
+
+To override the default settings, insert the `NorthstarPluginSettings` resource into your app:
+
+```rust,no-run
+App::new()
+    .insert_resource(NorthstarPluginSettings {
+        max_pathfinding_agents_per_frame: 16,
+        max_collision_avoidance_agents_per_frame: 16,
+    })
+```

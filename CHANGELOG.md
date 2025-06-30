@@ -11,7 +11,7 @@
 See the migration guide for more details on how to migrate.
 
 ### Features
-* Updated the basic example to demonstrate a very minimal visual example of using the crate.
+* Updated the basic example to demonstrate more realistic usage of the crate.
 * `NorthstarPluginSettings` resource added to configure the maximum agents per frame that can be handled by the pathfinding systems.
 * `NorthstarPlugin` systems will now stagger agents defined by `NorthstarPluginSettings`.
 * Added `NeighborFilter` trait. You can now apply filters to the neighbors to prevent things like corner clipping. Filters can be chained.

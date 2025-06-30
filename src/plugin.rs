@@ -19,8 +19,8 @@ pub struct NorthstarPluginSettings {
 impl Default for NorthstarPluginSettings {
     fn default() -> Self {
         Self {
-            max_pathfinding_agents_per_frame: 16,
-            max_collision_avoidance_agents_per_frame: 32,
+            max_pathfinding_agents_per_frame: 128,
+            max_collision_avoidance_agents_per_frame: 128,
         }
     }
 }
