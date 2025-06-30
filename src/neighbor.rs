@@ -73,7 +73,7 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
                     bits |= 1 << i;
                 }
             } else {
-                panic!("Direction {:?} not in ORDINAL_3D_OFFSETS!", offset);
+                panic!("Direction {offset:?} not in ORDINAL_3D_OFFSETS!");
             }
         }
 
