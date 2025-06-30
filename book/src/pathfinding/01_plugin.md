@@ -46,10 +46,10 @@ The pathfinding algorith enum. Current options are:
 ##### This is the default algorithm
 Gets a high level path to the goal at the chunk level. If a path is found, the path is iterated over with a line of sight / tracing algorithm to attempt to create the shortest path to the goal. The refinement is more expensive than the HPA* algorithm but not nearly as expensive as using A*.
 
-#### `Pathfinding::Coarse`
+#### `PathfindMode::Coarse`
 Returns the unrefined HPA* path pulled from the cached entrance paths. This will not return the path with the least steps to the goal but is extremely fast to generate. It's great for natural paths NPCs might use to move around a building for example.
 
-#### `Pathfinding::AStar`
+#### `PathfindMode::AStar`
 This is standard A* pathfinding. It's very expensive for long distance goals on large maps but is still useful for very short distances or when you're concerned with the absolute shortest path. A good use would be movement where action points are subtracted based on number of moves.
 
 ## NextPos
