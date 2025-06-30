@@ -1,7 +1,7 @@
 //! This module defines the `Neighborhood` trait and its implementations for different types of neighborhoods.
 use bevy::math::{IVec3, UVec3};
 use ndarray::ArrayView3;
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use crate::{filter::NeighborFilter, grid::NeighborhoodSettings, nav::NavCell};
 
@@ -109,7 +109,7 @@ pub trait Neighborhood: Clone + Default + Sync + Send {
 /// Use `CardinalNeighborhood` for standard 2D pathfinding with no diagonal movement.
 #[derive(Clone, Default)]
 pub struct CardinalNeighborhood {
-    filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
+    pub(crate) filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
 }
 
 impl Neighborhood for CardinalNeighborhood {
@@ -130,6 +130,19 @@ impl Neighborhood for CardinalNeighborhood {
         ((pos.x as i32 - target.x as i32).abs() + (pos.y as i32 - target.y as i32).abs()) as u32
     }
 
+    fn from_settings(settings: &NeighborhoodSettings) -> Self {
+        Self {
+            filters: settings.filters.clone(),
+        }
+    }
+
+    #[inline(always)]
+    fn settings(&self) -> Option<NeighborhoodSettings> {
+        Some(NeighborhoodSettings {
+            filters: self.filters.clone(),
+        })
+    }
+
     fn filters(&self) -> &[Arc<dyn NeighborFilter + Send + Sync + 'static>] {
         &self.filters
     }
@@ -137,8 +150,10 @@ impl Neighborhood for CardinalNeighborhood {
 
 /// Use `CardinalNeighborhood3d` for 3D pathfinding with no diagonal movement.
 /// This neighborhood allows movement in the cardinal directions in 3D space only in UP or DOWN directions.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CardinalNeighborhood3d;
+#[derive(Clone, Default)]
+pub struct CardinalNeighborhood3d {
+    pub(crate) filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
+}
 
 impl Neighborhood for CardinalNeighborhood3d {
     #[inline(always)]
@@ -164,8 +179,21 @@ impl Neighborhood for CardinalNeighborhood3d {
         dx + dy + dz
     }
 
+    fn from_settings(settings: &NeighborhoodSettings) -> Self {
+        Self {
+            filters: settings.filters.clone(),
+        }
+    }
+
+    #[inline(always)]
+    fn settings(&self) -> Option<NeighborhoodSettings> {
+        Some(NeighborhoodSettings {
+            filters: self.filters.clone(),
+        })
+    }
+
     fn filters(&self) -> &[Arc<dyn NeighborFilter + Send + Sync + 'static>] {
-        &[]
+        &self.filters
     }
 }
 
@@ -173,7 +201,7 @@ impl Neighborhood for CardinalNeighborhood3d {
 /// This neighborhood allows movement in all 8 directions.
 #[derive(Clone, Default)]
 pub struct OrdinalNeighborhood {
-    filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
+    pub(crate) filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
 }
 
 impl Neighborhood for OrdinalNeighborhood {
@@ -227,8 +255,10 @@ impl Neighborhood for OrdinalNeighborhood {
 /// Use `OrdinalNeighborhood3d` for 3D pathfinding with diagonal movement.
 /// This neighborhood allows movement in all 26 directions.
 /// It's the 3D version of `OrdinalNeighborhood`.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct OrdinalNeighborhood3d;
+#[derive(Clone, Default)]
+pub struct OrdinalNeighborhood3d {
+    pub(crate) filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
+}
 
 impl Neighborhood for OrdinalNeighborhood3d {
     #[inline(always)]
@@ -279,8 +309,21 @@ impl Neighborhood for OrdinalNeighborhood3d {
         true
     }
 
+    fn from_settings(settings: &NeighborhoodSettings) -> Self {
+        Self {
+            filters: settings.filters.clone(),
+        }
+    }
+
+    #[inline(always)]
+    fn settings(&self) -> Option<NeighborhoodSettings> {
+        Some(NeighborhoodSettings {
+            filters: self.filters.clone(),
+        })
+    }
+
     fn filters(&self) -> &[Arc<dyn NeighborFilter + Send + Sync + 'static>] {
-        &[]
+        &self.filters
     }
 }
 
@@ -325,7 +368,9 @@ mod tests {
 
     #[test]
     fn test_cardinal_neighbors_3d() {
-        let neighborhood = CardinalNeighborhood3d;
+        let neighborhood = CardinalNeighborhood3d {
+            filters: Vec::new(),
+        };
         let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
         let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
@@ -336,7 +381,9 @@ mod tests {
 
     #[test]
     fn test_ordinal_neighbors_3d() {
-        let neighborhood = OrdinalNeighborhood3d;
+        let neighborhood = OrdinalNeighborhood3d {
+            filters: Vec::new(),
+        };
         let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
         let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
@@ -376,7 +423,9 @@ mod tests {
     #[test]
     #[allow(clippy::identity_op)]
     fn test_ordinal_neighbors_at_0() {
-        let neighborhood = OrdinalNeighborhood3d;
+        let neighborhood = OrdinalNeighborhood3d {
+            filters: Vec::new(),
+        };
         let cells: [NavCell; 27] = std::array::from_fn(|_| NavCell::default());
         let grid = ArrayView3::from_shape((3, 3, 3), &cells).unwrap();
 
@@ -428,7 +477,9 @@ mod tests {
     #[test]
     #[allow(clippy::identity_op)]
     fn test_ordinal_neighbors_no_depth() {
-        let neighborhood = OrdinalNeighborhood3d;
+        let neighborhood = OrdinalNeighborhood3d {
+            filters: Vec::new(),
+        };
         let cells: [NavCell; 9] = std::array::from_fn(|_| NavCell::default());
 
         let grid = ArrayView3::from_shape((3, 3, 1), &cells).unwrap();
@@ -482,7 +533,9 @@ mod tests {
 
     #[test]
     fn test_ordinal_heuristic() {
-        let neighborhood = OrdinalNeighborhood3d;
+        let neighborhood = OrdinalNeighborhood3d {
+            filters: Vec::new(),
+        };
 
         assert_eq!(
             neighborhood.heuristic(UVec3::new(0, 0, 0), UVec3::new(1, 1, 1)),

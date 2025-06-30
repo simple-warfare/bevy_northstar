@@ -277,7 +277,9 @@ mod tests {
         let goal = UVec3::new(2, 2, 2);
 
         let path = astar_grid(
-            &OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
             &grid.view(),
             start,
             goal,
@@ -309,7 +311,9 @@ mod tests {
         let goal = UVec3::new(2, 2, 2);
 
         let path = astar_grid(
-            &OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
             &grid.view(),
             start,
             goal,
@@ -340,7 +344,9 @@ mod tests {
         let goal = UVec3::new(7, 7, 7);
 
         let path = astar_grid(
-            &OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
             &grid.view(),
             start,
             goal,
@@ -399,7 +405,9 @@ mod tests {
         );
 
         let path = astar_graph(
-            &OrdinalNeighborhood3d,
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
             &graph,
             UVec3::new(0, 0, 0),
             UVec3::new(2, 2, 2),
