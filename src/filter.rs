@@ -122,6 +122,28 @@ impl NeighborFilter for NoCornerCutting {
     }
 }
 
+/// Disallow diagonal movement involving Z.
+/// Keeps cardinal movement and 2D (XY) diagonals.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct DisallowDiagonalZMovement;
+
+impl NeighborFilter for DisallowDiagonalZMovement {
+    fn filter(&self, _pos: UVec3, mut mask: u32, _grid: &ArrayView3<NavCell>) -> u32 {
+        for (i, &offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
+            if (mask >> i) & 1 == 0 {
+                continue;
+            }
+
+            // Disallow any movement involving Z and also X or Y
+            if offset.z != 0 && (offset.x != 0 || offset.y != 0) {
+                mask &= !(1 << i);
+            }
+        }
+
+        mask
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::nav::Nav;
@@ -187,6 +209,30 @@ mod tests {
                 );
             } else {
                 assert!(allowed, "Direction {:?} should remain allowed", offset);
+            }
+        }
+    }
+
+    #[test]
+    fn test_disallow_diagonal_z_movement() {
+        let grid = Array3::<NavCell>::default((3, 3, 3));
+        let pos = UVec3::new(1, 1, 1);
+        let mask = u32::MAX;
+
+        let filter = DisallowDiagonalZMovement;
+        let filtered_mask = filter.filter(pos, mask, &grid.view());
+
+        for (i, offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
+            let bit_set = (filtered_mask >> i) & 1 == 1;
+
+            if offset.z != 0 && (offset.x != 0 || offset.y != 0) {
+                assert!(
+                    !bit_set,
+                    "Direction {:?} should be disallowed (Z-diagonal)",
+                    offset
+                );
+            } else {
+                assert!(bit_set, "Direction {:?} should remain allowed", offset);
             }
         }
     }
