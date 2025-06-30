@@ -57,7 +57,7 @@ jobs:
         uses: Leafwing-Studios/cargo-cache@v2
 
       - name: Run clippy lints
-        run: cargo clippy --workspace --all-targets --all-features --  --no-deps --deny warnings
+        run: cargo clippy --workspace --all-targets --all-features -- --deny warnings
 
   # Check formatting.
   format:

@@ -175,8 +175,7 @@ mod tests {
                 assert_eq!(
                     (filtered_mask >> i) & 1,
                     1,
-                    "Direction {:?} should remain allowed",
-                    offset
+                    "Direction {offset:?} should remain allowed"
                 );
             }
         }
@@ -204,11 +203,10 @@ mod tests {
             if should_be_disallowed {
                 assert!(
                     !allowed,
-                    "Direction {:?} should be disallowed due to blocked EAST",
-                    offset
+                    "Direction {offset:?} should be disallowed due to blocked EAST"
                 );
             } else {
-                assert!(allowed, "Direction {:?} should remain allowed", offset);
+                assert!(allowed, "Direction {offset:?} should remain allowed");
             }
         }
     }
@@ -228,11 +226,10 @@ mod tests {
             if offset.z != 0 && (offset.x != 0 || offset.y != 0) {
                 assert!(
                     !bit_set,
-                    "Direction {:?} should be disallowed (Z-diagonal)",
-                    offset
+                    "Direction {offset:?} should be disallowed (Z-diagonal)"
                 );
             } else {
-                assert!(bit_set, "Direction {:?} should remain allowed", offset);
+                assert!(bit_set, "Direction {offset:?} should remain allowed");
             }
         }
     }

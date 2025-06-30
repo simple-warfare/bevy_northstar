@@ -363,9 +363,7 @@ mod tests {
                     // The bit at position `bit` should be set
                     assert!(
                         (neighbors_mask & (1 << bit)) != 0,
-                        "Neighbor bit {} (pos {:?}) not set",
-                        bit,
-                        pos
+                        "Neighbor bit {bit} (pos {pos:?}) not set"
                     );
                     expected_positions.push(pos);
                     bit += 1;
@@ -413,16 +411,12 @@ mod tests {
                     if expected_positions.contains(&pos) {
                         assert!(
                             (neighbors & (1 << bit)) != 0,
-                            "Expected neighbor at {:?} (bit {}) to be set",
-                            pos,
-                            bit
+                            "Expected neighbor at {pos:?} (bit {bit}) to be set"
                         );
                     } else {
                         assert!(
                             (neighbors & (1 << bit)) == 0,
-                            "Unexpected neighbor at {:?} (bit {}) set",
-                            pos,
-                            bit
+                            "Unexpected neighbor at {pos:?} (bit {bit}) set"
                         );
                     }
                     bit += 1;
@@ -470,16 +464,12 @@ mod tests {
                     if expected_positions.contains(&pos) {
                         assert!(
                             (neighbors & (1 << bit)) != 0,
-                            "Expected neighbor at {:?} (bit {}) to be set",
-                            pos,
-                            bit
+                            "Expected neighbor at {pos:?} (bit {bit}) to be set"
                         );
                     } else {
                         assert!(
                             (neighbors & (1 << bit)) == 0,
-                            "Unexpected neighbor at {:?} (bit {}) set",
-                            pos,
-                            bit
+                            "Unexpected neighbor at {pos:?} (bit {bit}) set"
                         );
                     }
                     bit += 1;

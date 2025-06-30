@@ -229,24 +229,24 @@ pub fn under_cursor(
             );
 
             // Prepend text with GridPos
-            text.push_str(&format!("Tile: {:?} ", tile_pos));
+            text.push_str(&format!("Tile: {tile_pos:?} "));
 
             for (entity, transform) in minions.iter() {
                 let distance = (transform.translation() - cursor_position.extend(0.0)).length();
 
                 if distance < 8.0 {
-                    text.push_str(&format!("{:?} ", entity));
+                    text.push_str(&format!("{entity:?} "));
 
                     // print all the data in the troubleshooting query
                     for (entity_other, position, pathfind, path, next, avoidance_failed) in
                         troubleshooting.iter()
                     {
                         if entity == entity_other {
-                            text.push_str(&format!("{:?} ", position));
-                            text.push_str(&format!("{:?} ", pathfind));
-                            text.push_str(&format!("{:?} ", path));
-                            text.push_str(&format!("{:?} ", next));
-                            text.push_str(&format!("{:?} ", avoidance_failed));
+                            text.push_str(&format!("{position:?} "));
+                            text.push_str(&format!("{pathfind:?} "));
+                            text.push_str(&format!("{path:?} "));
+                            text.push_str(&format!("{next:?} "));
+                            text.push_str(&format!("{avoidance_failed:?} "));
                         }
                     }
                 }

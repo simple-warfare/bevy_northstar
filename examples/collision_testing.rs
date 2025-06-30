@@ -207,7 +207,7 @@ fn spawn_minions(
                 color,
                 ..Default::default()
             })
-            .insert(Name::new(format!("{:?}", color)))
+            .insert(Name::new(format!("{color:?}")))
             .insert(DebugPath {
                 color,
                 draw_unrefined: false,
