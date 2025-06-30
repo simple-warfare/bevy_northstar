@@ -1564,4 +1564,29 @@ mod tests {
         assert!(path.is_some());
         assert_eq!(path.unwrap().len(), 10);
     }
+
+    #[test]
+    pub fn test_is_path_viable() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        // Block off a section of the grid to make sure the path is not viable
+        for x in 0..12 {
+            grid.set_point(
+                UVec3::new(x, 5, 0),
+                Point::new(1, true), // Set as wall
+            );
+        }
+
+        grid.build();
+
+        let viable = grid.is_path_viable(UVec3::new(0, 0, 0), UVec3::new(10, 0, 0));
+        assert!(viable);
+
+        let not_viable = grid.is_path_viable(UVec3::new(0, 0, 0), UVec3::new(8, 8, 0));
+        assert!(!not_viable);
+
+        let out_of_bounds_not_viable =
+            grid.is_path_viable(UVec3::new(100, 100, 0), UVec3::new(200, 200, 0));
+        assert!(!out_of_bounds_not_viable);
+    }
 }
