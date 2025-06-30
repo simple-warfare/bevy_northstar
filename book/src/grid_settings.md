@@ -70,4 +70,4 @@ The collision avoidance system will look ahead in the path to see if any upcomin
 
 ### `add_neighbor_filter(filter)`
 
-Pass a `NeighborFilter` that will be applied to viable neighbors when they are precalculated. See [Neighbor Filters](./neighbor_filters.md).
+Pass a `NeighborFilter` that will be applied to viable neighbors when they are precalculated. See [Filters](./neighborhood/02_filters.md).
