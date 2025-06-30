@@ -34,11 +34,11 @@ fn main() {
         .add_plugins((TilemapPlugin, TiledMapPlugin::default()))
         // bevy_northstar plugins
         .add_plugins((
-            NorthstarPlugin::<CardinalNeighborhood>::default(),
-            NorthstarDebugPlugin::<CardinalNeighborhood>::default(),
+            NorthstarPlugin::<OrdinalNeighborhood>::default(),
+            NorthstarDebugPlugin::<OrdinalNeighborhood>::default(),
         ))
         // Add the SharedPlugin for unrelated pathfinding systems shared by the examples
-        .add_plugins(shared::SharedPlugin::<CardinalNeighborhood>::default())
+        .add_plugins(shared::SharedPlugin::<OrdinalNeighborhood>::default())
         // Observe the LayerCreated event to build the grid from the Tiled layer
         .add_observer(layer_created)
         // Startup and State Systems
@@ -127,7 +127,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
     map_asset: Res<Assets<TiledMap>>,
-    grid: Single<&mut Grid<CardinalNeighborhood>>,
+    grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut state: ResMut<NextState<shared::State>>,
 ) {
     let mut grid = grid.into_inner();
