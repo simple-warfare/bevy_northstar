@@ -8,7 +8,7 @@
 `DebugMapType` has been renamed to `DebugTilemapType`.
 `DebugPath` has removed tile_width, tile_height, and map_type.
 
-See the [migration guide](https://https://jtothethree.github.io/bevy_northstar/migrations/001_v0.3.0.html) for more details on how to migrate.
+See the [migration guide](https://jtothethree.github.io/bevy_northstar/migrations/001_v0.3.0.html) for more details on how to migrate.
 
 ### Features
 * Updated the basic example to demonstrate more realistic usage of the crate.

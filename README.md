@@ -23,7 +23,7 @@ The crate provides:
 ## Demo
 `cargo run --example demo --features stats --release`
 
-Press P to switch between HPA* and traditional A*
+Press P to switch between Refined HPA*, Coarse HPA*, and traditional A*
 Press C to disable/enable collision
 
 ![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
