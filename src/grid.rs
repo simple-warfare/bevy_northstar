@@ -2,6 +2,7 @@
 use std::sync::Arc;
 
 use bevy::{
+    log,
     math::{IVec3, UVec3},
     platform::collections::HashMap,
     prelude::{Component, Entity},
@@ -351,6 +352,8 @@ pub struct Grid<N: Neighborhood> {
     chunks: Array3<Chunk>,
 
     graph: Graph,
+
+    dirty: bool,
 }
 
 impl<N: Neighborhood + Default> Grid<N> {
@@ -406,6 +409,8 @@ impl<N: Neighborhood + Default> Grid<N> {
             chunks,
 
             graph: Graph::new(),
+
+            dirty: true,
         }
     }
 
@@ -432,23 +437,43 @@ impl<N: Neighborhood + Default> Grid<N> {
 
     /// Test if a grid cell is passable at a given [`bevy::math::UVec3`] position.
     pub fn is_passable(&self, pos: UVec3) -> bool {
+        if !self.in_bounds(pos) {
+            return false;
+        }
+
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].is_passable()
     }
 
     /// Test if a grid cell is a ramp at a given [`bevy::math::UVec3`] position.
     pub fn is_ramp(&self, pos: UVec3) -> bool {
+        if !self.in_bounds(pos) {
+            return false;
+        }
+
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].is_ramp()
     }
 
     /// Set the [`Nav`] settings at a given [`bevy::math::UVec3`] position in the grid.
     pub fn set_nav(&mut self, pos: UVec3, nav: Nav) {
+        if !self.in_bounds(pos) {
+            panic!("Attempted to set nav at out-of-bounds position");
+        }
+
+        if !self.dirty {
+            log::warn!("The Grid state is dirty, you either forgot to call `build()` on grid or you need to call `build()` after modifying the grid. In the future partial rebuilding will be supported.");
+        }
+
         let navcell = NavCell::new(nav);
         self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]] = navcell;
     }
 
     /// Gets the [`Nav`] settings at a given [`bevy::math::UVec3`] position in the grid.
-    pub fn nav(&self, pos: UVec3) -> Nav {
-        self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].nav()
+    pub fn nav(&self, pos: UVec3) -> Option<Nav> {
+        if self.in_bounds(pos) {
+            Some(self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].nav())
+        } else {
+            None
+        }
     }
 
     /// Gets the [`NavCell`] at a given [`bevy::math::UVec3`] position in the grid.
@@ -519,6 +544,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.build_nodes();
         self.connect_internal_chunk_nodes();
         self.connect_adjacent_chunk_nodes();
+        self.dirty = false;
     }
 
     pub(crate) fn precompute_neighbors(&mut self) {

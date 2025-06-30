@@ -1,6 +1,6 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, math::UVec3, platform::collections::HashMap};
+use bevy::{ecs::entity::Entity, log, math::UVec3, platform::collections::HashMap};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -40,8 +40,14 @@ pub(crate) fn pathfind_astar<N: Neighborhood>(
 ) -> Option<Path> {
     // Ensure the goal is within bounds of the grid
     let shape = grid.shape();
+    if start.x as usize >= shape[0] || start.y as usize >= shape[1] || start.z as usize >= shape[2]
+    {
+        log::warn!("Start is out of bounds: {:?}", start);
+        return None;
+    }
+
     if goal.x as usize >= shape[0] || goal.y as usize >= shape[1] || goal.z as usize >= shape[2] {
-        //log::error!("Goal is out of bounds: {:?}", goal);
+        log::warn!("Goal is out of bounds: {:?}", goal);
         return None;
     }
 
@@ -80,9 +86,14 @@ pub(crate) fn pathfind<N: Neighborhood>(
     partial: bool,
     refined: bool,
 ) -> Option<Path> {
+    if !grid.in_bounds(start) {
+        log::warn!("Start is out of bounds: {:?}", start);
+        return None;
+    }
+
     // Make sure the goal is in grid bounds
     if !grid.in_bounds(goal) {
-        //log::error!("Goal is out of bounds: {:?}", goal);
+        log::warn!("Goal is out of bounds: {:?}", goal);
         return None;
     }
 
@@ -372,6 +383,16 @@ pub(crate) fn reroute_path<N: Neighborhood>(
     // When the starting chunks entrances are all blocked, this will try astar path to the NEXT chunk in the graph path
     // recursively until it can find a path out.
     // If it can't find a path out, it will return None.
+
+    if !grid.in_bounds(start) {
+        log::warn!("Start is out of bounds: {:?}", start);
+        return None;
+    }
+
+    if !grid.in_bounds(goal) {
+        log::warn!("Goal is out of bounds: {:?}", goal);
+        return None;
+    }
 
     if path.graph_path.is_empty() {
         // Our only option here is to astar path to the goal

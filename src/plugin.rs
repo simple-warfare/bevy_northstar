@@ -504,7 +504,10 @@ fn reroute_path<N: Neighborhood + 'static>(
     }
 }
 
-fn update_blocking_map(mut blocking_set: ResMut<BlockingMap>, query: Query<(Entity, &AgentPos)>) {
+fn update_blocking_map(
+    mut blocking_set: ResMut<BlockingMap>,
+    query: Query<(Entity, &AgentPos), With<Blocking>>,
+) {
     blocking_set.0.clear();
 
     query.iter().for_each(|(entity, position)| {
