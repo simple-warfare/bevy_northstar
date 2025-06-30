@@ -8,25 +8,23 @@
 `DebugMapType` has been renamed to `DebugTilemapType`.
 `DebugPath` has removed tile_width, tile_height, and map_type.
 
-See the migration guide for more details on how to migrate.
+See the [migration guide](https://https://jtothethree.github.io/bevy_northstar/migrations/001_v0.3.0.html) for more details on how to migrate.
 
 ### Features
 * Updated the basic example to demonstrate more realistic usage of the crate.
-* `NorthstarPluginSettings` resource added to configure the maximum agents per frame that can be handled by the pathfinding systems.
-* `NorthstarPlugin` systems will now stagger agents defined by `NorthstarPluginSettings`.
-* Added `NeighborFilter` trait. You can now apply filters to the neighbors to prevent things like corner clipping. Filters can be chained.
-* Added `NoCornerClipping` neighbor filter to optionally prevent ordinal movement through wall corners.
-* Added `NoCornerCutting` neighbor filter to prevent all diagonal movement in the direction of an adjacent wall.
-* Neighbors are now precomputed as bitmasks and cached when `Grid::build()` is called. This is a slight performance boost in general but a large performance boost when filtering neighbors.
-* All pathfinding HPA*, A*, Djikstra uses the cached neighbors instead of calculating neighbors per neighbor call.
-* Added `PathfindMode::Coarse` which fetches a heirarchichal path without refining it with the line trace algorithm.
+* `NorthstarPlugin` systems now stagger agent processing based on the `NorthstarPluginSettings` configuration.
+* Added the `NorthstarPluginSettings` resource to configure how many agents can be processed per frame by the pathfinding systems.
+* Added the `NeighborFilter` trait. Filters can now be applied to neighbor generation—for example, to prevent corner clipping. Multiple filters can be chained.
+* Added `NoCornerClipping`, `NoCornerCutting` filters which customize diagonal movement around and/or through wall corners.
+* Neighbors are now precomputed as bitmasks and cached during `Grid::build()`. This provides a general performance boost and a significant improvement when using neighbor filters.
+* Added `PathfindMode::Coarse`, which returns a hierarchical path without refinement. Refinement is the step that optimizes a path for shortest distance
 * `AgentOfGrid` relationship has been created to relate an entity with a specific `Grid`. This will allow supporting multiple grids in the future.
 * HPA* path refinement has been optimized for performance.
-* Optimized collision `avoidance` system to confine collision to a local search area to prevent stutters from a full A* search.
+* Optimized the collision avoidance system by limiting checks to a localized search area, reducing stutters from full A* searches.
 
 ### Debug Features
-* `DebugPath` now uses the `AgentOfGrid` relationship and child relationships making it cleaner to instantiate.
-* `DebugGridBuilder` has been added to make creating the `DebugGrid` more ergonomic.
+* `DebugPath` now uses the `AgentOfGrid` relationship and child relationships making it cleaner to setup.
+* Added `DebugGridBuilder` to simplify the creation and configuration of `DebugGrid`.
 
 ## v0.2.1
 **Fixes**
