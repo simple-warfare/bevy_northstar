@@ -32,7 +32,7 @@ fn startup(mut commands: Commands) {
     let grid_settings = GridSettingsBuilder::new_2d(64, 48).chunk_size(16).build();
 
     // Spawn the grid used for pathfinding.
-    commands.spawn(Grid<CardinalNeighborhood>::new(&grid_settings));
+    commands.spawn(Grid::<CardinalNeighborhood>::new(&grid_settings));
 }
 
 fn build_grid(grid: Single<&mut Grid<CardinalNeighborhood>>) {
@@ -43,7 +43,7 @@ fn build_grid(grid: Single<&mut Grid<CardinalNeighborhood>>) {
 
     // The default settings set every position as passable but for demonstration let's set one
     // Nav::Passable takes a movement cost which determines how expensive it is to move to that position.
-    grid.set_nav(UVec3::new(4, 4, 0), Nav::Passable(1))
+    grid.set_nav(UVec3::new(4, 4, 0), Nav::Passable(1));
 
     info!("Building the grid...");
 
