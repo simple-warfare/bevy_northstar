@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_ecs_tilemap::prelude::*;
 use bevy_northstar::prelude::*;
 
 // Config used for the examples
@@ -39,7 +40,7 @@ impl<N: Neighborhood + 'static> Plugin for SharedPlugin<N> {
                 (
                     input::<N>,
                     tick.run_if(in_state(State::Playing)),
-                    entity_under_cursor,
+                    under_cursor,
                     update_stat_text.run_if(in_state(State::Playing)),
                     update_pathfind_type_text.run_if(in_state(State::Playing)),
                     update_collision_text::<N>.run_if(in_state(State::Playing)),
@@ -185,11 +186,18 @@ pub fn setup_hud(mut commands: Commands) {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn entity_under_cursor(
+pub fn under_cursor(
     mut query: Query<&mut TextSpan, With<EntityDebugText>>,
     windows: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
     minions: Query<(Entity, &GlobalTransform)>,
+    map_query: Single<(
+        &TilemapGridSize,
+        &TilemapSize,
+        &TilemapTileSize,
+        &TilemapType,
+        &TilemapAnchor,
+    )>,
     troubleshooting: Query<(
         Entity,
         &AgentPos,
@@ -201,6 +209,7 @@ pub fn entity_under_cursor(
 ) {
     let window = windows.into_inner();
     let (camera, camera_transform, _) = camera.into_inner();
+    let (grid_size, map_size, tile_size, tilemap_type, anchor) = map_query.into_inner();
 
     if let Some(cursor_position) = window
         .cursor_position()
@@ -208,6 +217,19 @@ pub fn entity_under_cursor(
     {
         for mut span in &mut query {
             let mut text = String::new();
+            let offset = Vec2::new(0.0, 0.0);
+
+            let tile_pos = TilePos::from_world_pos(
+                &(cursor_position + offset),
+                map_size,
+                grid_size,
+                tile_size,
+                tilemap_type,
+                anchor,
+            );
+
+            // Prepend text with GridPos
+            text.push_str(&format!("Tile: {:?} ", tile_pos));
 
             for (entity, transform) in minions.iter() {
                 let distance = (transform.translation() - cursor_position.extend(0.0)).length();
