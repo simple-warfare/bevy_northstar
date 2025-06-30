@@ -13,7 +13,7 @@ fn manual_pathfind(
     mut commands: Commands,
     player: Single<(Entity, &AgentPos, &MoveAction), With<Player>>,
     grid: Single<&CardinalGrid>,
-    // If using the plugin you can use the BlockingMap resource to for an auto-updated blocking list.
+    // If using the plugin you can use the BlockingMap resource for an auto-updated blocking list.
     blocking: Res<BlockingMap>,
 ) {
     let grid = grid.into_inner();

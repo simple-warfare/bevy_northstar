@@ -2,7 +2,7 @@
 
 `NeighborFilter`s can be applied during the stage when neighbors are calculated and cached. There are a few built-in ones but you can also implement the `NeighborFilter` trait yourself to create new ones.
 
-Filters can be chained and they will be applied in the order that they added to `GridSettingsBuilder`.
+Filters can be chained and they will be applied in the order that they are added to `GridSettingsBuilder`.
 
 ```rust,no_run
 let grid_settings = GridSettingsBuilder::new_3d(64, 64, 4)
@@ -33,7 +33,7 @@ Apply to `GridSettingsBuilder` with `.add_neighbor_filter(filter::NoCornerCuttin
 ## DisallowZDiagonalMovement
 
 The `OrdinalNeighborhood3d` neighborhood allows diagonal movement along the Z axis.
-If this isn't desired you can apply the `DisallowZDiagonalMovement` filter and it will limit diagonal movement to only cells on the same depth while still allowing Up and Down movement. This is a good filter "3d" isometric map movement.
+If this isn't desired you can apply the `DisallowZDiagonalMovement` filter and it will limit diagonal movement to only cells on the same depth while still allowing Up and Down movement. This is a good filter "3D" isometric map movement.
 
 # Implementing Your Own Filter
 

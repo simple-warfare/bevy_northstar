@@ -3,7 +3,7 @@ The `Path` component will be inserted to an entity when after a path is found. I
 
 You can use it draw paths in your game, for example when highlighting tiles for a path in a turn based game.
 
-There are a few noteable methods on `Path`.
+There are a few notable methods on `Path`.
 
 ### `path() -> &[UVec3]`
 

@@ -21,7 +21,7 @@ use bevy_northstar::prelude::*;
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        // Add the Northstar Plugin with a selected neighborhood to use the built in pathfinding systems
+        // Add the Northstar Plugin with a selected neighborhood to use the built-in pathfinding systems
         .add_plugins(NorthstarPlugin::<CardinalNeighborhood>::default())
         .add_systems(Startup, (startup, build_grid.after(startup)))
         .run();
@@ -109,7 +109,7 @@ fn move_player(
         // NextPos contains the next valid position in the path.
         // Here we update just the AgentPos to keep it aligned with the grid,
         // but for real usage you would also likely update the transform for world positioning.
-        agent_pos.0 = next_pos.0
+        agent_pos.0 = next_pos.0;
 
         // Remove the NextPos component and the pathfinding system will insert a new NextPos with the next position in the path.
         commands.entity(entity).remove::<NextPos>();

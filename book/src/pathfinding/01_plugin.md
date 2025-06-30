@@ -34,13 +34,13 @@ Pathfind has configuration options you can set by chaining.
 Use this to set the desired algorithm to find the goal. Ex: `Pathfind::new_2d(8, 8).mode(PathfindMode::AStar)`.
 See below for a list of `PathfindMode`s and their description.
 
-#### `partal()`
+#### `partial()`
 `Default: Not enabled`
 
 Apply `.partial()` to request an incomplete path if the goal is not reachable. Ex: `Pathfind::new_2d(4, 4).mode(PathfindMode::Astar).partial()`.
 
 ### PathfindMode
-The pathfinding algorith enum. Current options are:
+The pathfinding algorithm enum. Current options are:
 
 #### `PathfindMode::Refined`
 ##### This is the default algorithm

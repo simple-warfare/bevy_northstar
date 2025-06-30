@@ -1,6 +1,6 @@
 # Configuring the Grid with GridSettingsBuilder
 
-Use `GridSettingsBuild` to generate `GridSettings` to pass to the `Grid` constructor.
+Use `GridSettingsBuilder` to generate `GridSettings` to pass to the `Grid` constructor.
 You will need to call `build()` to get the returned settings to pass to `Grid`.
 
 ```rust,no_run
