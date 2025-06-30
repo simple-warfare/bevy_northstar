@@ -19,7 +19,7 @@ fn benchmarks(c: &mut Criterion) {
 
     let grid_settings = GridSettingsBuilder::new_2d(64, 64).chunk_size(32).build();
 
-    let mut grid: Grid<CardinalNeighborhood> = Grid::new(&grid_settings);
+    let mut grid: Grid<OrdinalNeighborhood> = Grid::new(&grid_settings);
 
     group.sample_size(10);
 

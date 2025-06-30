@@ -1571,9 +1571,9 @@ mod tests {
 
         // Block off a section of the grid to make sure the path is not viable
         for x in 0..12 {
-            grid.set_point(
+            grid.set_nav(
                 UVec3::new(x, 5, 0),
-                Point::new(1, true), // Set as wall
+                Nav::Impassable, // Set as wall
             );
         }
 
