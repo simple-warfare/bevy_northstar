@@ -136,3 +136,13 @@ fn handle_reroute_failed(
     }
 }
 ```
+
+## PathingSet
+
+The `NorthstarPlugin` pathfinding systems run in their own system set named `PathingSet`.
+
+You can use the set to ensure that your systems dealing with pathfinding and entity movement happen before or after the pathing systems.
+
+```rust,no_run
+app.add_systems(Update, move_pathfinders.before(PathingSet));
+```

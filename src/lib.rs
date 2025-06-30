@@ -33,9 +33,9 @@ pub mod prelude {
     pub use crate::nav::Nav;
     pub use crate::neighbor::*;
     pub use crate::path::Path;
-    pub use crate::plugin::PathingSet;
-    pub use crate::plugin::Stats;
-    pub use crate::plugin::{NorthstarPlugin, NorthstarPluginSettings};
+    pub use crate::plugin::{
+        BlockingMap, NorthstarPlugin, NorthstarPluginSettings, PathingSet, Stats,
+    };
     pub use crate::MovementCost;
     pub use crate::{CardinalGrid, CardinalGrid3d, OrdinalGrid, OrdinalGrid3d};
 }
