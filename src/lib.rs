@@ -77,6 +77,10 @@ impl<Id: PartialEq> PartialEq for SmallestCostHolder<Id> {
 
 impl<Id: Eq> Eq for SmallestCostHolder<Id> {}
 
+/* Greedy A* implementation from the rust Pathfinding crate
+  It's meant to be faster, but is actually quite a bit slower testing it in the stress demo
+  and ~10% slower in the benchmarks.
+
 impl<Id: Ord> PartialOrd for SmallestCostHolder<Id> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -89,6 +93,23 @@ impl<Id: Ord> Ord for SmallestCostHolder<Id> {
             Ordering::Equal => self.cost.cmp(&other.cost),
             s => s,
         }
+    }
+}
+*/
+
+impl<Id: Ord + std::ops::Add<Output = Id> + Copy> PartialOrd for SmallestCostHolder<Id> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<Id: Ord + std::ops::Add<Output = Id> + Copy> Ord for SmallestCostHolder<Id> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let self_total = self.cost + self.estimated_cost;
+        let other_total = other.cost + other.estimated_cost;
+
+        // Reverse ordering for min-heap behavior
+        other_total.cmp(&self_total)
     }
 }
 

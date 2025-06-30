@@ -298,6 +298,13 @@ fn next_position<N: Neighborhood + 'static>(
                     .0
                     .insert(entity, next.as_vec3() - position.0.as_vec3());
 
+                // Let's try it...
+                if blocking.0.contains_key(&next) {
+                    // Someone beat us to it — requeue without inserting NextPos
+                    queue.push_back(entity);
+                    continue;
+                }
+
                 blocking.0.remove(&position.0);
                 blocking.0.insert(next, entity);
                 commands.entity(entity).insert(NextPos(next));
@@ -338,7 +345,6 @@ fn avoidance<N: Neighborhood + 'static>(
     let next_position = path.path.front().unwrap();
 
     if path.path.len() == 1 && blocking.contains_key(next_position) {
-        info!("The next position is the goal and is blocked, all we can do is wait");
         return false;
     }
 

@@ -21,7 +21,7 @@ fn startup(mut commands: Commands) {
     commands.spawn(Camera2d);
 
     // Build the grid settings.
-    let grid_settings = GridSettingsBuilder::new_2d(64, 48).chunk_size(4).build();
+    let grid_settings = GridSettingsBuilder::new_2d(64, 48).chunk_size(8).build();
 
     // Spawn the grid used for pathfinding.
     commands

@@ -1,5 +1,6 @@
 use bevy::{
     dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
+    log,
     prelude::*,
     text::FontSmoothing,
 };
@@ -50,7 +51,7 @@ fn main() {
             (
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
-                handle_reroute_failed.run_if(in_state(shared::State::Playing)),
+                handle_pathfinding_failed.run_if(in_state(shared::State::Playing)),
             ),
         )
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
@@ -208,11 +209,12 @@ fn spawn_minions(
             rand::random::<f32>(),
         );
 
-        //let mut pathfind = Pathfind::new_2d((goal.x / 8.0) as u32, (goal.y / 8.0) as u32).mode(PathfindMode::Coarse);
         let mut pathfind = Pathfind::new_2d((goal.x / 8.0) as u32, (goal.y / 8.0) as u32);
 
-        if config.use_astar {
-            pathfind = pathfind.mode(PathfindMode::AStar);
+        match config.mode {
+            PathfindMode::AStar => pathfind = pathfind.mode(PathfindMode::AStar),
+            PathfindMode::Coarse => pathfind = pathfind.mode(PathfindMode::Coarse),
+            PathfindMode::Refined => pathfind = pathfind.mode(PathfindMode::Refined),
         }
 
         commands
@@ -283,28 +285,43 @@ fn set_new_goal(
     for entity in minions.iter_mut() {
         let new_goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
 
-        //let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32).mode(PathfindMode::Coarse);
         let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
 
-        if config.use_astar {
-            pathfind = pathfind.mode(PathfindMode::AStar);
+        match config.mode {
+            PathfindMode::AStar => pathfind = pathfind.mode(PathfindMode::AStar),
+            PathfindMode::Coarse => pathfind = pathfind.mode(PathfindMode::Coarse),
+            PathfindMode::Refined => pathfind = pathfind.mode(PathfindMode::Refined),
         }
 
         commands.entity(entity).insert(pathfind);
     }
 }
 
-fn handle_reroute_failed(
+#[allow(clippy::type_complexity)]
+fn handle_pathfinding_failed(
     mut commands: Commands,
-    mut query: Query<(Entity, &Pathfind, &RerouteFailed)>,
-    mut tick_reader: EventReader<shared::Tick>,
+    minions: Query<Entity, Or<(With<PathfindingFailed>, With<RerouteFailed>)>>,
+    config: Res<shared::Config>,
+    walkable: Res<shared::Walkable>,
 ) {
-    for _ in tick_reader.read() {
-        for (entity, pathfind, _) in query.iter_mut() {
-            commands.entity(entity).remove::<RerouteFailed>();
-            commands
-                .entity(entity)
-                .insert(Pathfind::new(pathfind.goal).mode(PathfindMode::AStar));
+    // Pathfinding failed, normally we might have our AI come up with a new plan,
+    // but for this example, we'll just reroute to a new random goal.
+    for entity in &minions {
+        log::info!("Pathfinding failed for entity {entity:?}, setting new goal.");
+        let new_goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
+
+        let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
+
+        match config.mode {
+            PathfindMode::AStar => pathfind = pathfind.mode(PathfindMode::AStar),
+            PathfindMode::Coarse => pathfind = pathfind.mode(PathfindMode::Coarse),
+            PathfindMode::Refined => pathfind = pathfind.mode(PathfindMode::Refined),
         }
+
+        commands
+            .entity(entity)
+            .insert(pathfind)
+            .remove::<PathfindingFailed>()
+            .remove::<RerouteFailed>();
     }
 }

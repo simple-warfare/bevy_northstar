@@ -36,11 +36,11 @@ fn main() {
         .add_plugins((TilemapPlugin, TiledMapPlugin::default()))
         // bevy_northstar plugins
         .add_plugins((
-            NorthstarPlugin::<CardinalNeighborhood>::default(),
-            NorthstarDebugPlugin::<CardinalNeighborhood>::default(),
+            NorthstarPlugin::<OrdinalNeighborhood>::default(),
+            NorthstarDebugPlugin::<OrdinalNeighborhood>::default(),
         ))
         // Add the SharedPlugin for unrelated pathfinding systems shared by the examples
-        .add_plugins(shared::SharedPlugin::<CardinalNeighborhood>::default())
+        .add_plugins(shared::SharedPlugin::<OrdinalNeighborhood>::default())
         // Observe the LayerCreated event to build the grid from the Tiled layer
         .add_observer(layer_created)
         // Startup and State Systems
@@ -52,7 +52,7 @@ fn main() {
             (
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
-                handle_reroute_failed.run_if(in_state(shared::State::Playing)),
+                handle_pathfinding_failed.run_if(in_state(shared::State::Playing)),
             ),
         )
         .run();
@@ -109,7 +109,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             render_chunk_size: UVec2::new(32, 32),
             ..Default::default()
         },
-        Grid::<CardinalNeighborhood>::new(&grid_settings),
+        Grid::<OrdinalNeighborhood>::new(&grid_settings),
     ));
 
     map_entity.with_child((
@@ -121,7 +121,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 fn layer_created(
     trigger: Trigger<TiledLayerCreated>,
     map_asset: Res<Assets<TiledMap>>,
-    grid: Single<&mut Grid<CardinalNeighborhood>>,
+    grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut state: ResMut<NextState<shared::State>>,
 ) {
     let mut grid = grid.into_inner();
@@ -157,7 +157,7 @@ fn layer_created(
 
 fn spawn_minions(
     mut commands: Commands,
-    grid: Single<(Entity, &Grid<CardinalNeighborhood>)>,
+    grid: Single<(Entity, &Grid<OrdinalNeighborhood>)>,
     layer_entity: Query<Entity, With<TiledMapTileLayer>>,
     tilemap: Single<(
         &TilemapSize,
@@ -284,31 +284,41 @@ fn set_new_goal(
 
         let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
 
-        if config.use_astar {
-            pathfind = pathfind.mode(PathfindMode::AStar);
+        match config.mode {
+            PathfindMode::AStar => pathfind = pathfind.mode(PathfindMode::AStar),
+            PathfindMode::Coarse => pathfind = pathfind.mode(PathfindMode::Coarse),
+            PathfindMode::Refined => pathfind = pathfind.mode(PathfindMode::Refined),
         }
 
         commands.entity(entity).insert(pathfind);
     }
 }
 
-fn handle_reroute_failed(
+#[allow(clippy::type_complexity)]
+fn handle_pathfinding_failed(
     mut commands: Commands,
-    mut query: Query<(Entity, &Pathfind, &RerouteFailed)>,
+    minions: Query<Entity, Or<(With<PathfindingFailed>, With<RerouteFailed>)>>,
     config: Res<shared::Config>,
-    mut tick_reader: EventReader<shared::Tick>,
+    walkable: Res<shared::Walkable>,
 ) {
-    for _ in tick_reader.read() {
-        for (entity, pathfind, _) in query.iter_mut() {
-            commands.entity(entity).remove::<RerouteFailed>();
+    // Pathfinding failed, normally we might have our AI come up with a new plan,
+    // but for this example, we'll just reroute to a new random goal.
+    for entity in &minions {
+        log::info!("Pathfinding failed for entity {entity:?}, setting new goal.");
+        let new_goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
 
-            let mut pathfind = Pathfind::new(pathfind.goal);
+        let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
 
-            if config.use_astar {
-                pathfind = pathfind.mode(PathfindMode::AStar);
-            }
-
-            commands.entity(entity).insert(pathfind);
+        match config.mode {
+            PathfindMode::AStar => pathfind = pathfind.mode(PathfindMode::AStar),
+            PathfindMode::Coarse => pathfind = pathfind.mode(PathfindMode::Coarse),
+            PathfindMode::Refined => pathfind = pathfind.mode(PathfindMode::Refined),
         }
+
+        commands
+            .entity(entity)
+            .insert(pathfind)
+            .remove::<PathfindingFailed>()
+            .remove::<RerouteFailed>();
     }
 }

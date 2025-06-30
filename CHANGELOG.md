@@ -19,7 +19,7 @@ See the [migration guide](https://https://jtothethree.github.io/bevy_northstar/m
 * Neighbors are now precomputed as bitmasks and cached during `Grid::build()`. This provides a general performance boost and a significant improvement when using neighbor filters.
 * Added `PathfindMode::Coarse`, which returns a hierarchical path without refinement. Refinement is the step that optimizes a path for shortest distance
 * `AgentOfGrid` relationship has been created to relate an entity with a specific `Grid`. This will allow supporting multiple grids in the future.
-* HPA* path refinement has been optimized for performance.
+* HPA* path refinement has been optimized for performance. A* performance has been further optimized.
 * Optimized the collision avoidance system by limiting checks to a localized search area, reducing stutters from full A* searches.
 
 ### Debug Features

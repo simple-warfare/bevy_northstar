@@ -6,7 +6,7 @@ use bevy_northstar::prelude::*;
 
 #[derive(Resource, Debug, Default)]
 pub struct Config {
-    pub use_astar: bool,
+    pub mode: PathfindMode,
     pub paused: bool,
 }
 
@@ -288,10 +288,10 @@ pub fn update_pathfind_type_text(
     mut query: Query<&mut TextSpan, With<PathfindTypeText>>,
 ) {
     for mut span in &mut query {
-        **span = if config.use_astar {
-            "A*".to_string()
-        } else {
-            "HPA*".to_string()
+        **span = match config.mode {
+            PathfindMode::AStar => "A*".to_string(),
+            PathfindMode::Coarse => "HPA* Coarse".to_string(),
+            PathfindMode::Refined => "HPA*".to_string(),
         };
     }
 }
@@ -343,7 +343,13 @@ pub fn input<N: Neighborhood + 'static>(
         }
 
         if keyboard_input.just_pressed(KeyCode::KeyP) {
-            config.use_astar = !config.use_astar;
+            // Cycle through pathfinding modes
+            config.mode = match config.mode {
+                PathfindMode::AStar => PathfindMode::Refined,
+                PathfindMode::Coarse => PathfindMode::AStar,
+                PathfindMode::Refined => PathfindMode::Coarse,
+            };
+
             stats.reset_pathfinding();
             stats.reset_collision();
 
