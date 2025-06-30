@@ -1004,6 +1004,19 @@ impl<N: Neighborhood + Default> Grid<N> {
         reroute_path(self, path, start, goal, blocking, refined)
     }
 
+    /// Checks if a path exists from `start` to `goal` using the fastest algorithm.
+    /// Ignores any blocking entities.
+    ///
+    /// # Arguments
+    /// * `start` - The starting position in the grid.
+    /// * `goal` - The goal position in the grid.
+    /// # Returns
+    /// `true` if a path exists, `false` otherwise.
+    ///
+    pub fn is_path_viable(&self, start: UVec3, goal: UVec3) -> bool {
+        pathfind(self, start, goal, &HashMap::new(), false, false).is_some()
+    }
+
     /// Generate an HPA* path from `start` to `goal`.
     ///
     /// # Arguments
