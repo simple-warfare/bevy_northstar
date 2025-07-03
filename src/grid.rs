@@ -386,11 +386,11 @@ impl<N: Neighborhood + Default> Grid<N> {
             (x_chunks as usize, y_chunks as usize, z_chunks as usize),
             |(x, y, z)| {
                 let min_x = x as u32 * chunk_settings.size;
-                let max_x = min_x + chunk_settings.size - 1;
+                let max_x = min_x + chunk_settings.size;
                 let min_y = y as u32 * chunk_settings.size;
-                let max_y = min_y + chunk_settings.size - 1;
+                let max_y = min_y + chunk_settings.size;
                 let min_z = z as u32 * chunk_settings.depth;
-                let max_z = min_z + chunk_settings.depth - 1;
+                let max_z = min_z + chunk_settings.depth;
 
                 Chunk::new(
                     UVec3::new(min_x, min_y, min_z),
@@ -459,8 +459,10 @@ impl<N: Neighborhood + Default> Grid<N> {
             panic!("Attempted to set nav at out-of-bounds position");
         }
 
-        if !self.dirty {
-            log::warn!("The Grid state is dirty, you either forgot to call `build()` on grid or you need to call `build()` after modifying the grid. In the future partial rebuilding will be supported.");
+        // If the grid not dirty, we need to flag every chunk, edge, and nodes that needs to be rebuilt.
+        if !self.dirty{
+            self.dirty = true;
+            self.mark_dirty_for_pos(pos);
         }
 
         let navcell = NavCell::new(nav);
@@ -536,6 +538,70 @@ impl<N: Neighborhood + Default> Grid<N> {
         pos.x < self.dimensions.x && pos.y < self.dimensions.y && pos.z < self.dimensions.z
     }
 
+    /// Marks the chunk containing the given position as dirty, marks all its edges as dirty,
+    /// and marks the relevant edges and cells of adjacent chunks as dirty as well.
+    pub(crate) fn mark_dirty_for_pos(&mut self, pos: UVec3) {
+        let chunk_size = self.chunk_settings.size as usize;
+        let chunk_depth = self.chunk_settings.depth as usize;
+        let x_chunks = self.dimensions.x as usize / chunk_size;
+        let y_chunks = self.dimensions.y as usize / chunk_size;
+        let z_chunks = self.dimensions.z as usize / chunk_depth;
+
+        let chunk_x = pos.x as usize / chunk_size;
+        let chunk_y = pos.y as usize / chunk_size;
+        let chunk_z = pos.z as usize / chunk_depth;
+
+        // Helper closure to check chunk bounds
+        let in_bounds = |x: isize, y: isize, z: isize| {
+            x >= 0 && x < x_chunks as isize && y >= 0 && y < y_chunks as isize && z >= 0 && z < z_chunks as isize
+        };
+
+        // Mark the chunk containing the position as dirty
+        if let Some(chunk) = self.chunks.get_mut((chunk_x, chunk_y, chunk_z)) {
+            chunk.set_dirty_cells(true);
+            chunk.set_all_edges_dirty(true);
+        }
+
+        // Mark adjacent chunks' edges and cells as dirty
+        let mut directions: Vec<Dir> = Dir::cardinal().collect();
+        if self.chunk_settings.diagonal_connections {
+            directions.extend(Dir::ordinal());
+        }
+
+        for dir in directions {
+            let (dx, dy, dz) = dir.vector();
+            let nx = chunk_x as isize + dx as isize;
+            let ny = chunk_y as isize + dy as isize;
+            let nz = chunk_z as isize + dz as isize;
+            if in_bounds(nx, ny, nz) {
+                if let Some(neighbor_chunk) = self.chunks.get_mut((nx as usize, ny as usize, nz as usize)) {
+                    neighbor_chunk.set_dirty_cells(true);
+                    // Mark the edge facing this chunk as dirty
+                    neighbor_chunk.set_dirty_edge(dir.opposite(), true);
+                }
+            }
+        }
+
+        if self.chunk_settings.diagonal_connections {
+            // For diagonal connections, we also need to check the corners
+            let ordinal_directions = Dir::ordinal();
+            for dir in ordinal_directions {
+                let (dx, dy, dz) = dir.vector();
+                let nx = chunk_x as isize + dx as isize;
+                let ny = chunk_y as isize + dy as isize;
+                let nz = chunk_z as isize + dz as isize;
+                if in_bounds(nx, ny, nz) {
+                    if let Some(neighbor_chunk) = self.chunks.get_mut((nx as usize, ny as usize, nz as usize)) {
+                        neighbor_chunk.set_dirty_cells(true);
+                        // Mark the edge facing this chunk as dirty
+                        neighbor_chunk.set_dirty_edge(dir.opposite(), true);
+                    }
+                }
+            }
+        }
+    }
+
+
     /// Builds the entire grid. This includes precomputing neighbors, creating nodes for each edge of each chunk,
     /// caching paths between internal nodes within each chunk, and connecting adjacent nodes between chunks.
     /// This method needs to be called after the grid has been initialized.
@@ -548,19 +614,26 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 
     pub(crate) fn precompute_neighbors(&mut self) {
-        let grid_view = self.grid.view();
+        let mut updates = Vec::new();
 
-        // Collect positions and neighbor bits first to avoid borrow checker issues
-        let mut neighbor_bits_vec = Vec::with_capacity(self.grid.len());
-        for ((x, y, z), _cell) in self.grid.indexed_iter() {
-            let pos = UVec3::new(x as u32, y as u32, z as u32);
-            let bits = self.neighborhood.neighbors(&grid_view, pos);
-            neighbor_bits_vec.push(((x, y, z), bits));
+        for (_, chunk) in self.chunks.indexed_iter_mut() {
+            if !chunk.has_dirty_cells() {
+                continue;
+            }
+
+            let grid_view = self.grid.view();
+
+            for pos in chunk.bounds() {
+                let bits = self.neighborhood.neighbors(&grid_view, pos);
+                updates.push((pos, bits));
+            }
+
+            chunk.set_dirty_cells(false);
         }
 
-        // Now apply the neighbor bits with mutable access
-        for &((x, y, z), bits) in &neighbor_bits_vec {
-            self.grid[[x, y, z]].neighbor_bits = bits;
+        // Apply updates after view is dropped
+        for (pos, bits) in updates {
+            self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].neighbor_bits = bits;
         }
     }
 
@@ -614,11 +687,11 @@ impl<N: Neighborhood + Default> Grid<N> {
                                 node.pos = match dir {
                                     Dir::NORTH => UVec3::new(
                                         node.pos.x + current_chunk.min().x,
-                                        node.pos.y + current_chunk.max().y,
+                                        node.pos.y + current_chunk.max().y - 1,
                                         node.pos.z + current_chunk.min().z,
                                     ),
                                     Dir::EAST => UVec3::new(
-                                        node.pos.y + current_chunk.max().x,
+                                        node.pos.y + current_chunk.max().x - 1,
                                         node.pos.x + current_chunk.min().y,
                                         node.pos.z + current_chunk.min().z,
                                     ),
@@ -636,7 +709,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                                     Dir::UP => UVec3::new(
                                         node.pos.x + current_chunk.min().x,
                                         node.pos.y + current_chunk.min().y,
-                                        node.pos.z + current_chunk.max().z,
+                                        node.pos.z + current_chunk.max().z - 1,
                                     ),
                                     Dir::DOWN => UVec3::new(
                                         node.pos.x + current_chunk.min().x,
@@ -684,12 +757,12 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                                 let pos = match dir {
                                     Dir::NORTHEAST => UVec3::new(
-                                        current_chunk.max().x,
-                                        current_chunk.max().y,
+                                        current_chunk.max().x - 1,
+                                        current_chunk.max().y - 1,
                                         current_chunk.min().z,
                                     ),
                                     Dir::SOUTHEAST => UVec3::new(
-                                        current_chunk.max().x,
+                                        current_chunk.max().x - 1,
                                         current_chunk.min().y,
                                         current_chunk.min().z,
                                     ),
@@ -700,36 +773,36 @@ impl<N: Neighborhood + Default> Grid<N> {
                                     ),
                                     Dir::NORTHWEST => UVec3::new(
                                         current_chunk.min().x,
-                                        current_chunk.max().y,
+                                        current_chunk.max().y - 1,
                                         current_chunk.min().z,
                                     ),
                                     Dir::NORTHEASTUP => UVec3::new(
-                                        current_chunk.max().x,
-                                        current_chunk.max().y,
-                                        current_chunk.max().z,
+                                        current_chunk.max().x - 1,
+                                        current_chunk.max().y - 1,
+                                        current_chunk.max().z - 1,
                                     ),
                                     Dir::SOUTHEASTUP => UVec3::new(
-                                        current_chunk.max().x,
+                                        current_chunk.max().x - 1,
                                         current_chunk.min().y,
-                                        current_chunk.max().z,
+                                        current_chunk.max().z - 1,
                                     ),
                                     Dir::SOUTHWESTUP => UVec3::new(
                                         current_chunk.min().x,
                                         current_chunk.min().y,
-                                        current_chunk.max().z,
+                                        current_chunk.max().z - 1,
                                     ),
                                     Dir::NORTHWESTUP => UVec3::new(
                                         current_chunk.min().x,
-                                        current_chunk.max().y,
-                                        current_chunk.max().z,
+                                        current_chunk.max().y - 1,
+                                        current_chunk.max().z - 1,
                                     ),
                                     Dir::NORTHEASTDOWN => UVec3::new(
-                                        current_chunk.max().x,
-                                        current_chunk.max().y,
+                                        current_chunk.max().x - 1,
+                                        current_chunk.max().y - 1,
                                         current_chunk.min().z,
                                     ),
                                     Dir::SOUTHEASTDOWN => UVec3::new(
-                                        current_chunk.max().x,
+                                        current_chunk.max().x - 1,
                                         current_chunk.min().y,
                                         current_chunk.min().z,
                                     ),
@@ -740,7 +813,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                                     ),
                                     Dir::NORTHWESTDOWN => UVec3::new(
                                         current_chunk.min().x,
-                                        current_chunk.max().y,
+                                        current_chunk.max().y - 1,
                                         current_chunk.min().z,
                                     ),
                                     _ => panic!("Invalid direction"),
@@ -993,11 +1066,11 @@ impl<N: Neighborhood + Default> Grid<N> {
     pub(crate) fn chunk_at_position(&self, pos: UVec3) -> Option<&Chunk> {
         self.chunks.iter().find(|&chunk| {
             pos.x >= chunk.min().x
-                && pos.x <= chunk.max().x
+                && pos.x < chunk.max().x
                 && pos.y >= chunk.min().y
-                && pos.y <= chunk.max().y
+                && pos.y < chunk.max().y
                 && pos.z >= chunk.min().z
-                && pos.z <= chunk.max().z
+                && pos.z < chunk.max().z
         })
     }
 
@@ -1416,9 +1489,9 @@ mod tests {
         assert_eq!(
             chunk.max(),
             UVec3::new(
-                GRID_SETTINGS.0.chunk_settings.size - 1,
-                GRID_SETTINGS.0.chunk_settings.size - 1,
-                GRID_SETTINGS.0.chunk_settings.depth - 1
+                GRID_SETTINGS.0.chunk_settings.size,
+                GRID_SETTINGS.0.chunk_settings.size,
+                GRID_SETTINGS.0.chunk_settings.depth
             )
         );
     }
