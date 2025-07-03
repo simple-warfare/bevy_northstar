@@ -52,7 +52,7 @@ fn main() {
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
                 handle_pathfinding_failed.run_if(in_state(shared::State::Playing)),
-                randomize_nav.run_if(in_state(shared::State::Playing)),
+                randomize_nav.run_if(in_state(shared::State::Playing)).before(PathingSet),
             ),
         )
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
@@ -119,6 +119,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     map_entity.with_child((
         DebugGridBuilder::new(8, 8)
             .enable_chunks()
+            //.enable_cells()
             .enable_entrances()
             .build(),
         // Add the offset to the debug gizmo so that it aligns with your tilemap.
@@ -308,7 +309,7 @@ fn handle_pathfinding_failed(
     // Pathfinding failed, normally we might have our AI come up with a new plan,
     // but for this example, we'll just reroute to a new random goal.
     for entity in &minions {
-        log::info!("Pathfinding failed for entity {entity:?}, setting new goal.");
+        //log::info!("Pathfinding failed for entity {entity:?}, setting new goal.");
         let new_goal = walkable.tiles.choose(&mut rand::rng()).unwrap();
 
         let mut pathfind = Pathfind::new_2d((new_goal.x / 8.0) as u32, (new_goal.y / 8.0) as u32);
@@ -330,8 +331,7 @@ fn handle_pathfinding_failed(
 
 // Let's make a system that randomly changes a few set_nav calls and rebuilds the grid.
 fn randomize_nav(
-    mut grid: Single<&mut Grid<OrdinalNeighborhood>>,
-    mut commands: Commands,
+    grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut timer: Local<Timer>,
     time: Res<Time>,
 ) {
@@ -348,17 +348,26 @@ fn randomize_nav(
         let width = grid.width();
         let height = grid.height();
         let depth = grid.depth();
-        let x = rand::random::<u32>() % width;
-        let y = rand::random::<u32>() % height;
-        let z = rand::random::<u32>() % depth;
 
-        let pos = UVec3::new(x, y, z);
+        for _ in 0..5 {
+            let x = rand::random::<u32>() % width;
+            let y = rand::random::<u32>() % height;
+            let z = rand::random::<u32>() % depth;
 
-        // random Nav::Passable(1) or Nav::Impassable
-        if rand::random::<bool>() {
-            grid.set_nav(pos, Nav::Passable(1));
-        } else {
-            grid.set_nav(pos, Nav::Impassable);
+            let pos = UVec3::new(x, y, z);
+
+            let start = std::time::Instant::now();
+
+            // random Nav::Passable(1) or Nav::Impassable
+            if rand::random::<bool>() {
+                grid.set_nav(pos, Nav::Passable(1));
+            } else {
+                grid.set_nav(pos, Nav::Impassable);
+            }
+
+            let end = std::time::Instant::now();
+            let duration = end.duration_since(start);
+            log::info!("Set nav for position {:?} in {:?}", pos, duration);
         }
         
         let start = std::time::Instant::now();

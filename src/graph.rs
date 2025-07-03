@@ -1,5 +1,5 @@
 //! Graph module for managing nodes and edges in relative space.
-use bevy::{math::UVec3, platform::collections::{HashMap, HashSet}};
+use bevy::{log, math::UVec3, platform::collections::HashMap};
 
 use crate::{chunk::Chunk, dir::Dir, node::Node, path::Path, NodeId};
 
@@ -9,8 +9,6 @@ pub(crate) struct Graph {
     nodes: slab::Slab<Node>,
     /// A mapping from node `UVec3` positions to their IDs in the slab.
     node_ids: HashMap<UVec3, NodeId>,
-    /// A set of node IDs that have been modified and need to be processed.
-    dirty_nodes: HashSet<NodeId>,
 }
 
 impl Graph {
@@ -18,7 +16,6 @@ impl Graph {
         Graph {
             nodes: slab::Slab::new(),
             node_ids: HashMap::new(),
-            dirty_nodes: HashSet::new(),
         }
     }
 
@@ -91,12 +88,27 @@ impl Graph {
 
         // Remove all nodes from the slab and node_ids mapping
         for (pos, id) in &edge_nodes {
-            self.nodes.remove(*id);
-            self.node_ids.remove(pos);
+            if self.nodes.contains(*id) {
+                self.nodes.remove(*id);
+                self.node_ids.remove(pos);
+            } else {
+                log::warn!("Tried to remove node {:?} with id {:?} from Chunk {:?}, but it was already gone", pos, id, chunk);
+            }
         }
 
         // Remove any edges in other nodes that point to the removed positions
         let positions: Vec<UVec3> = edge_nodes.iter().map(|(pos, _)| *pos).collect();
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&positions);
+        }
+    }
+
+    pub(crate) fn remove_edges_for_chunk(&mut self, chunk: Chunk) {
+        // Get all the ndoes in the chunk
+        let nodes_in_chunk = self.nodes_in_chunk(chunk);
+        // Collect all positions in the chunk
+        let positions: Vec<UVec3> = nodes_in_chunk.iter().map(|node| node.pos).collect();
+        // Now iterate over all nodes in the chunk and remove edges to those positions
         for node in self.nodes.iter_mut() {
             node.1.remove_edges_to_positions(&positions);
         }
