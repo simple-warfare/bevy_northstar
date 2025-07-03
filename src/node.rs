@@ -32,6 +32,12 @@ impl Node {
     pub(crate) fn edges(&self) -> Vec<UVec3> {
         self.edges.keys().cloned().collect()
     }
+
+    pub(crate) fn remove_edges_to_positions(&mut self, positions: &[UVec3]) {
+        for pos in positions {
+            self.edges.remove(pos);
+        }
+    }
 }
 
 impl PartialEq for Node {
@@ -56,12 +62,12 @@ mod tests {
     fn test_node_eq() {
         let node1 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let node2 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
 
@@ -72,12 +78,12 @@ mod tests {
     fn test_node_hash() {
         let node1 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let node2 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
 

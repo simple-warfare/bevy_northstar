@@ -52,6 +52,7 @@ fn main() {
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
                 handle_pathfinding_failed.run_if(in_state(shared::State::Playing)),
+                randomize_nav.run_if(in_state(shared::State::Playing)),
             ),
         )
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
@@ -323,5 +324,47 @@ fn handle_pathfinding_failed(
             .insert(pathfind)
             .remove::<PathfindingFailed>()
             .remove::<RerouteFailed>();
+    }
+}
+
+
+// Let's make a system that randomly changes a few set_nav calls and rebuilds the grid.
+fn randomize_nav(
+    mut grid: Single<&mut Grid<OrdinalNeighborhood>>,
+    mut commands: Commands,
+    mut timer: Local<Timer>,
+    time: Res<Time>,
+) {
+    // Initialize the timer if it hasn't been already.
+    if timer.finished() && timer.duration().as_secs_f32() == 0.0 {
+        // Set to repeat every 1 second by default.
+        *timer = Timer::from_seconds(1.0, TimerMode::Repeating);
+    }
+
+    timer.tick(time.delta());
+    if timer.just_finished() {
+        let mut grid = grid.into_inner();
+
+        let width = grid.width();
+        let height = grid.height();
+        let depth = grid.depth();
+        let x = rand::random::<u32>() % width;
+        let y = rand::random::<u32>() % height;
+        let z = rand::random::<u32>() % depth;
+
+        let pos = UVec3::new(x, y, z);
+
+        // random Nav::Passable(1) or Nav::Impassable
+        if rand::random::<bool>() {
+            grid.set_nav(pos, Nav::Passable(1));
+        } else {
+            grid.set_nav(pos, Nav::Impassable);
+        }
+        
+        let start = std::time::Instant::now();
+        grid.build();
+        let end = std::time::Instant::now();
+        let duration = end.duration_since(start);
+        log::info!("Rebuilt grid in {:?}", duration);
     }
 }

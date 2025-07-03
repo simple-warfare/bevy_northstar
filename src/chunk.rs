@@ -7,11 +7,13 @@ use crate::{dir::Dir, nav::NavCell};
 /// A chunk is a 3D region of the grid.
 #[derive(Debug, Clone)]
 pub(crate) struct Chunk {
+    /// The index of the chunk in the grid.
+    index: (usize, usize, usize),
     /// The minimum coordinates of the chunk.
     min: UVec3,
     /// The maximum coordinates of the chunk.
     max: UVec3,
-    dirty_cells: bool,
+    /// Flags which indicate which edges are dirty.
     dirty_edges: [bool; 18],
 }
 
@@ -25,8 +27,12 @@ impl Eq for Chunk {}
 
 impl Chunk {
     /// Creates a new chunk from minimum and maximum coordinates.
-    pub(crate) fn new(min: UVec3, max: UVec3) -> Self {
-        Chunk { min, max, dirty_cells: true, dirty_edges: [true; 18] }
+    pub(crate) fn new(index: (usize, usize, usize), min: UVec3, max: UVec3) -> Self {
+        Chunk { index, min, max, dirty_edges: [true; 18] }
+    }
+
+    pub(crate) fn index(&self) -> (usize, usize, usize) {
+        self.index
     }
 
     pub(crate) fn min(&self) -> UVec3 {
@@ -48,20 +54,12 @@ impl Chunk {
         })
     }
 
-    pub(crate) fn has_dirty_cells(&self) -> bool {
-        self.dirty_cells
-    }
-
     pub(crate) fn has_dirty_edges(&self) -> bool {
         self.dirty_edges.iter().any(|&edge| edge)
     }
 
     pub(crate) fn is_edge_dirty(&self, dir: Dir) -> bool {
         self.dirty_edges[dir as usize]
-    }
-
-    pub(crate) fn set_dirty_cells(&mut self, dirty: bool) {
-        self.dirty_cells = dirty;
     }
 
     pub(crate) fn set_dirty_edge(&mut self, dir: Dir, dirty: bool) {
@@ -75,7 +73,6 @@ impl Chunk {
     }
 
     pub(crate) fn clean(&mut self) {
-        self.dirty_cells = false;
         self.dirty_edges.fill(false);
     }
 
@@ -221,7 +218,7 @@ mod test {
     #[test]
     fn test_chunk_view() {
         let grid = Array3::from_elem((10, 10, 10), NavCell::default());
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
         let view = chunk.view(&grid);
 
         assert_eq!(view.shape(), [4, 4, 4]);
@@ -230,7 +227,7 @@ mod test {
     #[test]
     fn test_chunk_edge() {
         let grid = Array3::from_elem((10, 10, 10), NavCell::default());
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
         let edge = chunk.edge(&grid, Dir::NORTH);
 
         assert_eq!(edge.shape(), [4, 4]);

@@ -1,5 +1,5 @@
 //! Graph module for managing nodes and edges in relative space.
-use bevy::{math::UVec3, platform::collections::HashMap};
+use bevy::{math::UVec3, platform::collections::{HashMap, HashSet}};
 
 use crate::{chunk::Chunk, dir::Dir, node::Node, path::Path, NodeId};
 
@@ -9,6 +9,8 @@ pub(crate) struct Graph {
     nodes: slab::Slab<Node>,
     /// A mapping from node `UVec3` positions to their IDs in the slab.
     node_ids: HashMap<UVec3, NodeId>,
+    /// A set of node IDs that have been modified and need to be processed.
+    dirty_nodes: HashSet<NodeId>,
 }
 
 impl Graph {
@@ -16,6 +18,7 @@ impl Graph {
         Graph {
             nodes: slab::Slab::new(),
             node_ids: HashMap::new(),
+            dirty_nodes: HashSet::new(),
         }
     }
 
@@ -72,6 +75,30 @@ impl Graph {
     pub(crate) fn remove_node(&mut self, pos: UVec3) {
         if let Some(id) = self.node_ids.remove(&pos) {
             self.nodes.remove(id);
+        }
+    }
+
+    pub(crate) fn remove_nodes_at_edge(&mut self, chunk: &Chunk, dir: Dir) {
+        // Collect all nodes in the edge and their IDs
+        let edge_nodes: Vec<(UVec3, NodeId)> = self
+            .nodes_in_chunk(chunk.clone())
+            .iter()
+            .filter(|node| node.dir == Some(dir))
+            .filter_map(|node| {
+                self.node_ids.get(&node.pos).map(|&id| (node.pos, id))
+            })
+            .collect();
+
+        // Remove all nodes from the slab and node_ids mapping
+        for (pos, id) in &edge_nodes {
+            self.nodes.remove(*id);
+            self.node_ids.remove(pos);
+        }
+
+        // Remove any edges in other nodes that point to the removed positions
+        let positions: Vec<UVec3> = edge_nodes.iter().map(|(pos, _)| *pos).collect();
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&positions);
         }
     }
 
@@ -158,7 +185,7 @@ mod tests {
     fn test_add_node() {
         let mut graph = Graph::new();
         let pos = UVec3::new(0, 0, 0);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         let id = graph.add_node(pos, chunk.clone(), None);
 
         let node = graph.node_at(pos).unwrap();
@@ -173,7 +200,7 @@ mod tests {
         let mut graph = Graph::new();
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         graph.add_node(pos1, chunk.clone(), None);
         graph.add_node(pos2, chunk.clone(), None);
 
@@ -188,7 +215,7 @@ mod tests {
         let mut graph = Graph::new();
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         graph.add_node(pos1, chunk.clone(), None);
         graph.add_node(pos2, chunk.clone(), None);
 
