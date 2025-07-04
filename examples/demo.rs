@@ -1,6 +1,6 @@
 use bevy::{
     dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin},
-    log,
+    platform::collections::HashMap,
     prelude::*,
     text::FontSmoothing,
 };
@@ -52,7 +52,10 @@ fn main() {
                 move_pathfinders.before(PathingSet),
                 set_new_goal.run_if(in_state(shared::State::Playing)),
                 handle_pathfinding_failed.run_if(in_state(shared::State::Playing)),
-                randomize_nav.run_if(in_state(shared::State::Playing)).before(PathingSet),
+                randomize_nav
+                    .run_if(in_state(shared::State::Playing))
+                    .before(PathingSet),
+                update_modified_tiles.run_if(in_state(shared::State::Playing)),
             ),
         )
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
@@ -61,6 +64,7 @@ fn main() {
             max_pathfinding_agents_per_frame: 48,
             max_collision_avoidance_agents_per_frame: 64,
         })
+        .insert_resource(TileTexturesToUpdate::default())
         .run();
 }
 
@@ -119,7 +123,6 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     map_entity.with_child((
         DebugGridBuilder::new(8, 8)
             .enable_chunks()
-            //.enable_cells()
             .enable_entrances()
             .build(),
         // Add the offset to the debug gizmo so that it aligns with your tilemap.
@@ -226,10 +229,10 @@ fn spawn_minions(
                 ..Default::default()
             })
             .insert(Name::new(format!("{color:?}")))
-            .insert(DebugPath {
-                color,
-                draw_unrefined: false,
-            })
+            //.insert(DebugPath {
+            //    color,
+            //    draw_unrefined: false,
+            //})
             .insert(AgentOfGrid(grid_entity))
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
@@ -328,52 +331,106 @@ fn handle_pathfinding_failed(
     }
 }
 
+#[derive(Resource, Default)]
+struct TileTexturesToUpdate {
+    tiles: HashMap<TilePos, u32>,
+}
+
+const WALL_TEXTURE: u32 = 13;
+const FLOOR_TEXTURE: u32 = 14;
+
+fn update_modified_tiles(
+    mut query: Query<(&TilePos, &mut TileTextureIndex)>,
+    mut tiles_to_update: ResMut<TileTexturesToUpdate>,
+) {
+    // Iterate over the tiles to update and apply the new textures.
+    for (tile_pos, mut tile_texture) in query.iter_mut() {
+        if let Some(texture_index) = tiles_to_update.tiles.get(tile_pos) {
+            // Update the tile texture index with the new texture.
+            tile_texture.0 = *texture_index;
+        } else {
+            // If no update is needed, we can skip this tile.
+            continue;
+        }
+    }
+
+    // Clear the tiles to update after applying them.
+    tiles_to_update.tiles.clear();
+}
 
 // Let's make a system that randomly changes a few set_nav calls and rebuilds the grid.
 fn randomize_nav(
     grid: Single<&mut Grid<OrdinalNeighborhood>>,
     mut timer: Local<Timer>,
     time: Res<Time>,
+    mut commands: Commands,
+    pathfinders: Query<(Entity, &Pathfind), With<Path>>,
+    mut tiles_to_update: ResMut<TileTexturesToUpdate>,
 ) {
     // Initialize the timer if it hasn't been already.
     if timer.finished() && timer.duration().as_secs_f32() == 0.0 {
-        // Set to repeat every 1 second by default.
-        *timer = Timer::from_seconds(1.0, TimerMode::Repeating);
+        // Set to repeat every few seconds by default.
+        *timer = Timer::from_seconds(5.0, TimerMode::Repeating);
     }
 
     timer.tick(time.delta());
     if timer.just_finished() {
         let mut grid = grid.into_inner();
 
-        let width = grid.width();
-        let height = grid.height();
-        let depth = grid.depth();
+        // Let's pick a single chunk to update so we don't have to update a bunch of chunks.
+        // This might make it more realistic as a game might update the map based on an explosion or mining etc.
 
-        for _ in 0..5 {
-            let x = rand::random::<u32>() % width;
-            let y = rand::random::<u32>() % height;
-            let z = rand::random::<u32>() % depth;
+        // Divide the grid into chunks and pick a random chunk to update.
+        let chunk_size = grid.chunk_size();
+        let chunk_depth = grid.chunk_depth();
+        let width = grid.width() / chunk_size;
+        let height = grid.height() / chunk_size;
+        let depth = grid.depth() / chunk_depth;
 
-            let pos = UVec3::new(x, y, z);
+        // Randomly pick a chunk to update.
+        let chunk_x = rand::random::<u32>() % width;
+        let chunk_y = rand::random::<u32>() % height;
+        let chunk_z = rand::random::<u32>() % depth;
 
-            let start = std::time::Instant::now();
+        for _ in 0..25 {
+            let x = rand::random::<u32>() % chunk_size;
+            let y = rand::random::<u32>() % chunk_size;
+            let z = rand::random::<u32>() % chunk_depth;
+
+            // Create a global position from the chunk coordinates.
+            let pos = UVec3::new(
+                x + chunk_size * chunk_x,
+                y + chunk_size * chunk_y,
+                z + chunk_depth * chunk_z,
+            );
 
             // random Nav::Passable(1) or Nav::Impassable
             if rand::random::<bool>() {
                 grid.set_nav(pos, Nav::Passable(1));
+                tiles_to_update
+                    .tiles
+                    .insert(TilePos::new(pos.x, pos.y), FLOOR_TEXTURE);
             } else {
                 grid.set_nav(pos, Nav::Impassable);
+                tiles_to_update
+                    .tiles
+                    .insert(TilePos::new(pos.x, pos.y), WALL_TEXTURE);
             }
-
-            let end = std::time::Instant::now();
-            let duration = end.duration_since(start);
-            log::info!("Set nav for position {:?} in {:?}", pos, duration);
         }
-        
-        let start = std::time::Instant::now();
+
         grid.build();
-        let end = std::time::Instant::now();
-        let duration = end.duration_since(start);
-        log::info!("Rebuilt grid in {:?}", duration);
+
+        // All the paths might be invalid now so we need to remove the path component and trigger a pathfinding update.
+        for (entity, pathfind) in &pathfinders {
+            // Reinsert the Path component to trigger a pathfinding update.
+            commands
+                .entity(entity)
+                .insert(Pathfind {
+                    goal: pathfind.goal,
+                    partial: pathfind.partial,
+                    mode: pathfind.mode,
+                })
+                .remove::<Path>();
+        }
     }
 }

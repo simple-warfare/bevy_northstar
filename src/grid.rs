@@ -1,7 +1,9 @@
 //! This module contains the `Grid` component which is the main component for the crate.
+use rayon::prelude::*;
 use std::sync::Arc;
 
 use bevy::{
+    log::info,
     math::{IVec3, UVec3},
     platform::collections::{HashMap, HashSet},
     prelude::{Component, Entity},
@@ -520,6 +522,11 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.chunk_settings.size
     }
 
+    // Returns the depth of the chunks in the grid.
+    pub fn chunk_depth(&self) -> u32 {
+        self.chunk_settings.depth
+    }
+
     /// Returns the chunk settings of the grid.
     pub fn chunk_settings(&self) -> ChunkSettings {
         self.chunk_settings
@@ -605,37 +612,28 @@ impl<N: Neighborhood + Default> Grid<N> {
                 }
             }
         }
-
-        if self.chunk_settings.diagonal_connections {
-            // For diagonal connections, we also need to check the corners
-            let ordinal_directions = Dir::ordinal();
-            for dir in ordinal_directions {
-                let (dx, dy, dz) = dir.vector();
-                let nx = chunk_x as isize + dx as isize;
-                let ny = chunk_y as isize + dy as isize;
-                let nz = chunk_z as isize + dz as isize;
-                if self.chunk_in_bounds(nx, ny, nz) {
-                    if let Some(neighbor_chunk) =
-                        self.chunks.get_mut((nx as usize, ny as usize, nz as usize))
-                    {
-                        self.dirty_chunks
-                            .insert((nx as usize, ny as usize, nz as usize));
-                        // Mark the edge facing this chunk as dirty
-                        neighbor_chunk.set_dirty_edge(dir.opposite(), true);
-                    }
-                }
-            }
-        }
     }
 
     /// Builds the entire grid. This includes precomputing neighbors, creating nodes for each edge of each chunk,
     /// caching paths between internal nodes within each chunk, and connecting adjacent nodes between chunks.
     /// This method needs to be called after the grid has been initialized.
     pub fn build(&mut self) {
+        let start = std::time::Instant::now();
         self.precompute_neighbors();
+        let end = std::time::Instant::now();
+        info!("Precomputed neighbors in {:?}", end - start);
+        let start = std::time::Instant::now();
         self.build_nodes();
+        let end = std::time::Instant::now();
+        info!("Built nodes in {:?}", end - start);
+        let start = std::time::Instant::now();
         self.connect_internal_chunk_nodes();
+        let end = std::time::Instant::now();
+        info!("Connected internal chunk nodes in {:?}", end - start);
+        let start = std::time::Instant::now();
         self.connect_adjacent_chunk_nodes();
+        let end = std::time::Instant::now();
+        info!("Connected adjacent chunk nodes in {:?}", end - start);
 
         // Iterate over all chunks and clean up any dirty edges
         for (_, chunk) in self.chunks.indexed_iter_mut() {
@@ -712,7 +710,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                     continue;
                 }
 
-                self.graph.remove_nodes_at_edge(&chunk, dir);
+                self.graph.remove_nodes_at_edge(chunk, dir);
 
                 let current_edge = chunk.edge(&self.grid, dir);
 
@@ -970,52 +968,41 @@ impl<N: Neighborhood + Default> Grid<N> {
             let chunk = &self.chunks[[x, y, z]];
 
             // Clear all node edges with positions in the chunk if any exist
-            self.graph.remove_edges_for_chunk(chunk.clone());
+            self.graph.remove_edges_for_chunk(chunk);
 
-            let nodes = self.graph.nodes_in_chunk(chunk.clone());
+            let nodes = self.graph.nodes_in_chunk(chunk);
 
-            let mut connections = Vec::new();
-
-            for node in nodes.iter() {
-                // Collect other nodes positions into an array
-                let other_nodes = nodes
-                    .iter()
-                    .filter(|other_node| other_node.pos != node.pos)
-                    .map(|other_node| other_node.pos)
-                    .collect::<Vec<_>>();
-
-                // Adjust node.pos by the chunk position
-                let start_pos = node.pos - chunk.min();
-
-                let goals = other_nodes
-                    .iter()
-                    .map(|pos| *pos - chunk.min())
-                    .collect::<Vec<_>>();
-
-                let paths =
-                    dijkstra_grid(&chunk_grid, start_pos, &goals, false, 100, &HashMap::new());
-
-                // Readjust position to world space and then connect the nodes
-                for (goal_pos, path) in paths {
-                    let start = node.pos;
-                    let goal = goal_pos + chunk.min();
-
-                    // Readjust path to world space
-                    let path_vec = path
-                        .path()
+            let all_connections: Vec<_> = nodes
+                .par_iter()
+                .flat_map_iter(|node| {
+                    let start = node.pos - chunk.min();
+                    let goals = nodes
                         .iter()
-                        .map(|pos| *pos + chunk.min())
+                        .filter(|other| other.pos != node.pos)
+                        .map(|other| other.pos - chunk.min())
                         .collect::<Vec<_>>();
 
-                    connections.push((
-                        start,
-                        goal,
-                        Path::new(path_vec.clone(), path_vec.len() as u32),
-                    ));
-                }
-            }
+                    let paths =
+                        dijkstra_grid(&chunk_grid, start, &goals, false, 100, &HashMap::new());
 
-            for (node_pos, other_node_pos, path) in connections {
+                    paths.into_iter().map(move |(goal_pos, path)| {
+                        let world_start = node.pos;
+                        let world_goal = goal_pos + chunk.min();
+                        let path_vec = path
+                            .path()
+                            .iter()
+                            .map(|p| *p + chunk.min())
+                            .collect::<Vec<_>>();
+                        (
+                            world_start,
+                            world_goal,
+                            Path::new(path_vec.clone(), path_vec.len() as u32),
+                        )
+                    })
+                })
+                .collect();
+
+            for (node_pos, other_node_pos, path) in all_connections {
                 self.graph.connect_node(node_pos, other_node_pos, path);
             }
         }
@@ -1047,7 +1034,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                     .node_at(UVec3::new(nx as u32, ny as u32, nz as u32))
                 {
                     // Check if neighbor is in a different chunk
-                    if node.chunk != neighbor.chunk {
+                    if node.chunk_index != neighbor.chunk_index {
                         let path = Path::from_slice(&[node.pos, neighbor.pos], 1);
 
                         connections.push((node.pos, neighbor.pos, path));
@@ -1283,7 +1270,6 @@ mod tests {
     use bevy::{math::UVec3, platform::collections::HashMap};
 
     use crate::{
-        chunk,
         dir::Dir,
         grid::{
             ChunkSettings, CollisionSettings, Grid, GridInternalSettings, GridSettings,
@@ -1414,8 +1400,7 @@ mod tests {
         for pos in expected {
             assert!(
                 nodes.iter().any(|n| n.pos == pos),
-                "Missing node at {:?}",
-                pos
+                "Missing node at {pos:?}"
             );
         }
 
@@ -1519,7 +1504,7 @@ mod tests {
         let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
         grid.build_nodes();
 
-        let nodes = grid.graph.nodes_in_chunk(grid.chunks[[0, 0, 0]].clone());
+        let nodes = grid.graph.nodes_in_chunk(&grid.chunks[[0, 0, 0]]);
 
         assert_eq!(nodes.len(), 2);
     }
@@ -1719,8 +1704,7 @@ mod tests {
         for dir in Dir::cardinal() {
             assert!(
                 chunk.is_edge_dirty(dir),
-                "Edge {:?} of chunk (0,0,0) should be dirty",
-                dir
+                "Edge {dir:?} of chunk (0,0,0) should be dirty"
             );
         }
 
@@ -1730,18 +1714,11 @@ mod tests {
             if let Some(neighbor_chunk) = grid.chunks.get((nx, ny, nz)) {
                 assert!(
                     grid.dirty_chunks.contains(&(nx, ny, nz)),
-                    "Neighbor chunk ({},{},{}) should be dirty",
-                    nx,
-                    ny,
-                    nz
+                    "Neighbor chunk ({nx},{ny},{nz}) should be dirty"
                 );
                 assert!(
                     neighbor_chunk.is_edge_dirty(expected_edge),
-                    "Neighbor chunk ({},{},{}) edge {:?} should be dirty",
-                    nx,
-                    ny,
-                    nz,
-                    expected_edge
+                    "Neighbor chunk ({nx},{ny},{nz}) edge {expected_edge:?} should be dirty",
                 );
             }
         }

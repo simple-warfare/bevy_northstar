@@ -100,6 +100,17 @@ fn build_grid(grid: Single<&mut CardinalGrid>) {
 }
 ```
 
+## Debug Optimization
+Pathfinding and grid algorithms involve a lot of branching, which can make debug builds significantly slower. You can set the optimization settings for this crate so you can still debug without the performance hit.
+
+Follow the [Bevy Quickstart Cargo Workspaces section](https://bevy.org/learn/quick-start/getting-started/setup/#cargo-workspaces) to add opt-level 3 to your dependencies.
+
+Or alternatively add the following to your `Cargo.toml`:
+```toml
+[profile.dev.package."bevy_northstar"]
+opt-level = 3
+```
+
 ## Bevy Compatibility
 
 |bevy|bevy_northstar|

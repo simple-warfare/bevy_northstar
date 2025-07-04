@@ -200,7 +200,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                 for edge in node.edges() {
                     let neighbor = grid.graph().node_at(edge);
                     if let Some(neighbor) = neighbor {
-                        if neighbor.chunk != node.chunk {
+                        if neighbor.chunk_index != node.chunk_index {
                             let neighbor_position = match debug_grid.map_type {
                                 DebugTilemapType::Square => Vec2::new(
                                     (neighbor.pos.x * debug_grid.tile_width) as f32,

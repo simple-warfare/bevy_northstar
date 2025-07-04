@@ -965,6 +965,7 @@ dependencies = [
  "ndarray",
  "pprof",
  "rand 0.9.1",
+ "rayon",
  "rustc-hash 2.1.1",
  "slab",
  "smallvec",

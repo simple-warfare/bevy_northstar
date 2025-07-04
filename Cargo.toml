@@ -20,11 +20,12 @@ stats = []
 [dependencies]
 thiserror = "2.0.12"
 indexmap = "2.10.0"
-ndarray = { version = "0.16.1", features=["rayon"] }
+ndarray = { version = "0.16.1", features = ["rayon"] }
 rustc-hash = "2.1.1"
 strum = "0.27.1"
 slab = "0.4.10"
 smallvec = "1.15.1"
+rayon = "1.10.0"
 
 [dependencies.bevy]
 version = "0.16.1"
@@ -32,7 +33,7 @@ default-features = false
 features=["bevy_render", "bevy_gizmos", "bevy_log"]
 
 [dev-dependencies]
-bevy = { version = "0.16.1", features=["bevy_dev_tools"] }
+bevy = { version = "0.16.1", features = ["bevy_dev_tools"] }
 bevy_ecs_tilemap = { version = "0.16" }
 bevy_ecs_tiled = { version = "0.7.2" }
 
@@ -57,3 +58,4 @@ required-features = ["stats"]
 
 [[example]]
 name = "basic"
+

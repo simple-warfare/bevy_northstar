@@ -10,7 +10,7 @@ pub(crate) struct Node {
     /// The position of the node in space.
     pub(crate) pos: UVec3,
     /// The chunk that this node belongs to.
-    pub(crate) chunk: Chunk,
+    pub(crate) chunk_index: (usize, usize, usize),
     /// Edges are the other nodes that this node is connected to and the path to them.
     pub(crate) edges: HashMap<UVec3, Path>,
     /// The direction of the edge relative to the chunk.
@@ -22,7 +22,7 @@ impl Node {
     pub(crate) fn new(pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> Self {
         Node {
             pos,
-            chunk,
+            chunk_index: chunk.index(),
             dir,
             edges: HashMap::new(),
         }

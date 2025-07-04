@@ -1,3 +1,8 @@
+## v0.3.1
+### Features
+* You can now dynamically change your map and call `Grid::set_nav()` to change navigation data for that position and then call `.build()` again. `Grid::build()` now only rebuilds areas that have been flagged as changed. It can still be a performance hit in a single frame, so you will want to design around it.
+* Cached internal paths are now calculated in parallel to speed up `Grid::build()`.
+
 ## v0.3.0
 **BREAKING CHANGES**
 `GridSettings` has been replaced with a builder `GridSettingsBuilder`.

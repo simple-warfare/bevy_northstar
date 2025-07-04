@@ -314,7 +314,7 @@ fn filter_and_rank_chunk_nodes<'a, N: Neighborhood>(
     target: UVec3,
     blocking: &HashMap<UVec3, Entity>,
 ) -> Option<(Vec<&'a Node>, HashMap<UVec3, Path>)> {
-    let nodes = grid.graph().nodes_in_chunk(chunk.clone());
+    let nodes = grid.graph().nodes_in_chunk(chunk);
 
     // Adjust the blocking map to the local chunk coordinates
     let adjusted_blocking = blocking

@@ -28,7 +28,12 @@ impl Eq for Chunk {}
 impl Chunk {
     /// Creates a new chunk from minimum and maximum coordinates.
     pub(crate) fn new(index: (usize, usize, usize), min: UVec3, max: UVec3) -> Self {
-        Chunk { index, min, max, dirty_edges: [true; 18] }
+        Chunk {
+            index,
+            min,
+            max,
+            dirty_edges: [true; 18],
+        }
     }
 
     pub(crate) fn index(&self) -> (usize, usize, usize) {
@@ -48,9 +53,7 @@ impl Chunk {
         let max = self.max();
 
         (min.x..max.x).flat_map(move |x| {
-            (min.y..max.y).flat_map(move |y| {
-                (min.z..max.z).map(move |z| UVec3::new(x, y, z))
-            })
+            (min.y..max.y).flat_map(move |y| (min.z..max.z).map(move |z| UVec3::new(x, y, z)))
         })
     }
 
