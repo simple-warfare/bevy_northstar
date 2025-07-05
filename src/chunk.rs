@@ -69,6 +69,7 @@ impl Chunk {
         self.dirty_edges[dir as usize] = dirty;
     }
 
+    #[allow(dead_code)]
     pub(crate) fn set_all_edges_dirty(&mut self, dirty: bool) {
         for edge in self.dirty_edges.iter_mut() {
             *edge = dirty;
@@ -212,6 +213,32 @@ impl Chunk {
             _ => panic!("Cardinal directions have no corner."),
         }
     }
+
+    pub(crate) fn touching_edges(&self, pos: UVec3) -> impl Iterator<Item = Dir> + '_ {
+        Dir::all().filter(move |&dir| {
+            let (dx, dy, dz) = dir.vector();
+
+            let x_match = match dx {
+                -1 => pos.x == self.min().x,
+                1 => pos.x + 1 == self.max().x,
+                _ => true, // direction doesn't check x
+            };
+
+            let y_match = match dy {
+                -1 => pos.y == self.min().y,
+                1 => pos.y + 1 == self.max().y,
+                _ => true,
+            };
+
+            let z_match = match dz {
+                -1 => pos.z == self.min().z,
+                1 => pos.z + 1 == self.max().z,
+                _ => true,
+            };
+
+            x_match && y_match && z_match
+        })
+    }
 }
 
 #[cfg(test)]
@@ -234,5 +261,17 @@ mod test {
         let edge = chunk.edge(&grid, Dir::NORTH);
 
         assert_eq!(edge.shape(), [4, 4]);
+    }
+
+    #[test]
+    fn test_touching_edges() {
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
+        let pos = UVec3::new(3, 2, 0);
+
+        let edges: Vec<Dir> = chunk.touching_edges(pos).collect();
+        assert!(!edges.contains(&Dir::WEST));
+        assert!(!edges.contains(&Dir::NORTH));
+        assert!(edges.contains(&Dir::EAST));
+        assert!(!edges.contains(&Dir::SOUTH));
     }
 }

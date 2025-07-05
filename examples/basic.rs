@@ -113,33 +113,56 @@ fn input(
     window: Single<&Window>,
     camera: Single<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
     player: Single<Entity, With<AgentPos>>,
+    grid: Single<&mut CardinalGrid>,
     mut commands: Commands,
 ) {
+    let window = window.into_inner();
+    let (camera, camera_transform, _) = camera.into_inner();
+    let player = player.into_inner();
+
+    let clicked_tile = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
+        .map(|cursor_position| {
+            let offset = Vec2::new(-384.0, -288.0);
+            let cursor_position = cursor_position - offset;
+            UVec3::new(
+                (cursor_position.x / 12.0).round() as u32,
+                (cursor_position.y / 12.0).round() as u32,
+                0,
+            )
+        });
     // Most of this isn't important for using the crate and is standard Bevy usage.
     // We just want to demonstrate how to use the pathfinding system with a mouse click.
     if input.just_pressed(MouseButton::Left) {
-        let window = window.into_inner();
-        let (camera, camera_transform, _) = camera.into_inner();
-        let player = player.into_inner();
-
-        if let Some(cursor_position) = window
-            .cursor_position()
-            .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
-        {
-            let offset = Vec2::new(-384.0, -288.0); // Offset to center on the world.
-            let cursor_position = cursor_position - offset;
-
-            let goal = UVec3::new(
-                (cursor_position.x / 12.0).round() as u32,
-                (cursor_position.y / 12.0).round() as u32,
-                0, // Assuming a 2D grid, z-coordinate is 0.
-            );
-
+        if let Some(goal) = clicked_tile {
             // This is the important bit here.
             // We insert a Pathfind component with the goal position.
             // The pathfinding system will insert a NextPos component
             // on the next frame.
             commands.entity(player).insert(Pathfind::new(goal));
+        }
+    }
+
+    // Right click to toggle the navigation state of the clicked tile.
+    // This demonstrates how to dynamically change the grid's navigation data.
+    if input.just_pressed(MouseButton::Right) {
+        if let Some(position) = clicked_tile {
+            let mut grid = grid.into_inner();
+
+            if let Some(nav) = grid.nav(position) {
+                if !matches!(nav, Nav::Impassable) {
+                    // If the cell is passable, we set it to impassable.
+                    grid.set_nav(position, Nav::Impassable);
+                } else {
+                    // If the cell is impassable, we set it to passable with a cost of 1.
+                    grid.set_nav(position, Nav::Passable(1));
+                }
+            } else {
+                return;
+            }
+            // You must call `build` after modifying the grid to update the internal state.
+            grid.build();
         }
     }
 }

@@ -10,10 +10,24 @@ bevy = "0.16"
 bevy_northstar = "0.3"
 ```
 
-### Debug Optimization
-Pathfinding and grid algorithms involve a lot of branching, which can make debug builds significantly slower. You can set the optimization settings for this crate so you can still debug without the performance hit.
+### Features
 
-Follow the [Bevy Quickstart Cargo Workspaces section](https://bevy.org/learn/quick-start/getting-started/setup/#cargo-workspaces) to add opt-level 3 to your dependencies.
+#### `Stats`
+Enable statistics reporting, includes pathfinding, collision avoidance, and grid build time stats. Useful for diagnosing frame spikes. See [Debugging](./debugging.md).
+
+#### `Parallel` *(Enabled by default)*
+Uses `rayon` to build the navigation grid in parallel. This greatly speeds up grid rebuilds, but may cause issues in WASM builds.
+To disable parallelism (e.g. for WASM support), disable default features:
+```toml
+bevy_northstar = { version = "0.3", default-features = false }
+```
+> **⚠️ Warning**  
+> If you disable `parallel`, rebuilding the grid during gameplay (e.g. mining, explosions, etc.) can be quite expensive. You will want to confine your updates in a single frame to the least amount of affected chunks.
+
+### Debug Optimization
+Pathfinding and grid algorithms involve a lot of branching, which can make debug builds significantly slower. You can set the optimization settings for this crate so you can still debug your game without the performance hit.
+
+Follow [Bevy Quickstart Cargo Workspaces](https://bevy.org/learn/quick-start/getting-started/setup/#cargo-workspaces) to add `opt-level = 3` to your `Cargo.toml` dependencies.
 
 Or alternatively add the following to your `Cargo.toml`:
 ```toml

@@ -14,6 +14,8 @@ The crate provides:
 - **Pathfinding Options** - Choose between optimized HPA* algorithms or traditional A* per call. You can retrieve paths directly even when using the plugin systems.
 - **Supports 2D and 3D Tilemaps** – Works with both 2D and 3D tilemaps.
 - **Neighbor Filtering and Caching** - Precomputed, optionally filtered neighbors are cached to avoid redundant processing.
+- **Dynamic Changes** - Modify your tilemap and only affected areas will be recalculated during grid rebuilds.
+- **Parallel Building** - Chunk calculations run in parallel for faster builds. Can be disabled to support WASM.
 - **Memory Efficient** - Neighbors are stored in compact bitmasks, reduced memory on large maps.
 - **Gizmo Debug View** – Visualize the HPA* grid and entity paths using debug components.
 - **Dynamic Collision & Avoidance** – Optional collision avoidance system. Just the add the `Blocking` component to flag blockers.
@@ -25,6 +27,7 @@ The crate provides:
 
 Press P to switch between Refined HPA*, Coarse HPA*, and traditional A*
 Press C to disable/enable collision
+Press R to change the nav data for random tiles every 5 seconds. 
 
 ![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
 
@@ -38,6 +41,7 @@ Press C to disable/enable collision
 This crate has the following Cargo features:
 
 - `stats`: Enables pathfinding benchmarks. Useful to get an idea of how much time it's using per frame.
+- `parallel`: Enabled by default. Disable default features to run grid builds single-threaded if needed for WASM.
 
 # Quick Start
 
@@ -101,9 +105,9 @@ fn build_grid(grid: Single<&mut CardinalGrid>) {
 ```
 
 ## Debug Optimization
-Pathfinding and grid algorithms involve a lot of branching, which can make debug builds significantly slower. You can set the optimization settings for this crate so you can still debug without the performance hit.
+Pathfinding and grid algorithms involve a lot of branching, which can make debug builds significantly slower. You can set the optimization settings for this crate so you can still debug your game without the performance hit.
 
-Follow the [Bevy Quickstart Cargo Workspaces section](https://bevy.org/learn/quick-start/getting-started/setup/#cargo-workspaces) to add opt-level 3 to your dependencies.
+Follow [Bevy Quickstart Cargo Workspaces](https://bevy.org/learn/quick-start/getting-started/setup/#cargo-workspaces) to add `opt-level = 3` to your `Cargo.toml` dependencies.
 
 Or alternatively add the following to your `Cargo.toml`:
 ```toml

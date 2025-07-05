@@ -15,6 +15,17 @@ pub enum Nav {
     Ramp(MovementCost),
 }
 
+impl PartialEq for Nav {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Nav::Passable(a), Nav::Passable(b)) => a == b,
+            (Nav::Impassable, Nav::Impassable) => true,
+            (Nav::Ramp(a), Nav::Ramp(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 /// [`NavCell`] represents the navigation data for a position in the grid.
 /// Normal use shouldn't require direct interaction with this struct,
 #[derive(Debug, Clone)]

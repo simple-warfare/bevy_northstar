@@ -43,6 +43,7 @@ impl Graph {
 
     /// Add a new `Node` to the graph at the given position with the specified `Chunk`
     /// and optional direction.
+    #[allow(dead_code)]
     pub(crate) fn add_node(&mut self, pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> usize {
         if let Some(old_id) = self.node_ids.insert(pos, usize::MAX) {
             self.nodes.remove(old_id);
@@ -78,7 +79,39 @@ impl Graph {
         }
     }
 
-    pub(crate) fn remove_nodes_at_edge(&mut self, chunk: &Chunk, dir: Dir) {
+    /// Remove all nodes for edge directions in the Chunk.
+    /// This is used to clean up nodes that are no longer needed
+    /// when edges are rebuilt.
+    pub(crate) fn remove_nodes_for_edges(&mut self, chunk: &Chunk, dirs: &[Dir]) {
+        // Collect all nodes for all specified edges
+        let edge_nodes: Vec<(UVec3, NodeId)> = self
+            .nodes_in_chunk(chunk)
+            .iter()
+            .filter(|node| node.dir.is_some() && dirs.contains(&node.dir.unwrap()))
+            .filter_map(|node| self.node_ids.get(&node.pos).map(|&id| (node.pos, id)))
+            .collect();
+
+        // Remove nodes from slab and mapping
+        for (pos, id) in &edge_nodes {
+            if self.nodes.contains(*id) {
+                self.nodes.remove(*id);
+                self.node_ids.remove(pos);
+            } else {
+                log::warn!(
+                    "Tried to remove node {:?} with id {:?} from Chunk {:?}, but it was already gone",
+                    pos, id, chunk
+                );
+            }
+        }
+
+        // Remove edges from all nodes pointing to removed positions
+        let removed_positions: Vec<UVec3> = edge_nodes.iter().map(|(pos, _)| *pos).collect();
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&removed_positions);
+        }
+    }
+
+    /*pub(crate) fn remove_nodes_at_edge(&mut self, chunk: &Chunk, dir: Dir) {
         // Collect all nodes in the edge and their IDs
         let edge_nodes: Vec<(UVec3, NodeId)> = self
             .nodes_in_chunk(chunk)
@@ -102,7 +135,7 @@ impl Graph {
         for node in self.nodes.iter_mut() {
             node.1.remove_edges_to_positions(&positions);
         }
-    }
+    }*/
 
     pub(crate) fn remove_edges_for_chunk(&mut self, chunk: &Chunk) {
         // Get all the ndoes in the chunk

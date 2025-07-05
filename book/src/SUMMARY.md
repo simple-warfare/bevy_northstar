@@ -3,6 +3,7 @@
 # Usage
 - [Getting Started](./getting_started.md)
 - [Grid Settings](./grid_settings.md)
+- [Grid Updates](./grid_updates.md)
 # Pathfinding
 - [With NorthstarPlugin](./pathfinding/01_plugin.md)
 - [Path Component/Struct](./pathfinding/02_path.md)

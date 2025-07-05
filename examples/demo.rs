@@ -55,7 +55,7 @@ fn main() {
                 randomize_nav
                     .run_if(in_state(shared::State::Playing))
                     .before(PathingSet),
-                update_modified_tiles.run_if(in_state(shared::State::Playing)),
+                update_tile_colors.run_if(in_state(shared::State::Playing)),
             ),
         )
         // You only need to add the `NorthstarPluginSettings` resource if you want to change the default settings.
@@ -229,10 +229,7 @@ fn spawn_minions(
                 ..Default::default()
             })
             .insert(Name::new(format!("{color:?}")))
-            //.insert(DebugPath {
-            //    color,
-            //    draw_unrefined: false,
-            //})
+            .insert(DebugPath::new(color))
             .insert(AgentOfGrid(grid_entity))
             .insert(Blocking)
             .insert(Transform::from_translation(transform))
@@ -250,7 +247,8 @@ fn spawn_minions(
 
 fn move_pathfinders(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
+    mut query: Query<(Entity, &mut AgentPos, &Pathfind, &NextPos)>,
+    grid: Single<&Grid<OrdinalNeighborhood>>,
     tilemap: Single<(
         &TilemapSize,
         &TilemapTileSize,
@@ -260,11 +258,23 @@ fn move_pathfinders(
     mut tick_reader: EventReader<shared::Tick>,
 ) {
     let (map_size, tile_size, grid_size, anchor) = tilemap.into_inner();
+    let grid = grid.into_inner();
 
     for _ in tick_reader.read() {
         let offset = anchor.as_offset(map_size, grid_size, tile_size, &TilemapType::Square);
 
-        for (entity, mut position, next) in query.iter_mut() {
+        for (entity, mut position, pathfind, next) in query.iter_mut() {
+            if grid.nav(next.0) == Some(Nav::Impassable) {
+                // We're making random dynamic changes to the grid in `randomize_nav`.
+                // It's up to us to handle this case. It's not automatically handled by the pathfinding systems because different games will want to handle it differently.
+                commands
+                    .entity(entity)
+                    // For our case, we'll just reinsert the same goal to generate a new path.
+                    .insert(Pathfind::new(pathfind.goal).mode(pathfind.mode))
+                    .remove::<NextPos>();
+                continue;
+            }
+
             position.0 = next.0;
 
             let translation = Vec3::new(
@@ -331,41 +341,43 @@ fn handle_pathfinding_failed(
     }
 }
 
+// FOR GRID REBUILDING DEMO: We store a list of tile positions that have changed to Impassable or Passable.
+// This is used to update the tile colors in the grid to represent the new state of the tiles.
 #[derive(Resource, Default)]
 struct TileTexturesToUpdate {
-    tiles: HashMap<TilePos, u32>,
+    tiles: HashMap<TilePos, Color>,
 }
 
-const WALL_TEXTURE: u32 = 13;
-const FLOOR_TEXTURE: u32 = 14;
+const IMPASSABLE_COLOR: Color = Color::srgba(1.0, 0.0, 0.0, 1.0); // Red, 70% alpha
+const PASSABLE_COLOR: Color = Color::srgba(0.0, 1.0, 0.0, 1.0); // Light green, 50% alpha
 
-fn update_modified_tiles(
-    mut query: Query<(&TilePos, &mut TileTextureIndex)>,
-    mut tiles_to_update: ResMut<TileTexturesToUpdate>,
+// FOR GRID REBUILDING DEMO: Simple system to add a green or red overlay to the tiles that have changed.
+// This is a simple way to visualize the changes in the grid without adding the complexity of changing the tile textures.
+fn update_tile_colors(
+    mut query: Query<(&TilePos, &mut TileColor)>, // Adjust component name to your color type
+    tiles_to_update: Res<TileTexturesToUpdate>,
 ) {
-    // Iterate over the tiles to update and apply the new textures.
-    for (tile_pos, mut tile_texture) in query.iter_mut() {
-        if let Some(texture_index) = tiles_to_update.tiles.get(tile_pos) {
-            // Update the tile texture index with the new texture.
-            tile_texture.0 = *texture_index;
-        } else {
-            // If no update is needed, we can skip this tile.
-            continue;
+    for (tile_pos, mut tile_color) in query.iter_mut() {
+        if tiles_to_update.tiles.contains_key(tile_pos) {
+            tile_color.0 = tiles_to_update
+                .tiles
+                .get(tile_pos)
+                .cloned()
+                .unwrap_or_default();
         }
     }
-
-    // Clear the tiles to update after applying them.
-    tiles_to_update.tiles.clear();
 }
 
-// Let's make a system that randomly changes a few set_nav calls and rebuilds the grid.
+// FOR GRID REBUILDING DEMO: Every five seconds, randomly changes the nav data for 25 tiles in the grid.
+// It then calls `grid::build()` to rebuild only the affected areas of the grid.
+// This is a simple way to demonstrate how the grid can be modified dynamically.
 fn randomize_nav(
     grid: Single<&mut Grid<OrdinalNeighborhood>>,
+    positions: Query<&AgentPos>,
     mut timer: Local<Timer>,
     time: Res<Time>,
-    mut commands: Commands,
-    pathfinders: Query<(Entity, &Pathfind), With<Path>>,
     mut tiles_to_update: ResMut<TileTexturesToUpdate>,
+    config: Res<shared::Config>,
 ) {
     // Initialize the timer if it hasn't been already.
     if timer.finished() && timer.duration().as_secs_f32() == 0.0 {
@@ -375,53 +387,50 @@ fn randomize_nav(
 
     timer.tick(time.delta());
     if timer.just_finished() {
+        if !config.random_rebuild {
+            // If random_rebuild is false, we don't do anything.
+            return;
+        }
+
         let mut grid = grid.into_inner();
 
-        // Let's pick a single chunk to update so we don't have to update a bunch of chunks.
-        // This might make it more realistic as a game might update the map based on an explosion or mining etc.
+        // Build a list of agentpos positions to avoid modifying their tiles
+        let agent_positions: Vec<UVec3> = positions.iter().map(|pos| pos.0).collect();
 
-        // Divide the grid into chunks and pick a random chunk to update.
-        let chunk_size = grid.chunk_size();
-        let chunk_depth = grid.chunk_depth();
-        let width = grid.width() / chunk_size;
-        let height = grid.height() / chunk_size;
-        let depth = grid.depth() / chunk_depth;
+        // This is a bit of an extreme example.
+        // Most games would not need to modify this many tiles in a variety of chunks in a single frame.
+        // For example, an explosion or an entity mining a wall might only modify tiles in a single chunk.
+        for _ in 0..1 {
+            let x = rand::random::<u32>() % grid.width();
+            let y = rand::random::<u32>() % grid.height();
+            let z = rand::random::<u32>() % grid.depth();
 
-        // Randomly pick a chunk to update.
-        let chunk_x = rand::random::<u32>() % width;
-        let chunk_y = rand::random::<u32>() % height;
-        let chunk_z = rand::random::<u32>() % depth;
+            let pos = UVec3::new(x, y, z);
 
-        for _ in 0..25 {
-            let x = rand::random::<u32>() % chunk_size;
-            let y = rand::random::<u32>() % chunk_size;
-            let z = rand::random::<u32>() % chunk_depth;
-
-            // Create a global position from the chunk coordinates.
-            let pos = UVec3::new(
-                x + chunk_size * chunk_x,
-                y + chunk_size * chunk_y,
-                z + chunk_depth * chunk_z,
-            );
+            if agent_positions.contains(&pos) {
+                // Skip positions that are already occupied by agents.
+                continue;
+            }
 
             // random Nav::Passable(1) or Nav::Impassable
             if rand::random::<bool>() {
                 grid.set_nav(pos, Nav::Passable(1));
                 tiles_to_update
                     .tiles
-                    .insert(TilePos::new(pos.x, pos.y), FLOOR_TEXTURE);
+                    .insert(TilePos::new(pos.x, pos.y), PASSABLE_COLOR);
             } else {
                 grid.set_nav(pos, Nav::Impassable);
                 tiles_to_update
                     .tiles
-                    .insert(TilePos::new(pos.x, pos.y), WALL_TEXTURE);
+                    .insert(TilePos::new(pos.x, pos.y), IMPASSABLE_COLOR);
             }
         }
 
         grid.build();
 
         // All the paths might be invalid now so we need to remove the path component and trigger a pathfinding update.
-        for (entity, pathfind) in &pathfinders {
+        // The current `NorthstarPlugin` systems will not handle this automatically.
+        /*for (entity, pathfind) in &pathfinders {
             // Reinsert the Path component to trigger a pathfinding update.
             commands
                 .entity(entity)
@@ -431,6 +440,6 @@ fn randomize_nav(
                     mode: pathfind.mode,
                 })
                 .remove::<Path>();
-        }
+        }*/
     }
 }

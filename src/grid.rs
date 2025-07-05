@@ -1,9 +1,10 @@
 //! This module contains the `Grid` component which is the main component for the crate.
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::sync::Arc;
 
 use bevy::{
-    log::info,
+    log,
     math::{IVec3, UVec3},
     platform::collections::{HashMap, HashSet},
     prelude::{Component, Entity},
@@ -21,7 +22,7 @@ use crate::{
     node::Node,
     path::Path,
     pathfind::{pathfind, pathfind_astar, reroute_path},
-    position_in_cubic_window, MovementCost,
+    position_in_cubic_window, timed, MovementCost,
 };
 
 /// Settings for how the grid is divided into chunks.
@@ -572,9 +573,79 @@ impl<N: Neighborhood + Default> Grid<N> {
             && chunk_z < z_chunks as isize
     }
 
+    pub(crate) fn needs_build(&self) -> bool {
+        if self.dirty {
+            log::error!("Grid is dirty! You must call `build()` after modifying the grid.");
+            return true;
+        }
+
+        if !self.built {
+            log::error!("Grid is not built! You must call `build()` after setting up the grid.");
+            return true;
+        }
+
+        return false;
+    }
+
     /// Marks the chunk containing the given position as dirty, marks all its edges as dirty,
     /// and marks the relevant edges and cells of adjacent chunks as dirty as well.
     pub(crate) fn mark_dirty_for_pos(&mut self, pos: UVec3) {
+        let chunk_size = self.chunk_settings.size as usize;
+        let chunk_depth = self.chunk_settings.depth as usize;
+
+        let chunk_x = pos.x as usize / chunk_size;
+        let chunk_y = pos.y as usize / chunk_size;
+        let chunk_z = pos.z as usize / chunk_depth;
+
+        // Get a reference to the chunk
+        let Some(chunk) = self.chunks.get((chunk_x, chunk_y, chunk_z)) else {
+            return;
+        };
+
+        // Check which edges (if any) this position touches
+        let touched_dirs: Vec<Dir> = chunk.touching_edges(pos).collect();
+
+        // If diagonal or ordinal connectivity is enabled, we always dirty all directions
+        let mark_all_dirs =
+            self.chunk_settings.diagonal_connections || self.neighborhood.is_ordinal();
+
+        let dirs_to_dirty: Vec<Dir> = if touched_dirs.is_empty() && !mark_all_dirs {
+            // Only dirty the local chunk (no neighbor edge concerns)
+            self.dirty_chunks.insert((chunk_x, chunk_y, chunk_z));
+            return;
+        } else if mark_all_dirs {
+            Dir::all().collect()
+        } else {
+            touched_dirs
+        };
+
+        // Dirty this chunk and mark affected edges
+        self.dirty_chunks.insert((chunk_x, chunk_y, chunk_z));
+        if let Some(mut_chunk) = self.chunks.get_mut((chunk_x, chunk_y, chunk_z)) {
+            for dir in dirs_to_dirty.iter() {
+                mut_chunk.set_dirty_edge(*dir, true);
+            }
+        }
+
+        // Dirty adjacent chunks and mark their opposite edges
+        for dir in dirs_to_dirty {
+            let (dx, dy, dz) = dir.vector();
+            let nx = chunk_x as isize + dx as isize;
+            let ny = chunk_y as isize + dy as isize;
+            let nz = chunk_z as isize + dz as isize;
+
+            if self.chunk_in_bounds(nx, ny, nz) {
+                let n_coords = (nx as usize, ny as usize, nz as usize);
+                self.dirty_chunks.insert(n_coords);
+
+                if let Some(neighbor_chunk) = self.chunks.get_mut(n_coords) {
+                    neighbor_chunk.set_dirty_edge(dir.opposite(), true);
+                }
+            }
+        }
+    }
+
+    /*pub(crate) fn mark_dirty_for_pos_old(&mut self, pos: UVec3) {
         let chunk_size = self.chunk_settings.size as usize;
         let chunk_depth = self.chunk_settings.depth as usize;
 
@@ -590,10 +661,14 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
         // Mark adjacent chunks' edges and cells as dirty
-        let mut directions: Vec<Dir> = Dir::cardinal().collect();
-        if self.chunk_settings.diagonal_connections {
-            directions.extend(Dir::ordinal());
-        }
+        let directions = if self.chunk_settings.diagonal_connections {
+            Dir::all()
+        } else if self.neighborhood.is_ordinal() {
+            // We need all directions for ordinal neighborhoods because their neighbors may need to update.
+            Dir::all()
+        } else {
+            Dir::cardinal()
+        };
 
         for dir in directions {
             let (dx, dy, dz) = dir.vector();
@@ -612,32 +687,43 @@ impl<N: Neighborhood + Default> Grid<N> {
                 }
             }
         }
-    }
+    }*/
 
     /// Builds the entire grid. This includes precomputing neighbors, creating nodes for each edge of each chunk,
     /// caching paths between internal nodes within each chunk, and connecting adjacent nodes between chunks.
     /// This method needs to be called after the grid has been initialized.
     pub fn build(&mut self) {
-        let start = std::time::Instant::now();
-        self.precompute_neighbors();
-        let end = std::time::Instant::now();
-        info!("Precomputed neighbors in {:?}", end - start);
-        let start = std::time::Instant::now();
-        self.build_nodes();
-        let end = std::time::Instant::now();
-        info!("Built nodes in {:?}", end - start);
-        let start = std::time::Instant::now();
-        self.connect_internal_chunk_nodes();
-        let end = std::time::Instant::now();
-        info!("Connected internal chunk nodes in {:?}", end - start);
-        let start = std::time::Instant::now();
-        self.connect_adjacent_chunk_nodes();
-        let end = std::time::Instant::now();
-        info!("Connected adjacent chunk nodes in {:?}", end - start);
+        #[cfg(feature = "stats")]
+        let num_dirty_chunks = self.dirty_chunks.len();
+        #[cfg(feature = "stats")]
+        let build_start = std::time::Instant::now();
 
-        // Iterate over all chunks and clean up any dirty edges
+        timed!("Precomputed neighbors", { self.precompute_neighbors() });
+        timed!("Built nodes", { self.build_nodes() });
+        timed!("Connected internal chunk nodes", {
+            self.connect_internal_chunk_nodes()
+        });
+        timed!("Connected adjacent chunk nodes", {
+            self.connect_adjacent_chunk_nodes()
+        });
+
         for (_, chunk) in self.chunks.indexed_iter_mut() {
             chunk.clean();
+        }
+
+        #[cfg(feature = "stats")]
+        {
+            if num_dirty_chunks == 0 {
+                log::debug!("No dirty chunks to build.");
+                return;
+            }
+            let elapsed = build_start.elapsed();
+            log::debug!(
+                "Built grid with {} dirty chunks in {:?}: Average {}µs per chunk",
+                num_dirty_chunks,
+                elapsed,
+                elapsed.as_micros() / num_dirty_chunks as u128
+            );
         }
 
         self.dirty = false;
@@ -646,6 +732,19 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 
     pub(crate) fn precompute_neighbors(&mut self) {
+        #[cfg(feature = "parallel")]
+        {
+            self.precompute_neighbors_parallel();
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.precompute_neighbors_single();
+        }
+    }
+
+    /// Precomputes the neighbors for each cell in the grid.
+    #[cfg(not(feature = "parallel"))]
+    pub(crate) fn precompute_neighbors_single(&mut self) {
         let mut updates = Vec::new();
 
         for (_, chunk) in self.chunks.indexed_iter_mut() {
@@ -667,108 +766,77 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    // Populates the graph with nodes for each edge of each chunk.
-    fn build_nodes(&mut self) {
-        let dirty_chunks: Vec<(usize, usize, usize)> = self.dirty_chunks.iter().copied().collect();
-        for (x, y, z) in dirty_chunks {
-            self.build_nodes_for_chunk(x, y, z);
+    /// Precomputes the neighbors for each cell in the grid in parallel.
+    #[cfg(feature = "parallel")]
+    pub(crate) fn precompute_neighbors_parallel(&mut self) {
+        let grid_view = self.grid.view();
+        let neighborhood = &self.neighborhood;
+
+        let updates: Vec<(UVec3, u32)> = self
+            .chunks
+            .indexed_iter()
+            .par_bridge() // rayon parallel iterator over non-par types
+            .filter_map(|(_, chunk)| {
+                if !self.dirty_chunks.contains(&chunk.index()) {
+                    return None;
+                }
+
+                let updates = chunk
+                    .bounds()
+                    .map(|pos| {
+                        let bits = neighborhood.neighbors(&grid_view, pos);
+                        (pos, bits)
+                    })
+                    .collect::<Vec<_>>();
+
+                Some(updates)
+            })
+            .flatten()
+            .collect();
+
+        // Now apply updates
+        for (pos, bits) in updates {
+            self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].neighbor_bits = bits;
         }
     }
 
-    fn build_nodes_for_chunk(&mut self, x: usize, y: usize, z: usize) {
-        let chunk = &self.chunks[[x, y, z]];
-        let mut cleaned_edges = Vec::new();
-
-        if !chunk.has_dirty_edges() {
-            return;
+    fn build_nodes(&mut self) {
+        #[cfg(feature = "parallel")]
+        {
+            self.build_nodes_parallel();
         }
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.build_nodes_single();
+        }
+    }
 
-        let chunk_size = self.chunk_settings.size as usize;
-        let chunk_depth = self.chunk_settings.depth as usize;
-        let x_chunks = self.dimensions.x as usize / chunk_size;
-        let y_chunks = self.dimensions.y as usize / chunk_size;
-        let z_chunks = self.dimensions.z as usize / chunk_depth;
+    /// Builds the nodes for each edge of each chunk.
+    /// This method will calculate nodes for each edge of the chunk and connect them to the graph.
+    #[cfg(not(feature = "parallel"))]
+    fn build_nodes_single(&mut self) {
+        for (x, y, z) in self.dirty_chunks.iter().copied() {
+            let chunk = &self.chunks[[x, y, z]];
+            let mut cleaned_edges = Vec::new();
 
-        for dir in Dir::cardinal() {
-            let dir_vec = dir.vector();
-
-            let nx = x as i32 + dir_vec.0;
-            let ny = y as i32 + dir_vec.1;
-            let nz = z as i32 + dir_vec.2;
-
-            // Ensure neighbor is within bounds
-            if nx >= 0
-                && nx < x_chunks as i32
-                && ny >= 0
-                && ny < y_chunks as i32
-                && nz >= 0
-                && nz < z_chunks as i32
-            {
-                let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
-
-                if !chunk.is_edge_dirty(dir) {
-                    continue;
-                }
-
-                self.graph.remove_nodes_at_edge(chunk, dir);
-
-                let current_edge = chunk.edge(&self.grid, dir);
-
-                let neighbor_edge = neighbor_chunk.edge(&self.grid, dir.opposite());
-
-                let mut nodes =
-                    self.calculate_edge_nodes(current_edge, neighbor_edge, chunk.clone(), dir);
-
-                for node in nodes.iter_mut() {
-                    node.pos = match dir {
-                        Dir::NORTH => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            node.pos.y + chunk.max().y - 1,
-                            node.pos.z + chunk.min().z,
-                        ),
-                        Dir::EAST => UVec3::new(
-                            node.pos.y + chunk.max().x - 1,
-                            node.pos.x + chunk.min().y,
-                            node.pos.z + chunk.min().z,
-                        ),
-                        Dir::SOUTH => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            node.pos.y + chunk.min().y,
-                            node.pos.z + chunk.min().z,
-                        ),
-                        Dir::WEST => UVec3::new(
-                            node.pos.y + chunk.min().x,
-                            node.pos.x + chunk.min().y,
-                            node.pos.z + chunk.min().z,
-                        ),
-                        Dir::UP => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            node.pos.y + chunk.min().y,
-                            node.pos.z + chunk.max().z - 1,
-                        ),
-                        Dir::DOWN => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            node.pos.y + chunk.min().y,
-                            node.pos.z + chunk.min().z,
-                        ),
-                        _ => panic!("Invalid direction"),
-                    }
-                }
-
-                self.graph.add_nodes(&nodes);
-                cleaned_edges.push(dir);
+            if !chunk.has_dirty_edges() {
+                return;
             }
-        }
 
-        // Handle ordinal connections if enabled
-        if self.chunk_settings.diagonal_connections {
-            for dir in Dir::ordinal() {
+            let chunk_size = self.chunk_settings.size as usize;
+            let chunk_depth = self.chunk_settings.depth as usize;
+            let x_chunks = self.dimensions.x as usize / chunk_size;
+            let y_chunks = self.dimensions.y as usize / chunk_size;
+            let z_chunks = self.dimensions.z as usize / chunk_depth;
+
+            for dir in Dir::cardinal() {
                 let dir_vec = dir.vector();
 
                 let nx = x as i32 + dir_vec.0;
                 let ny = y as i32 + dir_vec.1;
                 let nz = z as i32 + dir_vec.2;
 
+                // Ensure neighbor is within bounds
                 if nx >= 0
                     && nx < x_chunks as i32
                     && ny >= 0
@@ -776,66 +844,330 @@ impl<N: Neighborhood + Default> Grid<N> {
                     && nz >= 0
                     && nz < z_chunks as i32
                 {
+                    let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
+
                     if !chunk.is_edge_dirty(dir) {
+                        continue;
+                    }
+
+                    self.graph.remove_nodes_for_edges(chunk, &[dir]);
+
+                    let current_edge = chunk.edge(&self.grid, dir);
+
+                    let neighbor_edge = neighbor_chunk.edge(&self.grid, dir.opposite());
+
+                    let mut nodes =
+                        self.calculate_edge_nodes(current_edge, neighbor_edge, chunk.clone(), dir);
+
+                    for node in nodes.iter_mut() {
+                        node.pos = match dir {
+                            Dir::NORTH => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.max().y - 1,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::EAST => UVec3::new(
+                                node.pos.y + chunk.max().x - 1,
+                                node.pos.x + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::SOUTH => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::WEST => UVec3::new(
+                                node.pos.y + chunk.min().x,
+                                node.pos.x + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::UP => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.max().z - 1,
+                            ),
+                            Dir::DOWN => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            _ => panic!("Invalid direction"),
+                        }
+                    }
+
+                    self.graph.add_nodes(&nodes);
+                    cleaned_edges.push(dir);
+                }
+            }
+
+            // Handle ordinal connections if enabled
+            if self.chunk_settings.diagonal_connections {
+                for dir in Dir::ordinal() {
+                    let dir_vec = dir.vector();
+
+                    let nx = x as i32 + dir_vec.0;
+                    let ny = y as i32 + dir_vec.1;
+                    let nz = z as i32 + dir_vec.2;
+
+                    if nx >= 0
+                        && nx < x_chunks as i32
+                        && ny >= 0
+                        && ny < y_chunks as i32
+                        && nz >= 0
+                        && nz < z_chunks as i32
+                    {
+                        if !chunk.is_edge_dirty(dir) {
+                            continue;
+                        }
+
+                        let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
+
+                        let current_corner = chunk.corner(&self.grid, dir);
+                        let neighbor_corner = neighbor_chunk.corner(&self.grid, dir.opposite());
+
+                        if current_corner.is_impassable() || neighbor_corner.is_impassable() {
+                            continue;
+                        }
+
+                        let pos = match dir {
+                            Dir::NORTHEAST => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::SOUTHEAST => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::SOUTHWEST => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::NORTHWEST => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::NORTHEASTUP => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.max().z - 1)
+                            }
+                            Dir::SOUTHEASTUP => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.max().z - 1)
+                            }
+                            Dir::SOUTHWESTUP => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.max().z - 1)
+                            }
+                            Dir::NORTHWESTUP => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.max().z - 1)
+                            }
+                            Dir::NORTHEASTDOWN => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::SOUTHEASTDOWN => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::SOUTHWESTDOWN => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::NORTHWESTDOWN => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
+                            }
+                            _ => panic!("Invalid direction"),
+                        };
+
+                        self.graph.add_node(pos, chunk.clone(), Some(dir));
+                        cleaned_edges.push(dir);
+                    }
+                }
+            }
+
+            let chunk = &mut self.chunks[[x, y, z]];
+            for dir in cleaned_edges.iter() {
+                chunk.set_dirty_edge(*dir, false);
+            }
+        }
+    }
+
+    /// Builds the nodes for each edge of each chunk.
+    /// This method will calculate nodes for each edge of the chunk and connect them to the graph in parallel.
+    #[cfg(feature = "parallel")]
+    fn build_nodes_parallel(&mut self) {
+        let chunk_size = self.chunk_settings.size as usize;
+        let chunk_depth = self.chunk_settings.depth as usize;
+        let x_chunks = self.dimensions.x as usize / chunk_size;
+        let y_chunks = self.dimensions.y as usize / chunk_size;
+        let z_chunks = self.dimensions.z as usize / chunk_depth;
+
+        // Collect dirty chunks once
+        let dirty_chunks: Vec<(usize, usize, usize)> = self.dirty_chunks.iter().copied().collect();
+
+        // Process chunks in parallel and produce per-chunk results
+        let results: Vec<_> = dirty_chunks
+            .into_par_iter()
+            .filter_map(|(x, y, z)| {
+                let chunk = &self.chunks[[x, y, z]];
+
+                if !chunk.has_dirty_edges() {
+                    return None;
+                }
+
+                let mut cleaned_edges = Vec::new();
+                let mut nodes_to_add = Vec::new();
+                let mut edges_to_remove = Vec::new();
+
+                // Helper closure to check neighbor in bounds
+                let in_bounds = |nx: i32, ny: i32, nz: i32| {
+                    nx >= 0
+                        && nx < x_chunks as i32
+                        && ny >= 0
+                        && ny < y_chunks as i32
+                        && nz >= 0
+                        && nz < z_chunks as i32
+                };
+
+                // Cardinal directions
+                for dir in Dir::cardinal() {
+                    if !chunk.is_edge_dirty(dir) {
+                        continue;
+                    }
+
+                    let dir_vec = dir.vector();
+                    let nx = x as i32 + dir_vec.0;
+                    let ny = y as i32 + dir_vec.1;
+                    let nz = z as i32 + dir_vec.2;
+
+                    if !in_bounds(nx, ny, nz) {
                         continue;
                     }
 
                     let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
 
-                    let current_corner = chunk.corner(&self.grid, dir);
-                    let neighbor_corner = neighbor_chunk.corner(&self.grid, dir.opposite());
+                    edges_to_remove.push((chunk.clone(), dir));
 
-                    if current_corner.is_impassable() || neighbor_corner.is_impassable() {
-                        continue;
+                    let current_edge = chunk.edge(&self.grid, dir);
+                    let neighbor_edge = neighbor_chunk.edge(&self.grid, dir.opposite());
+
+                    let mut new_nodes =
+                        self.calculate_edge_nodes(current_edge, neighbor_edge, chunk.clone(), dir);
+
+                    // Adjust node positions according to direction
+                    for node in new_nodes.iter_mut() {
+                        node.pos = match dir {
+                            Dir::NORTH => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.max().y - 1,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::EAST => UVec3::new(
+                                node.pos.y + chunk.max().x - 1,
+                                node.pos.x + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::SOUTH => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::WEST => UVec3::new(
+                                node.pos.y + chunk.min().x,
+                                node.pos.x + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            Dir::UP => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.max().z - 1,
+                            ),
+                            Dir::DOWN => UVec3::new(
+                                node.pos.x + chunk.min().x,
+                                node.pos.y + chunk.min().y,
+                                node.pos.z + chunk.min().z,
+                            ),
+                            _ => panic!("Invalid direction"),
+                        };
                     }
 
-                    let pos = match dir {
-                        Dir::NORTHEAST => {
-                            UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
-                        }
-                        Dir::SOUTHEAST => {
-                            UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
-                        }
-                        Dir::SOUTHWEST => UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z),
-                        Dir::NORTHWEST => {
-                            UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
-                        }
-                        Dir::NORTHEASTUP => {
-                            UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.max().z - 1)
-                        }
-                        Dir::SOUTHEASTUP => {
-                            UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.max().z - 1)
-                        }
-                        Dir::SOUTHWESTUP => {
-                            UVec3::new(chunk.min().x, chunk.min().y, chunk.max().z - 1)
-                        }
-                        Dir::NORTHWESTUP => {
-                            UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.max().z - 1)
-                        }
-                        Dir::NORTHEASTDOWN => {
-                            UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
-                        }
-                        Dir::SOUTHEASTDOWN => {
-                            UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
-                        }
-                        Dir::SOUTHWESTDOWN => {
-                            UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
-                        }
-                        Dir::NORTHWESTDOWN => {
-                            UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
-                        }
-                        _ => panic!("Invalid direction"),
-                    };
-
-                    self.graph.add_node(pos, chunk.clone(), Some(dir));
+                    nodes_to_add.extend(new_nodes);
                     cleaned_edges.push(dir);
                 }
-            }
-        }
 
-        let chunk = &mut self.chunks[[x, y, z]];
-        for dir in cleaned_edges.iter() {
-            chunk.set_dirty_edge(*dir, false);
+                // Diagonal directions if enabled
+                if self.chunk_settings.diagonal_connections {
+                    for dir in Dir::ordinal() {
+                        if !chunk.is_edge_dirty(dir) {
+                            continue;
+                        }
+
+                        let dir_vec = dir.vector();
+                        let nx = x as i32 + dir_vec.0;
+                        let ny = y as i32 + dir_vec.1;
+                        let nz = z as i32 + dir_vec.2;
+
+                        if !in_bounds(nx, ny, nz) {
+                            continue;
+                        }
+
+                        let neighbor_chunk = &self.chunks[[nx as usize, ny as usize, nz as usize]];
+
+                        let current_corner = chunk.corner(&self.grid, dir);
+                        let neighbor_corner = neighbor_chunk.corner(&self.grid, dir.opposite());
+
+                        if current_corner.is_impassable() || neighbor_corner.is_impassable() {
+                            continue;
+                        }
+
+                        let pos = match dir {
+                            Dir::NORTHEAST => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::SOUTHEAST => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::SOUTHWEST => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::NORTHWEST => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::NORTHEASTUP => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.max().z - 1)
+                            }
+                            Dir::SOUTHEASTUP => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.max().z - 1)
+                            }
+                            Dir::SOUTHWESTUP => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.max().z - 1)
+                            }
+                            Dir::NORTHWESTUP => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.max().z - 1)
+                            }
+                            Dir::NORTHEASTDOWN => {
+                                UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
+                            }
+                            Dir::SOUTHEASTDOWN => {
+                                UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::SOUTHWESTDOWN => {
+                                UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
+                            }
+                            Dir::NORTHWESTDOWN => {
+                                UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
+                            }
+                            _ => panic!("Invalid direction"),
+                        };
+
+                        nodes_to_add.push(Node::new(pos, chunk.clone(), Some(dir)));
+                        cleaned_edges.push(dir);
+                    }
+                }
+
+                Some((x, y, z, nodes_to_add, cleaned_edges))
+            })
+            .collect();
+
+        // Apply results sequentially (mutable access to self)
+        for (x, y, z, nodes, cleaned_edges) in results {
+            let chunk = &mut self.chunks[[x, y, z]];
+            self.graph.remove_nodes_for_edges(chunk, &cleaned_edges);
+            self.graph.add_nodes(&nodes);
+
+            for &dir in &cleaned_edges {
+                chunk.set_dirty_edge(dir, false);
+            }
         }
     }
 
@@ -959,8 +1291,71 @@ impl<N: Neighborhood + Default> Grid<N> {
         ordinal_nodes
     }
 
-    // Connects the internal nodes of each chunk to each other.
     fn connect_internal_chunk_nodes(&mut self) {
+        #[cfg(feature = "parallel")]
+        {
+            self.connect_internal_chunk_nodes_parallel();
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.connect_internal_chunk_nodes_single();
+        }
+    }
+
+    // Connects the internal nodes of each chunk to each other.
+    #[cfg(not(feature = "parallel"))]
+    fn connect_internal_chunk_nodes_single(&mut self) {
+        for (x, y, z) in self.dirty_chunks.iter().copied() {
+            // Connect internal nodes
+
+            let chunk_grid = self.chunks[[x, y, z]].view(&self.grid);
+            let chunk = &self.chunks[[x, y, z]];
+
+            // Clear all node edges with positions in the chunk if any exist
+            self.graph.remove_edges_for_chunk(chunk);
+
+            let nodes = self.graph.nodes_in_chunk(chunk);
+
+            // Collect all connections in a Vec
+            let mut all_connections = Vec::new();
+
+            for node in nodes.iter() {
+                let start = node.pos - chunk.min();
+
+                let goals: Vec<_> = nodes
+                    .iter()
+                    .filter(|other| other.pos != node.pos)
+                    .map(|other| other.pos - chunk.min())
+                    .collect();
+
+                let paths = dijkstra_grid(&chunk_grid, start, &goals, false, 100, &HashMap::new());
+
+                for (goal_pos, path) in paths.into_iter() {
+                    let world_start = node.pos;
+                    let world_goal = goal_pos + chunk.min();
+                    let path_vec = path
+                        .path()
+                        .iter()
+                        .map(|p| *p + chunk.min())
+                        .collect::<Vec<_>>();
+
+                    all_connections.push((
+                        world_start,
+                        world_goal,
+                        Path::new(path_vec.clone(), path_vec.len() as u32),
+                    ));
+                }
+            }
+
+            for (node_pos, other_node_pos, path) in all_connections {
+                self.graph.connect_node(node_pos, other_node_pos, path);
+            }
+        }
+    }
+
+    // Connects the internal nodes of each chunk to each other in parallel.
+    #[cfg(feature = "parallel")]
+    fn connect_internal_chunk_nodes_parallel(&mut self) {
         for (x, y, z) in self.dirty_chunks.iter().copied() {
             // Connect internal nodes
 
@@ -1086,6 +1481,10 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         refined: bool,
     ) -> Option<Path> {
+        if self.needs_build() {
+            return None;
+        }
+
         reroute_path(self, path, start, goal, blocking, refined)
     }
 
@@ -1099,6 +1498,10 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// `true` if a path exists, `false` otherwise.
     ///
     pub fn is_path_viable(&self, start: UVec3, goal: UVec3) -> bool {
+        if self.needs_build() {
+            return false;
+        }
+
         pathfind(self, start, goal, &HashMap::new(), false, false).is_some()
     }
 
@@ -1121,6 +1524,10 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
+        if self.needs_build() {
+            return None;
+        }
+
         pathfind(self, start, goal, blocking, partial, true)
     }
 
@@ -1145,6 +1552,10 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
+        if self.needs_build() {
+            return None;
+        }
+
         pathfind(self, start, goal, blocking, partial, false)
     }
 
@@ -1169,6 +1580,10 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
+        if self.needs_build() {
+            return None;
+        }
+
         pathfind_astar(
             &self.neighborhood,
             &self.grid.view(),
@@ -1202,6 +1617,10 @@ impl<N: Neighborhood + Default> Grid<N> {
         blocking: &HashMap<UVec3, Entity>,
         partial: bool,
     ) -> Option<Path> {
+        if self.needs_build() {
+            return None;
+        }
+
         let min = start.as_ivec3().saturating_sub(IVec3::splat(radius as i32));
         let max = start
             .as_ivec3()
@@ -1682,46 +2101,65 @@ mod tests {
             "No chunks should be dirty after initial build"
         );
 
-        for chunk_coords in grid.chunks.indexed_iter() {
-            let chunk = &grid.chunks[chunk_coords.0];
+        for (chunk_coords, chunk) in grid.chunks.indexed_iter() {
             assert!(
                 !chunk.has_dirty_edges(),
                 "Chunk {:?} should not have dirty edges after build",
-                chunk_coords.0
+                chunk_coords
             );
         }
 
-        // Mark a position in the center of chunk (0,0,0)
-        let pos = UVec3::new(1, 1, 0);
-        grid.mark_dirty_for_pos(pos);
+        // Mark a position in the center of chunk (0, 0, 0)
+        let center_pos = UVec3::new(1, 1, 0);
+        grid.mark_dirty_for_pos(center_pos);
 
-        // The containing chunk should be dirty and all its edges dirty
+        // Only the containing chunk should be dirty
         assert!(
             grid.dirty_chunks.contains(&(0, 0, 0)),
             "Containing chunk should be dirty"
         );
         let chunk = &grid.chunks[[0, 0, 0]];
+
+        // No edges should be dirty (not an edge position)
         for dir in Dir::cardinal() {
+            if dir == Dir::UP || dir == Dir::DOWN {
+                continue; // Skip vertical edges in 2D grid
+            }
             assert!(
-                chunk.is_edge_dirty(dir),
-                "Edge {dir:?} of chunk (0,0,0) should be dirty"
+                !chunk.is_edge_dirty(dir),
+                "Edge {dir:?} of chunk (0,0,0) should NOT be dirty for interior position"
             );
         }
 
-        // All adjacent chunks should be dirty and the edge facing the changed chunk should be dirty
-        let expected_neighbors = [((1, 0, 0), Dir::WEST), ((0, 1, 0), Dir::SOUTH)];
-        for &((nx, ny, nz), expected_edge) in &expected_neighbors[..2] {
-            if let Some(neighbor_chunk) = grid.chunks.get((nx, ny, nz)) {
-                assert!(
-                    grid.dirty_chunks.contains(&(nx, ny, nz)),
-                    "Neighbor chunk ({nx},{ny},{nz}) should be dirty"
-                );
-                assert!(
-                    neighbor_chunk.is_edge_dirty(expected_edge),
-                    "Neighbor chunk ({nx},{ny},{nz}) edge {expected_edge:?} should be dirty",
-                );
-            }
+        // Neighboring chunks should not be dirty
+        let neighbor_coords = [(1, 0, 0), (0, 1, 0)];
+        for &(nx, ny, nz) in &neighbor_coords {
+            assert!(
+                !grid.dirty_chunks.contains(&(nx, ny, nz)),
+                "Neighbor chunk ({nx},{ny},{nz}) should NOT be dirty"
+            );
         }
+
+        // Now test edge position
+        let edge_pos = UVec3::new(3, 1, 0); // Right edge of chunk (0, 0, 0)
+        grid.mark_dirty_for_pos(edge_pos);
+
+        let chunk = &grid.chunks[[0, 0, 0]];
+        assert!(
+            chunk.is_edge_dirty(Dir::EAST),
+            "East edge should now be dirty"
+        );
+
+        assert!(
+            grid.dirty_chunks.contains(&(1, 0, 0)),
+            "Neighbor chunk (1, 0, 0) should be dirty due to edge cell"
+        );
+
+        let neighbor = &grid.chunks[[1, 0, 0]];
+        assert!(
+            neighbor.is_edge_dirty(Dir::WEST),
+            "Neighbor chunk (1, 0, 0) should have WEST edge dirty"
+        );
     }
 
     // Helper function to check graph node invariants
@@ -1836,6 +2274,41 @@ mod tests {
             UVec3::new(15, 15, 0),
             &HashMap::new(),
             false,
+        );
+    }
+
+    #[test]
+    fn test_needs_build() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+        assert!(grid.needs_build(), "Grid should need build initially");
+
+        // After building, it should still not need a build
+        grid.build();
+        assert!(
+            !grid.needs_build(),
+            "Grid should not need build after initial build"
+        );
+
+        // Mark a position dirty and check needs_build
+        grid.set_nav(UVec3::new(1, 1, 0), Nav::Impassable);
+        assert!(
+            grid.needs_build(),
+            "Grid should need build after marking dirty"
+        );
+
+        let path = grid.pathfind(
+            UVec3::new(0, 0, 0),
+            UVec3::new(10, 10, 0),
+            &HashMap::new(),
+            false,
+        );
+
+        assert!(path.is_none(), "Path should not exist after marking dirty");
+
+        grid.build();
+        assert!(
+            !grid.needs_build(),
+            "Grid should not need build after rebuild"
         );
     }
 }

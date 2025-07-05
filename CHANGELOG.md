@@ -1,7 +1,9 @@
 ## v0.3.1
 ### Features
 * You can now dynamically change your map and call `Grid::set_nav()` to change navigation data for that position and then call `.build()` again. `Grid::build()` now only rebuilds areas that have been flagged as changed. It can still be a performance hit in a single frame, so you will want to design around it.
-* Cached internal paths are now calculated in parallel to speed up `Grid::build()`.
+* `Grid::build()` now processes chunks in parallel! Very large performance boost for the initial build and allows rebuilding large areas of the grid in a single frame.
+* `PathError` enum component has been added to be able to handle more pathfinding errors. `PathfindingFailed` and `RerouteFailed` have been marked as deprecated.
+* You can now right-click a tile in the basic example to change the navigation data and dynamically rebuild the grid.
 
 ## v0.3.0
 **BREAKING CHANGES**

@@ -105,6 +105,7 @@ impl Pathfind {
 /// Remove [`NextPos`] after you've moved the entity to the next position and
 /// a new [`NextPos`] will be inserted on the next frame.
 #[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
 pub struct NextPos(pub UVec3);
 
 // See src/path.rs for the Path component
@@ -123,23 +124,55 @@ pub struct NextPos(pub UVec3);
 #[derive(Component, Default)]
 pub struct Blocking;
 
-/// Marker component that is inserted on an entity when a collision is detected.
-/// The built-in pathfinding system will try to pathfind for this entity every frame unless
-/// you handle the failure in a custom way.
-#[derive(Component, Default, Debug)]
-pub struct PathfindingFailed;
+// I want to switch to this in the future on the next Bevy major release.
+/*#[derive(Component, Debug)]
+pub enum PathError {
+    /// Unable to find a path to the goal.
+    NoPathFound,
+    /// The next position in the path is now impassable due to dynamic changes to the grid.
+    PathInvalidated,
+    /// The pathfinding system failed to reroute the entity around an obstacle with `Blocking`.
+    /// `NorthstarPlugin` reroute_path system will attempt to deeper reroute. You can also handle this yourself by running your system before [`crate::prelude::PathingSet`].
+    AvoidanceFailed,
+    /// The pathfinding system failed to reroute the entity to its goal after all avoidance options were exhausted.
+    /// This means the entity cannot reach its goal and you will need to handle this failure in your own system.
+    /// Examples would be to set a new goal or wait for a certain amount of time before trying to reroute again.
+    /// **You will need to handle this failure in your own system before the entity can be pathed again**.
+    RerouteFailed,
+}
+
+impl PartialEq for PathError {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (PathError::NoPathFound, PathError::NoPathFound)
+                | (PathError::PathInvalidated, PathError::PathInvalidated)
+                | (PathError::AvoidanceFailed, PathError::AvoidanceFailed)
+                | (PathError::RerouteFailed, PathError::RerouteFailed)
+        )
+    }
+}*/
 
 /// Marker component that is inserted on an entity when local avoidance fails.
 /// Currently this marker is handled by the [`crate::plugin::NorthstarPlugin`] `reroute_path` system and can be ignored
 /// unless the desire is to handle the failure in a custom way.
 #[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
 pub struct AvoidanceFailed;
+
+/// Marker component that is inserted on an entity when a collision is detected.
+/// The built-in pathfinding system will try to pathfind for this entity every frame unless
+/// you handle the failure in a custom way.
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct PathfindingFailed;
 
 /// Marker component that is inserted on an entity when path rerouting in [`crate::plugin::NorthstarPlugin`] `reroute_path` fails.
 /// This happens well all avoidance options have been exhausted and the entity cannot be rerouted to its goal.
 /// **You will need to handle this failure in your own system before the entity can be pathed again**.
 /// Examples would be to set a new goal or wait for a certain amount of time before trying to reroute again.
 #[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
 pub struct RerouteFailed;
 
 /****************************************
