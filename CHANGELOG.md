@@ -1,8 +1,9 @@
 ## v0.3.1
 ### Features
-* You can now dynamically change your map and call `Grid::set_nav()` to change navigation data for that position and then call `.build()` again. `Grid::build()` now only rebuilds areas that have been flagged as changed. It can still be a performance hit in a single frame, so you will want to design around it.
-* `Grid::build()` now processes chunks in parallel! Very large performance boost for the initial build and allows rebuilding large areas of the grid in a single frame.
-* `PathError` enum component has been added to be able to handle more pathfinding errors. `PathfindingFailed` and `RerouteFailed` have been marked as deprecated.
+* The grid can now be updated during gameplay. After calling `Grid::set_nav()` to change navigation at a position just call `.build()` again. 
+* `Grid::build()` now rebuilds only areas affected by `set_nav()` when calling it after the initial build.
+* `Grid::build()` now processes chunks in parallel! Large performance boost for the initial build and allows rebuilding larger areas of the grid in a single frame.
+* `parallel` feature has been added and is enabled by default. You can disable default features if targetting WASM and multithreading gives you issue.
 * You can now right-click a tile in the basic example to change the navigation data and dynamically rebuild the grid.
 
 ## v0.3.0
