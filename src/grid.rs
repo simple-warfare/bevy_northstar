@@ -584,7 +584,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             return true;
         }
 
-        return false;
+        false
     }
 
     /// Marks the chunk containing the given position as dirty, marks all its edges as dirty,
@@ -2104,8 +2104,7 @@ mod tests {
         for (chunk_coords, chunk) in grid.chunks.indexed_iter() {
             assert!(
                 !chunk.has_dirty_edges(),
-                "Chunk {:?} should not have dirty edges after build",
-                chunk_coords
+                "Chunk {chunk_coords:?} should not have dirty edges after build",
             );
         }
 
