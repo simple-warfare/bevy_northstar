@@ -1,10 +1,10 @@
 ## v0.3.1
 ### Features
-* The grid can now be updated during gameplay. After calling `Grid::set_nav()` to change navigation at a position just call `.build()` again. 
+* The grid can now be updated during gameplay. After calling `Grid::set_nav()` to change navigation at a position just call `Grid::build()` again. 
 * `Grid::build()` now rebuilds only areas affected by `set_nav()` when calling it after the initial build.
 * `Grid::build()` now processes chunks in parallel! Large performance boost for the initial build and allows rebuilding larger areas of the grid in a single frame.
 * `parallel` feature has been added and is enabled by default. You can disable default features if targetting WASM and multithreading gives you issue.
-* You can now right-click a tile in the basic example to change the navigation data and dynamically rebuild the grid.
+* Right-click a tile in the basic example to change the navigation data and dynamically rebuild the grid.
 
 ## v0.3.0
 **BREAKING CHANGES**

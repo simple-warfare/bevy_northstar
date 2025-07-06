@@ -1,4 +1,6 @@
 // This is a basic example for setting up the plugin.
+// LEFT CLICK to pathfind to a tile.
+// RIGHT CLICK to toggle the navigation state of a tile.
 
 use bevy::prelude::*;
 use bevy_northstar::prelude::*;
