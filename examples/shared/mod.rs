@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_ecs_tilemap::prelude::*;
 use bevy_northstar::prelude::*;
 
 // Config used for the examples
@@ -7,6 +6,7 @@ use bevy_northstar::prelude::*;
 #[derive(Resource, Debug, Default)]
 pub struct Config {
     pub mode: PathfindMode,
+    pub random_rebuild: bool,
     pub paused: bool,
 }
 
@@ -40,7 +40,6 @@ impl<N: Neighborhood + 'static> Plugin for SharedPlugin<N> {
                 (
                     input::<N>,
                     tick.run_if(in_state(State::Playing)),
-                    under_cursor,
                     update_stat_text.run_if(in_state(State::Playing)),
                     update_pathfind_type_text.run_if(in_state(State::Playing)),
                     update_collision_text::<N>.run_if(in_state(State::Playing)),
@@ -87,9 +86,6 @@ struct CollisionText;
 
 #[derive(Component, Debug)]
 pub struct PathfindTypeText;
-
-#[derive(Component, Debug)]
-pub struct EntityDebugText;
 
 pub fn setup_hud(mut commands: Commands) {
     commands
@@ -160,101 +156,6 @@ pub fn setup_hud(mut commands: Commands) {
             },
             CollisionText,
         ));
-
-    commands
-        .spawn((
-            Text::new(""),
-            TextFont {
-                font_size: 24.0,
-                ..default()
-            },
-            Node {
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(200.0),
-                left: Val::Px(0.0),
-                ..default()
-            },
-        ))
-        .with_child((
-            TextSpan::default(),
-            TextFont {
-                font_size: 24.0,
-                ..default()
-            },
-            EntityDebugText,
-        ));
-}
-
-#[allow(clippy::type_complexity)]
-pub fn under_cursor(
-    mut query: Query<&mut TextSpan, With<EntityDebugText>>,
-    windows: Single<&Window>,
-    camera: Single<(&Camera, &GlobalTransform, &Transform), With<Camera>>,
-    minions: Query<(Entity, &GlobalTransform)>,
-    map_query: Single<(
-        &TilemapGridSize,
-        &TilemapSize,
-        &TilemapTileSize,
-        &TilemapType,
-        &TilemapAnchor,
-    )>,
-    troubleshooting: Query<(
-        Entity,
-        &AgentPos,
-        Option<&Pathfind>,
-        Option<&Path>,
-        Option<&NextPos>,
-        Option<&AvoidanceFailed>,
-    )>,
-) {
-    let window = windows.into_inner();
-    let (camera, camera_transform, _) = camera.into_inner();
-    let (grid_size, map_size, tile_size, tilemap_type, anchor) = map_query.into_inner();
-
-    if let Some(cursor_position) = window
-        .cursor_position()
-        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
-    {
-        for mut span in &mut query {
-            let mut text = String::new();
-            let offset = Vec2::new(0.0, 0.0);
-
-            let tile_pos = TilePos::from_world_pos(
-                &(cursor_position + offset),
-                map_size,
-                grid_size,
-                tile_size,
-                tilemap_type,
-                anchor,
-            );
-
-            // Prepend text with GridPos
-            text.push_str(&format!("Tile: {tile_pos:?} "));
-
-            for (entity, transform) in minions.iter() {
-                let distance = (transform.translation() - cursor_position.extend(0.0)).length();
-
-                if distance < 8.0 {
-                    text.push_str(&format!("{entity:?} "));
-
-                    // print all the data in the troubleshooting query
-                    for (entity_other, position, pathfind, path, next, avoidance_failed) in
-                        troubleshooting.iter()
-                    {
-                        if entity == entity_other {
-                            text.push_str(&format!("{position:?} "));
-                            text.push_str(&format!("{pathfind:?} "));
-                            text.push_str(&format!("{path:?} "));
-                            text.push_str(&format!("{next:?} "));
-                            text.push_str(&format!("{avoidance_failed:?} "));
-                        }
-                    }
-                }
-            }
-
-            **span = text;
-        }
-    }
 }
 
 pub fn update_stat_text(stats: Res<Stats>, mut query: Query<&mut TextSpan, With<StatText>>) {
@@ -340,6 +241,10 @@ pub fn input<N: Neighborhood + 'static>(
 
         if keyboard_input.just_pressed(KeyCode::Space) {
             config.paused = !config.paused;
+        }
+
+        if keyboard_input.just_pressed(KeyCode::KeyR) {
+            config.random_rebuild = !config.random_rebuild;
         }
 
         if keyboard_input.just_pressed(KeyCode::KeyP) {

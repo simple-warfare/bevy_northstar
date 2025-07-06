@@ -275,17 +275,17 @@ mod tests {
 
         let _ = graph.add_node(
             UVec3::new(0, 0, 0),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let _ = graph.add_node(
             UVec3::new(1, 1, 1),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let _ = graph.add_node(
             UVec3::new(2, 2, 2),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
 

@@ -1,5 +1,5 @@
 //! Graph module for managing nodes and edges in relative space.
-use bevy::{math::UVec3, platform::collections::HashMap};
+use bevy::{log, math::UVec3, platform::collections::HashMap};
 
 use crate::{chunk::Chunk, dir::Dir, node::Node, path::Path, NodeId};
 
@@ -30,11 +30,11 @@ impl Graph {
     }
 
     /// Returns all `Node`s that exist in the given `Chunk`.
-    pub(crate) fn nodes_in_chunk(&self, chunk: Chunk) -> Vec<&Node> {
+    pub(crate) fn nodes_in_chunk(&self, chunk: &Chunk) -> Vec<&Node> {
         let nodes = self
             .nodes
             .iter()
-            .filter(|(_, node)| node.chunk == chunk)
+            .filter(|(_, node)| node.chunk_index == chunk.index())
             .map(|(_, node)| node)
             .collect();
 
@@ -43,15 +43,15 @@ impl Graph {
 
     /// Add a new `Node` to the graph at the given position with the specified `Chunk`
     /// and optional direction.
+    #[allow(dead_code)]
     pub(crate) fn add_node(&mut self, pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> usize {
-        if let Some(&id) = self.node_ids.get(&pos) {
-            return id;
+        if let Some(old_id) = self.node_ids.insert(pos, usize::MAX) {
+            self.nodes.remove(old_id);
         }
 
         let node = Node::new(pos, chunk, dir);
         let id = self.nodes.insert(node.clone());
         self.node_ids.insert(pos, id);
-
         id
     }
 
@@ -62,8 +62,12 @@ impl Graph {
     /// The `nodes` parameter is a vector of `Node`s to be added.
     pub(crate) fn add_nodes(&mut self, nodes: &Vec<Node>) {
         for node in nodes {
-            self.node_ids
-                .insert(node.pos, self.nodes.insert(node.clone()));
+            if let Some(old_id) = self.node_ids.insert(node.pos, usize::MAX) {
+                self.nodes.remove(old_id);
+            }
+
+            let id = self.nodes.insert(node.clone());
+            self.node_ids.insert(node.pos, id);
         }
     }
 
@@ -72,6 +76,75 @@ impl Graph {
     pub(crate) fn remove_node(&mut self, pos: UVec3) {
         if let Some(id) = self.node_ids.remove(&pos) {
             self.nodes.remove(id);
+        }
+    }
+
+    /// Remove all nodes for edge directions in the Chunk.
+    /// This is used to clean up nodes that are no longer needed
+    /// when edges are rebuilt.
+    pub(crate) fn remove_nodes_for_edges(&mut self, chunk: &Chunk, dirs: &[Dir]) {
+        // Collect all nodes for all specified edges
+        let edge_nodes: Vec<(UVec3, NodeId)> = self
+            .nodes_in_chunk(chunk)
+            .iter()
+            .filter(|node| node.dir.is_some() && dirs.contains(&node.dir.unwrap()))
+            .filter_map(|node| self.node_ids.get(&node.pos).map(|&id| (node.pos, id)))
+            .collect();
+
+        // Remove nodes from slab and mapping
+        for (pos, id) in &edge_nodes {
+            if self.nodes.contains(*id) {
+                self.nodes.remove(*id);
+                self.node_ids.remove(pos);
+            } else {
+                log::warn!(
+                    "Tried to remove node {:?} with id {:?} from Chunk {:?}, but it was already gone",
+                    pos, id, chunk
+                );
+            }
+        }
+
+        // Remove edges from all nodes pointing to removed positions
+        let removed_positions: Vec<UVec3> = edge_nodes.iter().map(|(pos, _)| *pos).collect();
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&removed_positions);
+        }
+    }
+
+    /*pub(crate) fn remove_nodes_at_edge(&mut self, chunk: &Chunk, dir: Dir) {
+        // Collect all nodes in the edge and their IDs
+        let edge_nodes: Vec<(UVec3, NodeId)> = self
+            .nodes_in_chunk(chunk)
+            .iter()
+            .filter(|node| node.dir == Some(dir))
+            .filter_map(|node| self.node_ids.get(&node.pos).map(|&id| (node.pos, id)))
+            .collect();
+
+        // Remove all nodes from the slab and node_ids mapping
+        for (pos, id) in &edge_nodes {
+            if self.nodes.contains(*id) {
+                self.nodes.remove(*id);
+                self.node_ids.remove(pos);
+            } else {
+                log::warn!("Tried to remove node {:?} with id {:?} from Chunk {:?}, but it was already gone", pos, id, chunk);
+            }
+        }
+
+        // Remove any edges in other nodes that point to the removed positions
+        let positions: Vec<UVec3> = edge_nodes.iter().map(|(pos, _)| *pos).collect();
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&positions);
+        }
+    }*/
+
+    pub(crate) fn remove_edges_for_chunk(&mut self, chunk: &Chunk) {
+        // Get all the ndoes in the chunk
+        let nodes_in_chunk = self.nodes_in_chunk(chunk);
+        // Collect all positions in the chunk
+        let positions: Vec<UVec3> = nodes_in_chunk.iter().map(|node| node.pos).collect();
+        // Now iterate over all nodes in the chunk and remove edges to those positions
+        for node in self.nodes.iter_mut() {
+            node.1.remove_edges_to_positions(&positions);
         }
     }
 
@@ -101,6 +174,47 @@ impl Graph {
         }
 
         paths
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn validate_slab(&self) {
+        for (pos, id) in &self.node_ids {
+            if !self.nodes.contains(*id) {
+                log::error!(
+                    "validate: node_ids maps pos {:?} to id {:?}, but slab has no entry!",
+                    pos,
+                    id
+                );
+            } else {
+                let node = &self.nodes[*id];
+                if node.pos != *pos {
+                    log::error!(
+                        "validate: node_ids maps pos {:?} to id {:?}, but slab node has pos {:?}!",
+                        pos,
+                        id,
+                        node.pos
+                    );
+                }
+            }
+        }
+
+        for (id, node) in self.nodes.iter() {
+            if let Some(mapped_id) = self.node_ids.get(&node.pos) {
+                if *mapped_id != id {
+                    log::error!(
+                        "validate: slab node at id {:?} has pos {:?}, but node_ids maps to different id {:?}",
+                        id,
+                        node.pos,
+                        mapped_id
+                    );
+                }
+            } else {
+                log::error!(
+                    "validate: slab has node at pos {:?}, but node_ids has no entry",
+                    node.pos
+                );
+            }
+        }
     }
 
     /// Returns the number of nodes in the graph.
@@ -134,7 +248,7 @@ impl Graph {
 
     /// Returns the closest `Node` to the given position in the specified `Chunk`.
     #[allow(dead_code)]
-    pub(crate) fn closest_node_in_chunk(&self, pos: UVec3, chunk: Chunk) -> Option<&Node> {
+    pub(crate) fn closest_node_in_chunk(&self, pos: UVec3, chunk: &Chunk) -> Option<&Node> {
         let node = self
             .nodes_in_chunk(chunk)
             .iter()
@@ -158,12 +272,12 @@ mod tests {
     fn test_add_node() {
         let mut graph = Graph::new();
         let pos = UVec3::new(0, 0, 0);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         let id = graph.add_node(pos, chunk.clone(), None);
 
         let node = graph.node_at(pos).unwrap();
         assert_eq!(node.pos, pos);
-        assert_eq!(node.chunk, chunk);
+        assert_eq!(node.chunk_index, chunk.index());
         assert_eq!(node.dir, None);
         assert_eq!(id, 0);
     }
@@ -173,11 +287,11 @@ mod tests {
         let mut graph = Graph::new();
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         graph.add_node(pos1, chunk.clone(), None);
         graph.add_node(pos2, chunk.clone(), None);
 
-        let nodes = graph.nodes_in_chunk(chunk);
+        let nodes = graph.nodes_in_chunk(&chunk);
         assert_eq!(nodes.len(), 2);
         assert_eq!(nodes[0].pos, pos1);
         assert_eq!(nodes[1].pos, pos2);
@@ -188,12 +302,12 @@ mod tests {
         let mut graph = Graph::new();
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
-        let chunk = Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
+        let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
         graph.add_node(pos1, chunk.clone(), None);
         graph.add_node(pos2, chunk.clone(), None);
 
         let pos = UVec3::new(0, 1, 0);
-        let node = graph.closest_node_in_chunk(pos, chunk).unwrap();
+        let node = graph.closest_node_in_chunk(pos, &chunk).unwrap();
         assert_eq!(node.pos, pos1);
     }
 }

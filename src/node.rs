@@ -10,7 +10,7 @@ pub(crate) struct Node {
     /// The position of the node in space.
     pub(crate) pos: UVec3,
     /// The chunk that this node belongs to.
-    pub(crate) chunk: Chunk,
+    pub(crate) chunk_index: (usize, usize, usize),
     /// Edges are the other nodes that this node is connected to and the path to them.
     pub(crate) edges: HashMap<UVec3, Path>,
     /// The direction of the edge relative to the chunk.
@@ -22,7 +22,7 @@ impl Node {
     pub(crate) fn new(pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> Self {
         Node {
             pos,
-            chunk,
+            chunk_index: chunk.index(),
             dir,
             edges: HashMap::new(),
         }
@@ -31,6 +31,12 @@ impl Node {
     /// Returns all positions that are connected to this `Node`.
     pub(crate) fn edges(&self) -> Vec<UVec3> {
         self.edges.keys().cloned().collect()
+    }
+
+    pub(crate) fn remove_edges_to_positions(&mut self, positions: &[UVec3]) {
+        for pos in positions {
+            self.edges.remove(pos);
+        }
     }
 }
 
@@ -56,12 +62,12 @@ mod tests {
     fn test_node_eq() {
         let node1 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let node2 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
 
@@ -72,12 +78,12 @@ mod tests {
     fn test_node_hash() {
         let node1 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
         let node2 = Node::new(
             UVec3::new(1, 2, 3),
-            Chunk::new(UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
+            Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
         );
 

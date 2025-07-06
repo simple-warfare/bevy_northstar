@@ -138,6 +138,7 @@ pub struct BlockingMap(pub HashMap<UVec3, Entity>);
 pub struct DirectionMap(pub HashMap<Entity, Vec3>);
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub(crate) struct NeedsPathfinding;
 
 // Flags all the entities with a changed `Pathfind` component to request pathfinding.
@@ -152,7 +153,7 @@ fn tag_pathfinding_requests(mut commands: Commands, query: Query<Entity, Changed
 fn pathfind<N: Neighborhood + 'static>(
     grid: Single<&Grid<N>>,
     mut commands: Commands,
-    mut query: Query<(Entity, &AgentPos, &Pathfind), With<NeedsPathfinding>>,
+    query: Query<(Entity, &AgentPos, &Pathfind), With<NeedsPathfinding>>,
     blocking: Res<BlockingMap>,
     settings: Res<NorthstarPluginSettings>,
     //mut queue: Local<VecDeque<Entity>>,
@@ -163,7 +164,7 @@ fn pathfind<N: Neighborhood + 'static>(
     // Limit the number of agents processed per frame to prevent stutters
     let mut count = 0;
 
-    for (entity, start, pathfind) in &mut query {
+    for (entity, start, pathfind) in &query {
         if count >= settings.max_pathfinding_agents_per_frame {
             return;
         }

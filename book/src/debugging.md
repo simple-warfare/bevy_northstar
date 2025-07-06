@@ -114,6 +114,8 @@ If you would like to debug a directly created path (returned from `grid::pathfin
 # Stats
 Enabling the `stats` feature on the crate will allow the `NorthstarPlugin` pathfinding systems to calculate the average time spent on pathfinding and collision calls.
 
+It will also log debug level stats for `Grid::build()` times. Useful making sure your grid rebuilds are staying within your frame budget.
+
 ```toml
 [dependencies]
 bevy_northstar = { version = "0.2.0", features = ["stats"]}
@@ -127,3 +129,10 @@ fn print_stats(stats: Res<Stats>) {
     debug!("Pathfinding Stats: {:?}", stats.pathfinding);
 }
 ```
+
+To get the `Grid::build()` timing stats dumped to your log you'll need to enable debug level logging for the crate.
+```bash,no-run
+RUST_LOG=bevy_northstar=debug,bevy=info cargo run
+```
+
+Or alternatively configure it in code when setting up your Bevy logging.

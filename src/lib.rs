@@ -135,3 +135,24 @@ fn position_in_cubic_window(pos: UVec3, center: IVec3, radius: i32, grid_shape: 
         || pos.as_ivec3().cmpeq(max).all()
         || (pos.as_ivec3() - center).abs().max_element() <= radius
 }
+
+#[macro_use]
+mod internal_macros {
+    #[macro_export(local_inner_macros)]
+    macro_rules! timed {
+        ($name:literal, $block:block) => {{
+            #[cfg(feature = "stats")]
+            {
+                let start = std::time::Instant::now();
+                let result = $block;
+                log::debug!("{} in {:?}", $name, start.elapsed());
+                result
+            }
+
+            #[cfg(not(feature = "stats"))]
+            {
+                $block
+            }
+        }};
+    }
+}

@@ -1,6 +1,6 @@
 [package]
 name = "bevy_northstar"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 
 authors = ["John Mullins"]
@@ -15,12 +15,15 @@ keywords = ["bevy", "pathfinding", "astar", "hpa", "game"]
 exclude = ["assets/*", "res/*"]
 
 [features]
+default = ["parallel"]
 stats = []
+parallel = ["rayon", "ndarray/rayon"]
 
 [dependencies]
 thiserror = "2.0.12"
 indexmap = "2.10.0"
-ndarray = { version = "0.16.1", features=["rayon"] }
+ndarray = { version = "0.16.1" }
+rayon = { version = "1.10.0", optional = true }
 rustc-hash = "2.1.1"
 strum = "0.27.1"
 slab = "0.4.10"
@@ -32,7 +35,7 @@ default-features = false
 features=["bevy_render", "bevy_gizmos", "bevy_log"]
 
 [dev-dependencies]
-bevy = { version = "0.16.1", features=["bevy_dev_tools"] }
+bevy = { version = "0.16.1", features = ["bevy_dev_tools"] }
 bevy_ecs_tilemap = { version = "0.16" }
 bevy_ecs_tiled = { version = "0.7.2" }
 
@@ -57,3 +60,4 @@ required-features = ["stats"]
 
 [[example]]
 name = "basic"
+
