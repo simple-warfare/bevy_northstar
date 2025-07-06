@@ -123,10 +123,8 @@ opt-level = 3
 
 
 ## Roadmap / TODO
-- **UP NEXT: Modify & Rebuild Grid Chunks Dynamically** – Support updating the grid after it’s been built by only rebuilding the sections required.    
-- **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
-- **Parallelized Graph Building** – Speed up grid/graph construction using parallelism.  
 - **Add Support For Multiple HPA Levels** – Implement multiple hierarchical levels for improved efficiency.  
+- **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
 - **Optimize 3D Performance** – 3d grids appear to take a performance hit higher than expected currently. 
 
 ## Assets credits
