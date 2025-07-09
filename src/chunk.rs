@@ -57,6 +57,15 @@ impl Chunk {
         })
     }
 
+    pub(crate) fn contains(&self, pos: &UVec3) -> bool {
+        pos.x >= self.min.x
+            && pos.x < self.max.x
+            && pos.y >= self.min.y
+            && pos.y < self.max.y
+            && pos.z >= self.min.z
+            && pos.z < self.max.z
+    }
+
     pub(crate) fn has_dirty_edges(&self) -> bool {
         self.dirty_edges.iter().any(|&edge| edge)
     }

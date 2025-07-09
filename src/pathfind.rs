@@ -147,10 +147,19 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 100,
             );
 
-            if let Some(node_path) = node_path {
+            if let Some(mut node_path) = node_path {
+                trim_path(
+                    &mut node_path,
+                    start_chunk,
+                    goal_chunk,
+                );
+
+                let start_pos = node_path.path.front().unwrap();
+                let goal_pos = node_path.path.back().unwrap();
+
                 // Add start_path to the node_path
                 let start_path = start_paths
-                    .get(&(start_node.pos - start_chunk.min()))
+                    .get(&(start_pos - start_chunk.min()))
                     .unwrap();
                 path.extend(start_path.path().iter().map(|pos| *pos + start_chunk.min()));
                 cost += start_path.cost();
@@ -166,7 +175,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 }
 
                 // Add end path to path
-                let end_path = goal_paths.get(&(goal_node.pos - goal_chunk.min())).unwrap();
+                let end_path = goal_paths.get(&(goal_pos - goal_chunk.min())).unwrap();
                 path.extend(
                     end_path
                         .path()
@@ -205,6 +214,48 @@ pub(crate) fn pathfind<N: Neighborhood>(
     }
 
     None
+}
+
+#[inline(always)]
+pub(crate) fn trim_path(
+    path: &mut Path,
+    start_chunk: &Chunk,
+    goal_chunk: &Chunk,
+) {
+    // === Trim from the front (start chunk) ===
+    if let Some(best_start_node) = path
+        .path
+        .iter()
+        .rev() // iterate backwards to get the last start chunk node
+        .find(|&&pos| start_chunk.contains(&pos))
+        .cloned()
+    {
+        while let Some(first) = path.path.front() {
+            if start_chunk.contains(first) && *first != best_start_node {
+                log::info!("Trimming path start node: {:?}", first);
+                path.path.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // === Trim from the back (goal chunk) ===
+    if let Some(first_goal_node) = path
+        .path
+        .iter()
+        .find(|&&pos| goal_chunk.contains(&pos))
+        .cloned()
+    {
+        while let Some(last) = path.path.back() {
+            if goal_chunk.contains(last) && *last != first_goal_node {
+                log::info!("Trimming path goal node: {:?}", last);
+                path.path.pop_back();
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 /// Optimize a path by using line of sight checks to skip waypoints.

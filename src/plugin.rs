@@ -357,6 +357,11 @@ fn avoidance<N: Neighborhood + 'static>(
         .take(count)
         .filter(|pos| {
             if let Some(blocking_entity) = blocking.get(*pos) {
+                // If the blocking entity is the same as the current entity, skip it
+                if *blocking_entity == entity {
+                    return true;
+                }
+
                 // Too risky to move to the next position regardless of the direction
                 if *pos == next_position {
                     return false;
