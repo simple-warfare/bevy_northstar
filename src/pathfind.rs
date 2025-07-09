@@ -137,7 +137,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
     let mut path: Vec<UVec3> = Vec::new();
     let mut cost = 0;
 
-    for start_node in start_nodes {
+    for start_node in &start_nodes {
         for goal_node in goal_nodes.clone() {
             let node_path = astar_graph(
                 &grid.neighborhood,
@@ -150,8 +150,13 @@ pub(crate) fn pathfind<N: Neighborhood>(
             if let Some(mut node_path) = node_path {
                 trim_path(
                     &mut node_path,
-                    start_chunk,
-                    goal_chunk,
+                    start_nodes
+                        .iter()
+                        .map(|node| node.pos)
+                        .collect::<Vec<_>>(),
+                    goal_nodes.iter()
+                        .map(|node| node.pos)
+                        .collect::<Vec<_>>(),
                 );
 
                 let start_pos = node_path.path.front().unwrap();
@@ -219,20 +224,20 @@ pub(crate) fn pathfind<N: Neighborhood>(
 #[inline(always)]
 pub(crate) fn trim_path(
     path: &mut Path,
-    start_chunk: &Chunk,
-    goal_chunk: &Chunk,
+    starts: Vec<UVec3>,
+    goals: Vec<UVec3>,
 ) {
-    // === Trim from the front (start chunk) ===
-    if let Some(best_start_node) = path
+    // Trim out reduntant nodes in the viable starts
+    if let Some(last_start_node) = path
         .path
         .iter()
-        .rev() // iterate backwards to get the last start chunk node
-        .find(|&&pos| start_chunk.contains(&pos))
+        .rev()
+        .find(|&&pos| starts.contains(&pos))
         .cloned()
     {
         while let Some(first) = path.path.front() {
-            if start_chunk.contains(first) && *first != best_start_node {
-                log::info!("Trimming path start node: {:?}", first);
+            // Trim only if it's a different node in the start chunk
+            if starts.contains(first) && *first != last_start_node {
                 path.path.pop_front();
             } else {
                 break;
@@ -240,22 +245,26 @@ pub(crate) fn trim_path(
         }
     }
 
-    // === Trim from the back (goal chunk) ===
+    // Trim out redundant nodes in the viable goals
     if let Some(first_goal_node) = path
         .path
         .iter()
-        .find(|&&pos| goal_chunk.contains(&pos))
+        .find(|&&pos| goals.contains(&pos))
         .cloned()
     {
         while let Some(last) = path.path.back() {
-            if goal_chunk.contains(last) && *last != first_goal_node {
-                log::info!("Trimming path goal node: {:?}", last);
+            if goals.contains(last) && *last != first_goal_node {
                 path.path.pop_back();
             } else {
                 break;
             }
         }
     }
+
+    assert!(
+        !path.path.is_empty(),
+        "BUG: trim_path() removed all nodes — this should never happen"
+    );
 }
 
 /// Optimize a path by using line of sight checks to skip waypoints.
