@@ -61,7 +61,9 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_systems(Update, (draw_debug_map::<N>, draw_debug_paths::<N>))
             .register_type::<DebugGrid>()
-            .register_type::<DebugTilemapType>();
+            .register_type::<DebugTilemapType>()
+            .register_type::<DebugOffset>()
+            .register_type::<DebugPath>();
     }
 }
 

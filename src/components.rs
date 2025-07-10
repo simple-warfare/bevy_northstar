@@ -20,7 +20,7 @@ pub struct AgentPos(pub UVec3);
 *****************************************/
 
 /// Determines which algorithm to use for pathfinding.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum PathfindMode {
     /// Hierarchical pathfinding with the final path refined with line tracing.
     #[default]
@@ -34,7 +34,7 @@ pub enum PathfindMode {
 
 /// Insert [`Pathfind`] on an entity to pathfind to a goal.
 /// Once the plugin systems have found a path, [`NextPos`] will be inserted.
-#[derive(Component, Default, Debug)]
+#[derive(Component, Default, Debug, Reflect)]
 pub struct Pathfind {
     /// The goal to pathfind to.
     pub goal: UVec3,
@@ -104,7 +104,7 @@ impl Pathfind {
 /// The `pathfind` system in [`crate::plugin::NorthstarPlugin`] will insert this.
 /// Remove [`NextPos`] after you've moved the entity to the next position and
 /// a new [`NextPos`] will be inserted on the next frame.
-#[derive(Component, Default, Debug)]
+#[derive(Component, Default, Debug, Reflect)]
 #[component(storage = "SparseSet")]
 pub struct NextPos(pub UVec3);
 
@@ -181,11 +181,11 @@ pub struct RerouteFailed;
 
 /// Add this component to the same entity as [`DebugPath`] to offset the debug gizmos.
 /// Useful for aligning the gizmos with your tilemap rendering offset.
-#[derive(Component, Default)]
+#[derive(Component, Default, Reflect)]
 pub struct DebugOffset(pub Vec3);
 
 /// Component for debugging an entity's [`crate::path::Path`].
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[require(DebugOffset)]
 pub struct DebugPath {
     /// The [`Color`] of the path gizmo.
@@ -384,13 +384,13 @@ impl DebugGridBuilder {
 /// The [`AgentOfGrid`] component is used to create a relationship between an agent or entity and the grid it belongs to.
 /// Pass your [`crate::grid::Grid`] entity to this component and insert it on your entity to relate it so all
 /// pathfinding systems and debugging know which grid to use.
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship(relationship_target = GridAgents)]
 pub struct AgentOfGrid(pub Entity);
 
 /// The [`GridAgents`] component is used to store a list of entities that are agents in a grid.
 /// See [`AgentOfGrid`] for more information on how to associate an entity with a grid.
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[relationship_target(relationship = AgentOfGrid, linked_spawn)]
 pub struct GridAgents(Vec<Entity>);
 

@@ -118,7 +118,13 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
         .insert_resource(NorthstarPluginSettings::default())
         .insert_resource(BlockingMap::default())
         .insert_resource(Stats::default())
-        .insert_resource(DirectionMap::default());
+        .insert_resource(DirectionMap::default())
+        .register_type::<Path>()
+        .register_type::<Pathfind>()
+        .register_type::<PathfindMode>()
+        .register_type::<NextPos>()
+        .register_type::<AgentOfGrid>()
+        .register_type::<GridAgents>();
     }
 }
 
