@@ -1,6 +1,6 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, log, math::UVec3, platform::collections::HashMap};
+use bevy::{ecs::entity::Entity, log, math::{IVec3, UVec3}, platform::collections::{HashMap, HashSet}};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -148,15 +148,15 @@ pub(crate) fn pathfind<N: Neighborhood>(
             );
 
             if let Some(mut node_path) = node_path {
+                let start_keys: HashSet<_> = start_paths.keys().copied().collect();
+                let goal_keys: HashSet<_> = goal_paths.keys().copied().collect();
+
                 trim_path(
                     &mut node_path,
-                    start_nodes
-                        .iter()
-                        .map(|node| node.pos)
-                        .collect::<Vec<_>>(),
-                    goal_nodes.iter()
-                        .map(|node| node.pos)
-                        .collect::<Vec<_>>(),
+                    &start_keys,
+                    &goal_keys,
+                    start_chunk,
+                    goal_chunk,
                 );
 
                 let start_pos = node_path.path.front().unwrap();
@@ -221,7 +221,49 @@ pub(crate) fn pathfind<N: Neighborhood>(
     None
 }
 
-#[inline(always)]
+// Some times the Graph A* will return a path that has valid but redundant nodes at the start and end
+// of the path. Leading to awkward paths where the agent appears to veers off before heading to the goal.
+// This trims the path to ensure that only one entrance and exit node is used for the start and goal chunks.
+pub(crate) fn trim_path(
+    path: &mut Path,
+    start_keys: &HashSet<UVec3>, // local positions in start_paths
+    goal_keys: &HashSet<UVec3>,  // local positions in goal_paths
+    start_chunk: &Chunk,
+    goal_chunk: &Chunk,
+) {
+    // === Trim start ===
+    if let Some(i) = path
+        .path
+        .iter()
+        .position(|pos| start_keys.contains(&(*pos - start_chunk.min())))
+    {
+        // Remove everything before this index
+        for _ in 0..i {
+            path.path.pop_front();
+        }
+    }
+
+    // === Trim end ===
+    if let Some(i) = path
+        .path
+        .iter()
+        .rposition(|pos| goal_keys.contains(&(*pos - goal_chunk.min())))
+    {
+        // Remove everything after this index
+        let len = path.path.len();
+        for _ in (i + 1)..len {
+            path.path.pop_back();
+        }
+    }
+
+    assert!(
+        !path.path.is_empty(),
+        "BUG: trim_path() removed all nodes — this should never happen"
+    );
+}
+
+
+/*#[inline(always)]
 pub(crate) fn trim_path(
     path: &mut Path,
     starts: Vec<UVec3>,
@@ -265,7 +307,7 @@ pub(crate) fn trim_path(
         !path.path.is_empty(),
         "BUG: trim_path() removed all nodes — this should never happen"
     );
-}
+}*/
 
 /// Optimize a path by using line of sight checks to skip waypoints.
 ///
@@ -292,6 +334,78 @@ pub(crate) fn optimize_path<N: Neighborhood>(
 
     let filtered = !neighborhood.filters().is_empty();
 
+    let mut refined_path = Vec::with_capacity(path.len());
+    let mut i = 0;
+
+    let mut last_dir: Option<IVec3> = None;
+
+    refined_path.push(path.path[i]); // Always keep the first node
+
+    while i < path.len() {
+        let mut shortcut_taken = false;
+
+        for farthest in (i + 1..path.len()).rev() {
+            let candidate = path.path[farthest];
+            let dir = (candidate.as_ivec3() - path.path[i].as_ivec3()).signum();
+
+            // Reject if direction changes drastically
+            if let Some(prev_dir) = last_dir {
+                if dir != prev_dir && dir.dot(prev_dir) < 0 {
+                    continue; // Skip this candidate
+                }
+            }
+
+            let maybe_shortcut = if filtered {
+                bresenham_path_filtered(grid, path.path[i], candidate, neighborhood.is_ordinal())
+            } else {
+                bresenham_path(grid, path.path[i], candidate, neighborhood.is_ordinal())
+            };
+
+            if let Some(shortcut) = maybe_shortcut {
+                refined_path.extend(shortcut.into_iter().skip(1));
+                i = farthest;
+                shortcut_taken = true;
+                last_dir = Some(dir);
+                break;
+            }
+        }
+
+        if !shortcut_taken {
+            i += 1;
+            if i < path.len() {
+                let dir = if let Some(prev) = refined_path.last() {
+                    (path.path[i].as_ivec3() - prev.as_ivec3()).signum()
+                } else {
+                    IVec3::ZERO
+                };
+                refined_path.push(path.path[i]);
+                last_dir = Some(dir);
+            }
+        }
+    }
+
+    // Recompute cost of new path
+    let cost = refined_path
+        .iter()
+        .map(|pos| grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost)
+        .sum();
+
+    let mut path = Path::new(refined_path.clone(), cost);
+    path.graph_path = refined_path.into();
+    path
+}
+
+/*pub(crate) fn optimize_path_old<N: Neighborhood>(
+    neighborhood: &N,
+    grid: &ArrayView3<NavCell>,
+    path: &Path,
+) -> Path {
+    if path.is_empty() {
+        return path.clone();
+    }
+
+    let filtered = !neighborhood.filters().is_empty();
+
     let goal = *path.path.back().unwrap();
     let mut refined_path = Vec::with_capacity(path.len());
     let mut i = 0;
@@ -299,24 +413,20 @@ pub(crate) fn optimize_path<N: Neighborhood>(
     refined_path.push(path.path[i]); // Always keep the first node
 
     while i < path.len() {
-        // Try to shortcut directly to goal first
-        /*if let Some(direct_path) = bresenham_path(
-            grid,
-            path.path[i],
-            goal,
-            neighborhood.is_ordinal(),
-            allow_corner_clipping,
-        ) {
-            refined_path.extend(direct_path.into_iter().skip(1));
-            break;
-        }*/
-
-        if let Some(direct_path) = path_line_trace(grid, path.path[i], goal) {
-            // If we can reach the goal directly, add it and break
-            refined_path.extend(direct_path.into_iter().skip(1));
-            break;
+        if !filtered {
+            if let Some(direct_path) = bresenham_path(grid, path.path[i], goal, neighborhood.is_ordinal()) {
+                // If we can reach the goal directly, add it and break
+                refined_path.extend(direct_path.into_iter().skip(1));
+                break;
+            }
+        } else {
+            if let Some(direct_path) = bresenham_path_filtered(grid, path.path[i], goal, neighborhood.is_ordinal()) {
+                // If we can reach the goal directly, add it and break
+                refined_path.extend(direct_path.into_iter().skip(1));
+                break;
+            }
         }
-
+        
         // Try to find the farthest reachable waypoint from i (greedy)
         let mut shortcut_taken = false;
         for farthest in (i + 1..path.len()).rev() {
@@ -363,7 +473,7 @@ pub(crate) fn optimize_path<N: Neighborhood>(
     let mut path = Path::new(refined_path.clone(), cost);
     path.graph_path = refined_path.into();
     path
-}
+}*/
 
 // Filters and ranks nodes within a chunk based on reachability and proximity.
 #[inline(always)]
