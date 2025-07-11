@@ -22,7 +22,9 @@ use crate::{
     node::Node,
     path::Path,
     pathfind::{pathfind, pathfind_astar, reroute_path},
-    position_in_cubic_window, timed, MovementCost,
+    position_in_cubic_window,
+    prelude::NeighborDir,
+    timed, MovementCost,
 };
 
 /// Settings for how the grid is divided into chunks.
@@ -558,6 +560,17 @@ impl<N: Neighborhood + Default> Grid<N> {
         pos.x < self.dimensions.x && pos.y < self.dimensions.y && pos.z < self.dimensions.z
     }
 
+    /// Returns the neighbors of a given position in the grid.
+    pub fn neighbors(&self, pos: &UVec3) -> Vec<NeighborDir> {
+        if !self.in_bounds(*pos) {
+            return Vec::new();
+        }
+
+        let neighbor_bits =
+            self.grid[[pos.x as usize, pos.y as usize, pos.z as usize]].neighbor_bits;
+        NeighborDir::from_bits(neighbor_bits)
+    }
+
     pub(crate) fn chunk_in_bounds(&self, chunk_x: isize, chunk_y: isize, chunk_z: isize) -> bool {
         let chunk_size = self.chunk_settings.size as usize;
         let chunk_depth = self.chunk_settings.depth as usize;
@@ -1044,41 +1057,67 @@ impl<N: Neighborhood + Default> Grid<N> {
                     let mut new_nodes =
                         self.calculate_edge_nodes(current_edge, neighbor_edge, chunk.clone(), dir);
 
+                    // Assert that nodes are in bounds of current 2d edge
+                    for node in &new_nodes {
+                        assert!(
+                            node.pos.x < current_edge.shape()[0] as u32
+                                && node.pos.y < current_edge.shape()[1] as u32,
+                            "Node position {:?} is out of bounds for edge with shape {:?}",
+                            node.pos,
+                            current_edge.shape()
+                        );
+                    }
+
                     // Adjust node positions according to direction
                     for node in new_nodes.iter_mut() {
                         node.pos = match dir {
                             Dir::NORTH => UVec3::new(
                                 node.pos.x + chunk.min().x,
-                                node.pos.y + chunk.max().y - 1,
+                                chunk.max().y - 1,
                                 node.pos.z + chunk.min().z,
                             ),
                             Dir::EAST => UVec3::new(
-                                node.pos.y + chunk.max().x - 1,
+                                chunk.max().x - 1,
                                 node.pos.x + chunk.min().y,
                                 node.pos.z + chunk.min().z,
                             ),
                             Dir::SOUTH => UVec3::new(
                                 node.pos.x + chunk.min().x,
-                                node.pos.y + chunk.min().y,
+                                chunk.min().y,
                                 node.pos.z + chunk.min().z,
                             ),
                             Dir::WEST => UVec3::new(
-                                node.pos.y + chunk.min().x,
+                                chunk.min().x,
                                 node.pos.x + chunk.min().y,
                                 node.pos.z + chunk.min().z,
                             ),
                             Dir::UP => UVec3::new(
                                 node.pos.x + chunk.min().x,
                                 node.pos.y + chunk.min().y,
-                                node.pos.z + chunk.max().z - 1,
+                                chunk.max().z - 1,
                             ),
                             Dir::DOWN => UVec3::new(
                                 node.pos.x + chunk.min().x,
                                 node.pos.y + chunk.min().y,
-                                node.pos.z + chunk.min().z,
+                                chunk.min().z,
                             ),
                             _ => panic!("Invalid direction"),
                         };
+                    }
+
+                    // Assert that nodes will are in contained in chunk min/max bounds
+                    for node in &new_nodes {
+                        assert!(
+                            node.pos.x >= chunk.min().x
+                                && node.pos.x < chunk.max().x
+                                && node.pos.y >= chunk.min().y
+                                && node.pos.y < chunk.max().y
+                                && node.pos.z >= chunk.min().z
+                                && node.pos.z < chunk.max().z,
+                            "Node position {:?} is out of bounds for chunk {:?}",
+                            node.pos,
+                            chunk
+                        );
                     }
 
                     nodes_to_add.extend(new_nodes);
@@ -1181,6 +1220,10 @@ impl<N: Neighborhood + Default> Grid<N> {
     ) -> Vec<Node> {
         let mut nodes = Vec::new();
 
+        if dir == Dir::EAST || dir == Dir::WEST {
+            println!("I'm here");
+        }
+
         // Iterate over the start edge and find connections that are walkable
         for ((start_x, start_y), start_cell) in start_edge.indexed_iter() {
             if start_cell.is_impassable() {
@@ -1191,6 +1234,9 @@ impl<N: Neighborhood + Default> Grid<N> {
             let mut end_y = start_y;
 
             if start_cell.is_ramp() {
+                if end_y >= end_edge.shape()[1] {
+                    continue;
+                }
                 end_y = start_y + 1;
             }
 
@@ -1363,6 +1409,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             let chunk = &self.chunks[[x, y, z]];
 
             // Clear all node edges with positions in the chunk if any exist
+            // This is done for rebuilding the grid
             self.graph.remove_edges_for_chunk(chunk);
 
             let nodes = self.graph.nodes_in_chunk(chunk);
@@ -1696,7 +1743,7 @@ mod tests {
         },
         nav::Nav,
         neighbor::OrdinalNeighborhood3d,
-        prelude::CardinalNeighborhood,
+        prelude::{CardinalNeighborhood, OrdinalNeighborhood},
     };
 
     const GRID_SETTINGS: GridSettings = GridSettings(GridInternalSettings {
@@ -1719,10 +1766,48 @@ mod tests {
         },
     });
 
+    const GRID_SETTINGS_3D: GridSettings = GridSettings(GridInternalSettings {
+        dimensions: UVec3::new(12, 12, 12),
+        chunk_settings: ChunkSettings {
+            size: 4,
+            depth: 4,
+            diagonal_connections: false,
+        },
+        cost_settings: NavSettings {
+            default_movement_cost: 1,
+            default_impassible: false,
+        },
+        collision_settings: CollisionSettings {
+            enabled: false,
+            avoidance_distance: 4,
+        },
+        neighborhood_settings: NeighborhoodSettings {
+            filters: Vec::new(),
+        },
+    });
+
     #[test]
     pub fn test_new() {
         let grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
         assert_eq!(grid.grid.shape(), [12, 12, 1]);
+    }
+
+    #[test]
+    pub fn test_build() {
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
+        grid.build();
+
+        assert!(!grid.needs_build());
+        assert_eq!(grid.grid.shape(), [12, 12, 1]);
+        assert_eq!(grid.chunks.len(), 9); // 3x3 chunks of size 4
+
+        // Test 3d
+        let mut grid_3d = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS_3D);
+        grid_3d.build();
+
+        assert!(!grid_3d.needs_build());
+        assert_eq!(grid_3d.grid.shape(), [12, 12, 12]);
+        assert_eq!(grid_3d.chunks.len(), 27); // 3x3x3 chunks of size 4
     }
 
     #[test]
@@ -1732,7 +1817,7 @@ mod tests {
             .enable_diagonal_connections()
             .build();
 
-        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        let mut grid = Grid::<OrdinalNeighborhood>::new(&grid_settings);
 
         // Fill grid edges with walls
         for x in 0..4 {
@@ -1774,6 +1859,8 @@ mod tests {
         );
 
         assert_eq!(edges.len(), 1);
+
+        // 3D
     }
 
     #[test]
@@ -1784,19 +1871,9 @@ mod tests {
             .enable_diagonal_connections()
             .build();
 
-        let grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
 
-        let chunk = grid.chunks.iter().next().unwrap().clone();
-        let neighbor_chunk = grid.chunks.iter().nth(1).unwrap().clone();
-
-        let edges = grid.calculate_edge_nodes(
-            chunk.edge(&grid.grid, Dir::NORTH),
-            neighbor_chunk.edge(&grid.grid, Dir::SOUTH),
-            chunk.clone(),
-            Dir::NORTH,
-        );
-
-        assert_eq!(edges.len(), 4);
+        grid.build();
     }
 
     #[test]

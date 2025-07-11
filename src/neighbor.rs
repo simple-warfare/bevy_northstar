@@ -311,7 +311,7 @@ impl Neighborhood for OrdinalNeighborhood3d {
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (target.x as i32 - pos.x as i32).abs() as u32;
+        /* let dx = (target.x as i32 - pos.x as i32).abs() as u32;
         let dy = (target.y as i32 - pos.y as i32).abs() as u32;
         let dz = (target.z as i32 - pos.z as i32).abs() as u32;
 
@@ -321,11 +321,11 @@ impl Neighborhood for OrdinalNeighborhood3d {
         let max_axis = dx.max(dy).max(dz);
 
         // Scaled to preserve integer math
-        base * 1000 + max_axis
-/*         let dx = pos.x.abs_diff(target.x);
+        base * 1000 + max_axis */
+        let dx = pos.x.abs_diff(target.x);
         let dy = pos.y.abs_diff(target.y);
         let dz = pos.z.abs_diff(target.z);
-        dx.max(dy).max(dz)*/
+        dx.max(dy).max(dz)
     }
 
     #[inline(always)]
@@ -372,6 +372,158 @@ pub(crate) const ORDINAL_3D_OFFSETS: [IVec3; 26] = {
     }
     offsets
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum NeighborDir {
+    NorthWestDown = 0,
+    NorthDown = 1,
+    NorthEastDown = 2,
+    WestDown = 3,
+    Down = 4,
+    EastDown = 5,
+    SouthWestDown = 6,
+    SouthDown = 7,
+    SouthEastDown = 8,
+
+    NorthWest = 9,
+    North = 10,
+    NorthEast = 11,
+    West = 12,
+    East = 13,
+    SouthWest = 14,
+    South = 15,
+    SouthEast = 16,
+
+    NorthWestUp = 17,
+    NorthUp = 18,
+    NorthEastUp = 19,
+    WestUp = 20,
+    Up = 21,
+    EastUp = 22,
+    SouthWestUp = 23,
+    SouthUp = 24,
+    SouthEastUp = 25,
+}
+
+impl NeighborDir {
+    pub const fn offset(self) -> IVec3 {
+        use NeighborDir::*;
+        match self {
+            NorthWestDown => IVec3::new(-1, 1, -1),
+            NorthDown => IVec3::new(0, 1, -1),
+            NorthEastDown => IVec3::new(1, 1, -1),
+            WestDown => IVec3::new(-1, 0, -1),
+            Down => IVec3::new(0, 0, -1),
+            EastDown => IVec3::new(1, 0, -1),
+            SouthWestDown => IVec3::new(-1, -1, -1),
+            SouthDown => IVec3::new(0, -1, -1),
+            SouthEastDown => IVec3::new(1, -1, -1),
+
+            NorthWest => IVec3::new(-1, 1, 0),
+            North => IVec3::new(0, 1, 0),
+            NorthEast => IVec3::new(1, 1, 0),
+            West => IVec3::new(-1, 0, 0),
+            East => IVec3::new(1, 0, 0),
+            SouthWest => IVec3::new(-1, -1, 0),
+            South => IVec3::new(0, -1, 0),
+            SouthEast => IVec3::new(1, -1, 0),
+
+            NorthWestUp => IVec3::new(-1, 1, 1),
+            NorthUp => IVec3::new(0, 1, 1),
+            NorthEastUp => IVec3::new(1, 1, 1),
+            WestUp => IVec3::new(-1, 0, 1),
+            Up => IVec3::new(0, 0, 1),
+            EastUp => IVec3::new(1, 0, 1),
+            SouthWestUp => IVec3::new(-1, -1, 1),
+            SouthUp => IVec3::new(0, -1, 1),
+            SouthEastUp => IVec3::new(1, -1, 1),
+        }
+    }
+
+    pub(crate) const fn bit_index(self) -> usize {
+        self as usize
+    }
+
+    pub fn from_offset(offset: IVec3) -> Option<Self> {
+        use NeighborDir::*;
+        match (offset.x, offset.y, offset.z) {
+            (-1, 1, -1) => Some(NorthWestDown),
+            (0, 1, -1) => Some(NorthDown),
+            (1, 1, -1) => Some(NorthEastDown),
+            (-1, 0, -1) => Some(WestDown),
+            (0, 0, -1) => Some(Down),
+            (1, 0, -1) => Some(EastDown),
+            (-1, -1, -1) => Some(SouthWestDown),
+            (0, -1, -1) => Some(SouthDown),
+            (1, -1, -1) => Some(SouthEastDown),
+
+            (-1, 1, 0) => Some(NorthWest),
+            (0, 1, 0) => Some(North),
+            (1, 1, 0) => Some(NorthEast),
+            (-1, 0, 0) => Some(West),
+            (1, 0, 0) => Some(East),
+            (-1, -1, 0) => Some(SouthWest),
+            (0, -1, 0) => Some(South),
+            (1, -1, 0) => Some(SouthEast),
+
+            (-1, 1, 1) => Some(NorthWestUp),
+            (0, 1, 1) => Some(NorthUp),
+            (1, 1, 1) => Some(NorthEastUp),
+            (-1, 0, 1) => Some(WestUp),
+            (0, 0, 1) => Some(Up),
+            (1, 0, 1) => Some(EastUp),
+            (-1, -1, 1) => Some(SouthWestUp),
+            (0, -1, 1) => Some(SouthUp),
+            (1, -1, 1) => Some(SouthEastUp),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_bit_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(Self::NorthWestDown),
+            1 => Some(Self::NorthDown),
+            2 => Some(Self::NorthEastDown),
+            3 => Some(Self::WestDown),
+            4 => Some(Self::Down),
+            5 => Some(Self::EastDown),
+            6 => Some(Self::SouthWestDown),
+            7 => Some(Self::SouthDown),
+            8 => Some(Self::SouthEastDown),
+            9 => Some(Self::NorthWest),
+            10 => Some(Self::North),
+            11 => Some(Self::NorthEast),
+            12 => Some(Self::West),
+            13 => Some(Self::East),
+            14 => Some(Self::SouthWest),
+            15 => Some(Self::South),
+            16 => Some(Self::SouthEast),
+            17 => Some(Self::NorthWestUp),
+            18 => Some(Self::NorthUp),
+            19 => Some(Self::NorthEastUp),
+            20 => Some(Self::WestUp),
+            21 => Some(Self::Up),
+            22 => Some(Self::EastUp),
+            23 => Some(Self::SouthWestUp),
+            24 => Some(Self::SouthUp),
+            25 => Some(Self::SouthEastUp),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn from_bits(bits: u32) -> Vec<Self> {
+        let mut result = Vec::new();
+        for i in 0..26 {
+            if (bits & (1 << i)) != 0 {
+                if let Some(dir) = Self::from_bit_index(i) {
+                    result.push(dir);
+                }
+            }
+        }
+        result
+    }
+}
 
 #[cfg(test)]
 mod tests {

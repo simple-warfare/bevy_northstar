@@ -155,10 +155,14 @@ fn draw_debug_map<N: Neighborhood + 'static>(
         }
 
         if debug_grid.draw_cells {
+            if debug_grid.depth > grid.depth() {
+                continue;
+            }
+
             // Draw cell gizmos
             for x in 0..grid.width() {
                 for y in 0..grid.height() {
-                    let cell = grid.navcell(UVec3::new(x, y, 0));
+                    let cell = grid.navcell(UVec3::new(x, y, debug_grid.depth));
                     let color = if cell.is_impassable() {
                         css::RED
                     } else {

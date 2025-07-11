@@ -60,6 +60,15 @@ pub(crate) fn dijkstra_grid(
                 }
             }
 
+            assert!(
+                current_pos.x < shape[0] as u32
+                    && current_pos.y < shape[1] as u32
+                    && current_pos.z < shape[2] as u32,
+                "OOB: pos={:?} shape={:?}",
+                current_pos,
+                shape
+            );
+
             let cell = &grid[[
                 current_pos.x as usize,
                 current_pos.y as usize,

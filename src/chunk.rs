@@ -1,6 +1,6 @@
 //! This module defines the `Chunk` struct, which represents a 3D region of the grid.
 use bevy::math::UVec3;
-use ndarray::{s, Array3, ArrayView2, ArrayView3};
+use ndarray::{s, Array3, ArrayView2, ArrayView3, Ix2};
 
 use crate::{dir::Dir, nav::NavCell};
 
@@ -99,7 +99,7 @@ impl Chunk {
     }
 
     /// Returns a 2D `ArrayView2`` of the edge of the chunk in the given direction.
-    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
+    /*pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
         match dir {
             Dir::NORTH => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
@@ -131,6 +131,77 @@ impl Chunk {
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize,
             ]),
+            _ => panic!("Ordinal directions do not have an edge."),
+        }
+    }*/
+
+    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
+        match dir {
+            Dir::NORTH => {
+                let y = self.max.y as usize - 1;
+                grid.slice(s![
+                    self.min.x as usize..self.max.x as usize,
+                    y,
+                    self.min.z as usize..self.max.z as usize
+                ])
+                .into_dimensionality::<Ix2>()
+                .expect("Failed to cast NORTH edge to 2D")
+            }
+            Dir::EAST => {
+                // fixed X = max.x - 1, so slice [Y, Z]
+                let slice = grid.slice(s![
+                    self.max.x as usize - 1,
+                    self.min.y as usize..self.max.y as usize,
+                    self.min.z as usize..self.max.z as usize,
+                ]);
+                slice
+                    .into_dimensionality::<Ix2>()
+                    .expect("Failed to cast EAST edge to 2D")
+            }
+            Dir::SOUTH => {
+                // fixed Y = min.y, so slice [X, Z]
+                let slice = grid.slice(s![
+                    self.min.x as usize..self.max.x as usize,
+                    self.min.y as usize,
+                    self.min.z as usize..self.max.z as usize,
+                ]);
+                slice
+                    .into_dimensionality::<Ix2>()
+                    .expect("Failed to cast SOUTH edge to 2D")
+            }
+            Dir::WEST => {
+                // fixed X = min.x, so slice [Y, Z]
+                let slice = grid.slice(s![
+                    self.min.x as usize,
+                    self.min.y as usize..self.max.y as usize,
+                    self.min.z as usize..self.max.z as usize,
+                ]);
+                slice
+                    .into_dimensionality::<Ix2>()
+                    .expect("Failed to cast WEST edge to 2D")
+            }
+            Dir::UP => {
+                // fixed Z = max.z - 1, so slice [X, Y]
+                let slice = grid.slice(s![
+                    self.min.x as usize..self.max.x as usize,
+                    self.min.y as usize..self.max.y as usize,
+                    self.max.z as usize - 1,
+                ]);
+                slice
+                    .into_dimensionality::<Ix2>()
+                    .expect("Failed to cast UP edge to 2D")
+            }
+            Dir::DOWN => {
+                // fixed Z = min.z, so slice [X, Y]
+                let slice = grid.slice(s![
+                    self.min.x as usize..self.max.x as usize,
+                    self.min.y as usize..self.max.y as usize,
+                    self.min.z as usize,
+                ]);
+                slice
+                    .into_dimensionality::<Ix2>()
+                    .expect("Failed to cast DOWN edge to 2D")
+            }
             _ => panic!("Ordinal directions do not have an edge."),
         }
     }

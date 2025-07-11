@@ -222,6 +222,7 @@ impl Default for DebugPath {
 pub struct DebugGrid {
     pub(crate) tile_width: u32,
     pub(crate) tile_height: u32,
+    pub(crate) depth: u32,
     pub(crate) map_type: DebugTilemapType,
     pub(crate) draw_chunks: bool,
     pub(crate) draw_cells: bool,
@@ -234,6 +235,12 @@ impl DebugGrid {
     pub fn tile_size(&mut self, width: u32, height: u32) -> &Self {
         self.tile_width = width;
         self.tile_height = height;
+        self
+    }
+
+    /// Sets the z depth to draw for 3d tilemaps.
+    pub fn set_depth(&mut self, depth: u32) -> &Self {
+        self.depth = depth;
         self
     }
 
@@ -301,6 +308,7 @@ impl DebugGrid {
 pub struct DebugGridBuilder {
     tile_width: u32,
     tile_height: u32,
+    depth: u32,
     tilemap_type: DebugTilemapType,
     draw_chunks: bool,
     draw_cells: bool,
@@ -314,12 +322,19 @@ impl DebugGridBuilder {
         Self {
             tile_width,
             tile_height,
+            depth: 0,
             tilemap_type: DebugTilemapType::Square,
             draw_chunks: false,
             draw_cells: false,
             draw_entrances: false,
             draw_cached_paths: false,
         }
+    }
+
+    /// Sets which z depth the debug grid will draw for 3D tilemaps.
+    pub fn set_depth(mut self, depth: u32) -> Self {
+        self.depth = depth;
+        self
     }
 
     /// Sets the draw type of the tilemap.
@@ -368,6 +383,7 @@ impl DebugGridBuilder {
         DebugGrid {
             tile_width: self.tile_width,
             tile_height: self.tile_height,
+            depth: self.depth,
             map_type: self.tilemap_type,
             draw_chunks: self.draw_chunks,
             draw_cells: self.draw_cells,

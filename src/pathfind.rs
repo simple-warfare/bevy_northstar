@@ -1,6 +1,11 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, log, math::{IVec3, UVec3}, platform::collections::{HashMap, HashSet}};
+use bevy::{
+    ecs::entity::Entity,
+    log,
+    math::{IVec3, UVec3},
+    platform::collections::{HashMap, HashSet},
+};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -12,7 +17,7 @@ use crate::{
     node::Node,
     path::Path,
     prelude::Neighborhood,
-    raycast::{bresenham_path, bresenham_path_filtered, path_line_trace},
+    raycast::{bresenham_path, bresenham_path_filtered},
 };
 
 /// AStar pathfinding
@@ -163,9 +168,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 let goal_pos = node_path.path.back().unwrap();
 
                 // Add start_path to the node_path
-                let start_path = start_paths
-                    .get(&(start_pos - start_chunk.min()))
-                    .unwrap();
+                let start_path = start_paths.get(&(start_pos - start_chunk.min())).unwrap();
                 path.extend(start_path.path().iter().map(|pos| *pos + start_chunk.min()));
                 cost += start_path.cost();
 
@@ -261,7 +264,6 @@ pub(crate) fn trim_path(
         "BUG: trim_path() removed all nodes — this should never happen"
     );
 }
-
 
 /*#[inline(always)]
 pub(crate) fn trim_path(
@@ -426,7 +428,7 @@ pub(crate) fn optimize_path<N: Neighborhood>(
                 break;
             }
         }
-        
+
         // Try to find the farthest reachable waypoint from i (greedy)
         let mut shortcut_taken = false;
         for farthest in (i + 1..path.len()).rev() {
