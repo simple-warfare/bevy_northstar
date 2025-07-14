@@ -1,6 +1,6 @@
 //! This module defines the `Chunk` struct, which represents a 3D region of the grid.
 use bevy::math::UVec3;
-use ndarray::{s, Array3, ArrayView2, ArrayView3, Axis, Ix2};
+use ndarray::{s, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, Axis, Ix2};
 
 use crate::{dir::Dir, nav::NavCell};
 
@@ -292,93 +292,85 @@ impl Chunk {
         }
     }*/
 
-    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
-        match dir {
+    pub(crate) fn face<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
+         match dir {
             Dir::North => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.max.y as usize - 1,
-                self.min.z as usize..self.max.z as usize
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast NORTH edge to 2D"),
-
+                self.min.z as usize..self.max.z as usize,
+            ]),
             Dir::East => grid.slice(s![
                 self.max.x as usize - 1,
                 self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast EAST edge to 2D"),
-
+                self.min.z as usize..self.max.z as usize,
+            ]),
             Dir::South => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize,
-                self.min.z as usize..self.max.z as usize
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast SOUTH edge to 2D"),
-
+                self.min.z as usize..self.max.z as usize,
+            ]),
             Dir::West => grid.slice(s![
                 self.min.x as usize,
                 self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast WEST edge to 2D"),
-
+                self.min.z as usize..self.max.z as usize,
+            ]),
             Dir::Up => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize..self.max.y as usize,
                 self.max.z as usize - 1,
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast UP edge to 2D"),
-
+            ]),
             Dir::Down => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize,
-            ]).into_dimensionality::<Ix2>().expect("Failed to cast DOWN edge to 2D"),
+            ]),
+            _ => panic!("{dir:?} does not correspond to a face."),
+        }
+    }
 
+    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView1<'a, NavCell> {
+        match dir {
             Dir::NorthUp => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.max.y as usize - 1,
-                self.max.z as usize - 1,
-            ]).insert_axis(Axis(1)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast NORTH_UP edge to 2D"),
-
+                self.max.z as usize - 1
+            ]),
             Dir::EastUp => grid.slice(s![
                 self.max.x as usize - 1,
                 self.min.y as usize..self.max.y as usize,
-                self.max.z as usize - 1,
-            ]).insert_axis(Axis(0)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast EAST_UP edge to 2D"),
-
+                self.max.z as usize - 1
+            ]),
             Dir::SouthUp => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize,
-                self.max.z as usize - 1,
-            ]).insert_axis(Axis(1)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast SOUTH_UP edge to 2D"),
-
+                self.max.z as usize - 1
+            ]),
             Dir::WestUp => grid.slice(s![
                 self.min.x as usize,
                 self.min.y as usize..self.max.y as usize,
-                self.max.z as usize - 1,
-            ]).insert_axis(Axis(0)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast WEST_UP edge to 2D"),
-
+                self.max.z as usize - 1
+            ]),
             Dir::NorthDown => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.max.y as usize - 1,
-                self.min.z as usize,
-            ]).insert_axis(Axis(1)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast NORTH_DOWN edge to 2D"),
-
+                self.min.z as usize
+            ]),
             Dir::EastDown => grid.slice(s![
                 self.max.x as usize - 1,
                 self.min.y as usize..self.max.y as usize,
-                self.min.z as usize,
-            ]).insert_axis(Axis(0)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast EAST_DOWN edge to 2D"),
-
+                self.min.z as usize
+            ]),
             Dir::SouthDown => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize,
-                self.min.z as usize,
-            ]).insert_axis(Axis(1)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast SOUTH_DOWN edge to 2D"),
-
+                self.min.z as usize
+            ]),
             Dir::WestDown => grid.slice(s![
                 self.min.x as usize,
                 self.min.y as usize..self.max.y as usize,
-                self.min.z as usize,
-            ]).insert_axis(Axis(0)).insert_axis(Axis(2)).into_dimensionality::<Ix2>().expect("Failed to cast WEST_DOWN edge to 2D"),
-
-            _ => panic!("Ordinal directions do not have an edge."),
+                self.min.z as usize
+            ]),
+            _ => panic!("{dir:?} does not correspond to an edge."),
         }
     }
 
@@ -457,7 +449,7 @@ impl Chunk {
                 self.min.z as usize,
             ]]
             .clone(),
-            _ => panic!("Cardinal directions have no corner."),
+            _ => panic!("{dir:?} does not correspond to a corner."),
         }
     }
 
@@ -489,6 +481,7 @@ impl Chunk {
     }
 }
 
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -506,7 +499,7 @@ mod test {
     fn test_chunk_edge() {
         let grid = Array3::from_elem((10, 10, 10), NavCell::default());
         let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
-        let edge = chunk.edge(&grid, Dir::North);
+        let edge = chunk.face(&grid, Dir::North);
 
         assert_eq!(edge.shape(), [4, 4]);
     }
