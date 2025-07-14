@@ -83,8 +83,6 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 current_pos.z as usize,
             ]];
 
-            //let mut neighbors = SmallVec::new();
-            //neighborhood.neighbors(grid, *current_pos, &mut neighbors);
             cell.neighbor_iter(*current_pos)
         };
 
@@ -330,6 +328,69 @@ mod tests {
         // Ensure last position is the goal position
         assert_eq!(path.path()[3], goal);
         assert!(!path.is_position_in_path(UVec3::new(1, 1, 1)));
+    }
+
+    #[test]
+    fn test_astar_grid_with_ramp() {
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
+            .chunk_size(3)
+            .default_impassable()
+            .build();
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+
+        // Fill the bottoom left hand layer with passable cells
+        for x in 0..1 {
+            for y in 0..3 {
+                grid.set_nav(UVec3::new(x, y, 0), Nav::Passable(1));
+            }
+        }
+
+        for x in 2..3 {
+            for y in 0..3 {
+                grid.set_nav(UVec3::new(x, y, 2), Nav::Passable(1));
+            }
+        }
+
+        // Add a single ramp to transition from the bottom layer to the top layer
+        grid.set_nav(
+            UVec3::new(1, 1, 0),
+            Nav::Portal(crate::nav::Portal {
+                target: UVec3::new(1, 1, 2),
+                cost: 1,
+                one_way: false,
+            }),
+        );
+        // Make sure the ramp destination is passable
+        grid.set_nav(UVec3::new(1, 1, 2), Nav::Passable(1));
+
+        grid.build();
+
+        let start = UVec3::new(0, 0, 0);
+        let goal = UVec3::new(2, 2, 2);
+
+        let path = astar_grid(
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert!(!path.is_empty());
+        // Ensure the path is using the ramp
+        assert!(
+            path.path.contains(&UVec3::new(1, 1, 0)),
+            "Ramp origin missing"
+        );
+        assert!(
+            path.path.contains(&UVec3::new(1, 1, 2)),
+            "Ramp target missing"
+        );
     }
 
     #[test]

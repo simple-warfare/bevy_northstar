@@ -69,7 +69,7 @@ pub fn line_of_sight(grid: &ArrayView3<NavCell>, start: UVec3, end: UVec3) -> bo
 
     true
 }
-
+/* Unused but may be useful at some later point
 pub(crate) fn path_line_trace(
     grid: &ArrayView3<NavCell>,
     start: UVec3,
@@ -117,7 +117,7 @@ pub(crate) fn path_line_trace(
     }
 
     None
-}
+} */
 
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall
 // This should take into account the Neighborhood and the grid

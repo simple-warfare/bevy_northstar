@@ -10,9 +10,10 @@ pub enum Nav {
     Passable(MovementCost),
     /// Agents cannot move through this cell ever, it is solid.
     Impassable,
-    /// Agents can use this cell to transition to a different height level,
-    /// such as a ramp/slope/staircase, with a defined movement cost.
-    Ramp(MovementCost),
+    /// Agents can use this cell to transition or warp to another destination.
+    /// Used for stairs, ramps, ladders, as well as actual portals.
+    /// The other position must be a passable cell or another portal.
+    Portal(Portal),
 }
 
 impl PartialEq for Nav {
@@ -20,7 +21,7 @@ impl PartialEq for Nav {
         match (self, other) {
             (Nav::Passable(a), Nav::Passable(b)) => a == b,
             (Nav::Impassable, Nav::Impassable) => true,
-            (Nav::Ramp(a), Nav::Ramp(b)) => a == b,
+            (Nav::Portal(a), Nav::Portal(b)) => a == b,
             _ => false,
         }
     }
@@ -36,6 +37,8 @@ pub struct NavCell {
     pub(crate) cost: MovementCost,
     // Cached neighbors for this cell.
     pub(crate) neighbor_bits: u32,
+    // Special neighbors for this cell, such as portals or ladders.
+    pub(crate) special_neighbors: Vec<UVec3>,
 }
 
 impl NavCell {
@@ -45,16 +48,17 @@ impl NavCell {
             nav,
             cost: match nav {
                 Nav::Passable(cost) => cost,
-                Nav::Ramp(cost) => cost,
                 Nav::Impassable => 0,
+                Nav::Portal(portal) => portal.cost,
             },
             neighbor_bits: 0,
+            special_neighbors: Vec::new(),
         }
     }
 
     /// Is this cell passable?
     pub fn is_passable(&self) -> bool {
-        matches!(self.nav, Nav::Passable { .. } | Nav::Ramp { .. })
+        matches!(self.nav, Nav::Passable { .. } | Nav::Portal { .. })
     }
 
     /// Is this cell impassable?
@@ -62,9 +66,9 @@ impl NavCell {
         matches!(self.nav, Nav::Impassable)
     }
 
-    /// Is this cell a ramp?
-    pub fn is_ramp(&self) -> bool {
-        matches!(self.nav, Nav::Ramp { .. })
+    /// Is this cell a portal?
+    pub fn is_portal(&self) -> bool {
+        matches!(self.nav, Nav::Portal { .. })
     }
 
     /// Returns the `Nav` state associated with this cell.
@@ -75,7 +79,7 @@ impl NavCell {
     /// Returns an iterator over the neighboring positions that are passable.
     pub fn neighbor_iter(&self, pos: UVec3) -> impl Iterator<Item = UVec3> + '_ {
         let origin = pos.as_ivec3();
-        ORDINAL_3D_OFFSETS
+        let standard = ORDINAL_3D_OFFSETS
             .iter()
             .enumerate()
             .filter_map(move |(i, offset)| {
@@ -84,7 +88,11 @@ impl NavCell {
                 } else {
                     None
                 }
-            })
+            });
+
+        let special = self.special_neighbors.clone().into_iter();
+
+        standard.chain(special)
     }
 }
 
@@ -94,6 +102,31 @@ impl Default for NavCell {
             nav: Nav::Passable(1),
             cost: 1,
             neighbor_bits: 0,
+            special_neighbors: Vec::new(),
         }
+    }
+}
+
+/// Represents a portal that can be used to transition to another cell in the grid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Portal {
+    pub cost: MovementCost,
+    pub target: UVec3,
+    pub one_way: bool,
+}
+
+impl Portal {
+    /// Creates a new `Portal` with the given target position and movement cost.
+    pub fn new(target: UVec3, cost: MovementCost, one_way: bool) -> Self {
+        Self {
+            target,
+            cost,
+            one_way,
+        }
+    }
+
+    /// Returns the target position of the portal.
+    pub fn to_cell(&self) -> UVec3 {
+        self.target
     }
 }

@@ -231,9 +231,9 @@ impl Neighborhood for OrdinalNeighborhood {
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
-        let dx = (target.x as i32 - pos.x as i32).abs() as u32;
-        let dy = (target.y as i32 - pos.y as i32).abs() as u32;
-        let dz = (target.z as i32 - pos.z as i32).abs() as u32;
+        let dx = (target.x as i32 - pos.x as i32).unsigned_abs();
+        let dy = (target.y as i32 - pos.y as i32).unsigned_abs();
+        let dz = (target.z as i32 - pos.z as i32).unsigned_abs();
 
         let base = dx.max(dy).max(dz) * 1000;
 
@@ -373,7 +373,7 @@ pub(crate) const ORDINAL_3D_OFFSETS: [IVec3; 26] = {
     offsets
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/*#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum NeighborDir {
     NorthWestDown = 0,
@@ -439,10 +439,6 @@ impl NeighborDir {
             SouthUp => IVec3::new(0, -1, 1),
             SouthEastUp => IVec3::new(1, -1, 1),
         }
-    }
-
-    pub(crate) const fn bit_index(self) -> usize {
-        self as usize
     }
 
     pub fn from_offset(offset: IVec3) -> Option<Self> {
@@ -523,7 +519,7 @@ impl NeighborDir {
         }
         result
     }
-}
+}*/
 
 #[cfg(test)]
 mod tests {

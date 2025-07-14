@@ -30,7 +30,7 @@ pub mod prelude {
     pub use crate::dir::Dir;
     pub use crate::filter;
     pub use crate::grid::{Grid, GridSettingsBuilder};
-    pub use crate::nav::Nav;
+    pub use crate::nav::{Nav, Portal};
     pub use crate::neighbor::*;
     pub use crate::path::Path;
     pub use crate::plugin::{
