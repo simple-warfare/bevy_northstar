@@ -98,200 +98,6 @@ impl Chunk {
         ])
     }
 
-    // Returns a 2D `ArrayView2`` of the edge of the chunk in the given direction.
-    /*pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
-        match dir {
-            Dir::NORTH => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.max.y as usize - 1,
-                self.min.z as usize..self.max.z as usize,
-            ]),
-            Dir::EAST => grid.slice(s![
-                self.max.x as usize - 1,
-                self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize,
-            ]),
-            Dir::SOUTH => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.min.y as usize,
-                self.min.z as usize..self.max.z as usize,
-            ]),
-            Dir::WEST => grid.slice(s![
-                self.min.x as usize,
-                self.min.y as usize..self.max.y as usize,
-                self.min.z as usize..self.max.z as usize,
-            ]),
-            Dir::UP => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.min.y as usize..self.max.y as usize,
-                self.max.z as usize - 1,
-            ]),
-            Dir::DOWN => grid.slice(s![
-                self.min.x as usize..self.max.x as usize,
-                self.min.y as usize..self.max.y as usize,
-                self.min.z as usize,
-            ]),
-            _ => panic!("Ordinal directions do not have an edge."),
-        }
-    }*/
-
-    /*pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
-        match dir {
-            Dir::North => {
-                let y = self.max.y as usize - 1;
-                grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    y,
-                    self.min.z as usize..self.max.z as usize
-                ])
-                .into_dimensionality::<Ix2>()
-                .expect("Failed to cast NORTH edge to 2D")
-            }
-            Dir::East => {
-                // fixed X = max.x - 1, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.max.x as usize - 1,
-                    self.min.y as usize..self.max.y as usize,
-                    self.min.z as usize..self.max.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast EAST edge to 2D")
-            }
-            Dir::South => {
-                // fixed Y = min.y, so slice [X, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    self.min.y as usize,
-                    self.min.z as usize..self.max.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast SOUTH edge to 2D")
-            }
-            Dir::West => {
-                // fixed X = min.x, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize,
-                    self.min.y as usize..self.max.y as usize,
-                    self.min.z as usize..self.max.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast WEST edge to 2D")
-            }
-            Dir::Up => {
-                // fixed Z = max.z - 1, so slice [X, Y]
-                let slice = grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    self.min.y as usize..self.max.y as usize,
-                    self.max.z as usize - 1,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast UP edge to 2D")
-            }
-            Dir::Down => {
-                // fixed Z = min.z, so slice [X, Y]
-                let slice = grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    self.min.y as usize..self.max.y as usize,
-                    self.min.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast DOWN edge to 2D")
-            },
-            Dir::NorthUp => {
-                let y = self.max.y as usize - 1;
-                grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    y,
-                    self.max.z as usize - 1
-                ])
-                .into_dimensionality::<Ix2>()
-                .expect("Failed to cast NORTH_UP edge to 2D")
-            },
-            Dir::EastUp => {
-                // fixed X = max.x - 1, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.max.x as usize - 1,
-                    self.min.y as usize..self.max.y as usize,
-                    self.max.z as usize - 1,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast EAST_UP edge to 2D")
-            },
-            Dir::SouthUp => {
-                // fixed Y = min.y, so slice [X, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    self.min.y as usize,
-                    self.max.z as usize - 1,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast SOUTH_UP edge to 2D")
-            },
-            Dir::WestUp => {
-                // fixed X = min.x, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize,
-                    self.min.y as usize..self.max.y as usize,
-                    self.max.z as usize - 1,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast WEST_UP edge to 2D")
-            },
-            Dir::NorthDown => {
-                let y = self.max.y as usize - 1;
-                grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    y,
-                    self.min.z as usize
-                ])
-                .into_dimensionality::<Ix2>()
-                .expect("Failed to cast NORTH_DOWN edge to 2D")
-            },
-            Dir::EastDown => {
-                // fixed X = max.x - 1, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.max.x as usize - 1,
-                    self.min.y as usize..self.max.y as usize,
-                    self.min.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast EAST_DOWN edge to 2D")
-            },
-            Dir::SouthDown => {
-                // fixed Y = min.y, so slice [X, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize..self.max.x as usize,
-                    self.min.y as usize,
-                    self.min.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast SOUTH_DOWN edge to 2D")
-            },
-            Dir::WestDown => {
-                // fixed X = min.x, so slice [Y, Z]
-                let slice = grid.slice(s![
-                    self.min.x as usize,
-                    self.min.y as usize..self.max.y as usize,
-                    self.min.z as usize,
-                ]);
-                slice
-                    .into_dimensionality::<Ix2>()
-                    .expect("Failed to cast WEST_DOWN edge to 2D")
-            },
-            _ => panic!("Diagonal directions do not correspond to a single edge"),
-        }
-    }*/
-
     pub(crate) fn face<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
         match dir {
             Dir::North => grid.slice(s![
@@ -478,6 +284,46 @@ impl Chunk {
 
             x_match && y_match && z_match
         })
+    }
+
+    pub(crate) fn boundary_pos_to_global(&self, pos: UVec3, dir: Dir) -> UVec3 {
+        match dir {
+            Dir::North => UVec3::new(pos.x + self.min().x, self.max().y - 1, pos.y + self.min().z),
+            Dir::South => UVec3::new(pos.x + self.min().x, self.min().y, pos.y + self.min().z),
+            Dir::East => UVec3::new(self.max().x - 1, pos.x + self.min().y, pos.y + self.min().z),
+            Dir::West => UVec3::new(self.min().x, pos.x + self.min().y, pos.y + self.min().z),
+            Dir::Up => UVec3::new(pos.x + self.min().x, pos.y + self.min().y, self.max().z - 1),
+            Dir::Down => UVec3::new(pos.x + self.min().x, pos.y + self.min().y, self.min().z),
+            Dir::NorthUp => UVec3::new(pos.x + self.min().x, self.max().y - 1, self.max().z - 1),
+            Dir::EastUp => UVec3::new(self.max().x - 1, pos.x + self.min().y, self.max().z - 1),
+            Dir::SouthUp => UVec3::new(pos.x + self.min().x, self.min().y, self.max().z - 1),
+            Dir::WestUp => UVec3::new(self.min().x, pos.x + self.min().y, self.max().z - 1),
+            Dir::NorthDown => UVec3::new(pos.x + self.min().x, self.max().y - 1, self.min().z),
+            Dir::EastDown => UVec3::new(self.max().x - 1, pos.x + self.min().y, self.min().z),
+            Dir::SouthDown => UVec3::new(pos.x + self.min().x, self.min().y, self.min().z),
+            Dir::WestDown => UVec3::new(self.min().x, pos.x + self.min().y, self.min().z),
+            _ => panic!("{dir:?} is a corner. This function only supports edges and faces."),
+        }
+    }
+
+    pub fn corner_pos(&self, dir: Dir) -> UVec3 {
+        match dir {
+            Dir::NorthEast => UVec3::new(self.max().x - 1, self.max().y - 1, self.min().z),
+            Dir::SouthEast => UVec3::new(self.max().x - 1, self.min().y, self.min().z),
+            Dir::SouthWest => UVec3::new(self.min().x, self.min().y, self.min().z),
+            Dir::NorthWest => UVec3::new(self.min().x, self.max().y - 1, self.min().z),
+            Dir::NorthEastUp => UVec3::new(self.max().x - 1, self.max().y - 1, self.max().z - 1),
+            Dir::SouthEastUp => UVec3::new(self.max().x - 1, self.min().y, self.max().z - 1),
+            Dir::SouthWestUp => UVec3::new(self.min().x, self.min().y, self.max().z - 1),
+            Dir::NorthWestUp => UVec3::new(self.min().x, self.max().y - 1, self.max().z - 1),
+            Dir::NorthEastDown => UVec3::new(self.max().x - 1, self.max().y - 1, self.min().z),
+            Dir::SouthEastDown => UVec3::new(self.max().x - 1, self.min().y, self.min().z),
+            Dir::SouthWestDown => UVec3::new(self.min().x, self.min().y, self.min().z),
+            Dir::NorthWestDown => UVec3::new(self.min().x, self.max().y - 1, self.min().z),
+            _ => {
+                panic!("{dir:?} is not a corner. This function only supports corner directions.");
+            }
+        }
     }
 }
 
