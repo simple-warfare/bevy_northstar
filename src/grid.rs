@@ -9,13 +9,14 @@ use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::{Component, Entity},
 };
-use ndarray::{s, Array3, ArrayView1, ArrayView2, ArrayView3};
+use ndarray::{s, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, Zip};
 
 use crate::{
     chunk::Chunk,
     dijkstra::*,
     dir::*,
     filter::NeighborFilter,
+    flood_fill::flood_fill_bool_mask,
     graph::Graph,
     nav::{Nav, NavCell},
     neighbor::Neighborhood,
@@ -976,12 +977,7 @@ impl<N: Neighborhood + Default> Grid<N> {
 
     /// Shared logic for building nodes for a single chunk at (x, y, z).
     /// Returns (nodes_to_add, cleaned_edges).
-    fn build_nodes_for_chunk(
-        &self,
-        x: usize,
-        y: usize,
-        z: usize,
-    ) -> Option<(Vec<Node>, Vec<Dir>)> {
+    fn build_nodes_for_chunk(&self, x: usize, y: usize, z: usize) -> Option<(Vec<Node>, Vec<Dir>)> {
         let chunk_size = self.chunk_settings.size as usize;
         let chunk_depth = self.chunk_settings.depth as usize;
         let x_chunks = self.dimensions.x as usize / chunk_size;
@@ -1047,22 +1043,22 @@ impl<N: Neighborhood + Default> Grid<N> {
                     Dir::North => UVec3::new(
                         node.pos.x + chunk.min().x,
                         chunk.max().y - 1,
-                        node.pos.z + chunk.min().z,
-                    ),
-                    Dir::East => UVec3::new(
-                        chunk.max().x - 1,
-                        node.pos.x + chunk.min().y,
-                        node.pos.z + chunk.min().z,
+                        node.pos.y + chunk.min().z,
                     ),
                     Dir::South => UVec3::new(
                         node.pos.x + chunk.min().x,
                         chunk.min().y,
-                        node.pos.z + chunk.min().z,
+                        node.pos.y + chunk.min().z,
+                    ),
+                    Dir::East => UVec3::new(
+                        chunk.max().x - 1,
+                        node.pos.x + chunk.min().y,
+                        node.pos.y + chunk.min().z,
                     ),
                     Dir::West => UVec3::new(
                         chunk.min().x,
                         node.pos.x + chunk.min().y,
-                        node.pos.z + chunk.min().z,
+                        node.pos.y + chunk.min().z,
                     ),
                     Dir::Up => UVec3::new(
                         node.pos.x + chunk.min().x,
@@ -1072,41 +1068,6 @@ impl<N: Neighborhood + Default> Grid<N> {
                     Dir::Down => UVec3::new(
                         node.pos.x + chunk.min().x,
                         node.pos.y + chunk.min().y,
-                        chunk.min().z,
-                    ),
-                    Dir::NorthUp => UVec3::new(
-                        node.pos.x + chunk.min().x,
-                        chunk.max().y - 1,
-                        chunk.max().z - 1,
-                    ),
-                    Dir::EastUp => UVec3::new(
-                        chunk.max().x - 1,
-                        node.pos.x + chunk.min().y,
-                        chunk.max().z - 1,
-                    ),
-                    Dir::SouthUp => UVec3::new(
-                        node.pos.x + chunk.min().x,
-                        chunk.min().y,
-                        chunk.max().z - 1,
-                    ),
-                    Dir::WestUp => UVec3::new(
-                        chunk.min().x,
-                        node.pos.x + chunk.min().y,
-                        chunk.max().z - 1,
-                    ),
-                    Dir::NorthDown => UVec3::new(
-                        node.pos.x + chunk.min().x,
-                        chunk.max().y - 1,
-                        chunk.min().z,
-                    ),
-                    Dir::EastDown => UVec3::new(
-                        chunk.max().x - 1,
-                        node.pos.x + chunk.min().y,
-                        chunk.min().z,
-                    ),
-                    Dir::SouthDown => UVec3::new(
-                        node.pos.x + chunk.min().x,
-                        chunk.min().y,
                         chunk.min().z,
                     ),
                     _ => panic!("Invalid direction"),
@@ -1130,6 +1091,11 @@ impl<N: Neighborhood + Default> Grid<N> {
 
             nodes_to_add.extend(new_nodes);
             cleaned_edges.push(dir);
+        }
+
+        if x == 1 && y == 1 && z == 1 {
+            // If this is the only chunk, we can skip the rest
+            println!("Face Nodes to Add: {:?}", nodes_to_add);
         }
 
         // Cardinal Chunk Edges
@@ -1169,38 +1135,30 @@ impl<N: Neighborhood + Default> Grid<N> {
                             node.pos.x + chunk.min().y,
                             chunk.max().z - 1,
                         ),
-                        Dir::SouthUp => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            chunk.min().y,
-                            chunk.max().z - 1,
-                        ),
-                        Dir::WestUp => UVec3::new(
-                            chunk.min().x,
-                            node.pos.x + chunk.min().y,
-                            chunk.max().z - 1,
-                        ),
-                        Dir::NorthDown => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            chunk.max().y - 1,
-                            chunk.min().z,
-                        ),
-                        Dir::EastDown => UVec3::new(
-                            chunk.max().x - 1,
-                            node.pos.x + chunk.min().y,
-                            chunk.min().z,
-                        ),
-                        Dir::SouthDown => UVec3::new(
-                            node.pos.x + chunk.min().x,
-                            chunk.min().y,
-                            chunk.min().z,
-                        ),
-                        Dir::WestDown => UVec3::new(
-                            chunk.min().x,
-                            node.pos.x + chunk.min().y,
-                            chunk.min().z,
-                        ),
+                        Dir::SouthUp => {
+                            UVec3::new(node.pos.x + chunk.min().x, chunk.min().y, chunk.max().z - 1)
+                        }
+                        Dir::WestUp => {
+                            UVec3::new(chunk.min().x, node.pos.x + chunk.min().y, chunk.max().z - 1)
+                        }
+                        Dir::NorthDown => {
+                            UVec3::new(node.pos.x + chunk.min().x, chunk.max().y - 1, chunk.min().z)
+                        }
+                        Dir::EastDown => {
+                            UVec3::new(chunk.max().x - 1, node.pos.x + chunk.min().y, chunk.min().z)
+                        }
+                        Dir::SouthDown => {
+                            UVec3::new(node.pos.x + chunk.min().x, chunk.min().y, chunk.min().z)
+                        }
+                        Dir::WestDown => {
+                            UVec3::new(chunk.min().x, node.pos.x + chunk.min().y, chunk.min().z)
+                        }
                         _ => panic!("Invalid direction"),
                     };
+                }
+
+                if x == 1 && y == 1 && z == 1 {
+                    println!("Edge Nodes to Add: {:?}", new_nodes);
                 }
 
                 nodes_to_add.extend(new_nodes);
@@ -1238,24 +1196,16 @@ impl<N: Neighborhood + Default> Grid<N> {
                     Dir::NorthEast => {
                         UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.min().z)
                     }
-                    Dir::SouthEast => {
-                        UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
-                    }
-                    Dir::SouthWest => {
-                        UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
-                    }
-                    Dir::NorthWest => {
-                        UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
-                    }
+                    Dir::SouthEast => UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z),
+                    Dir::SouthWest => UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z),
+                    Dir::NorthWest => UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z),
                     Dir::NorthEastUp => {
                         UVec3::new(chunk.max().x - 1, chunk.max().y - 1, chunk.max().z - 1)
                     }
                     Dir::SouthEastUp => {
                         UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.max().z - 1)
                     }
-                    Dir::SouthWestUp => {
-                        UVec3::new(chunk.min().x, chunk.min().y, chunk.max().z - 1)
-                    }
+                    Dir::SouthWestUp => UVec3::new(chunk.min().x, chunk.min().y, chunk.max().z - 1),
                     Dir::NorthWestUp => {
                         UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.max().z - 1)
                     }
@@ -1265,9 +1215,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                     Dir::SouthEastDown => {
                         UVec3::new(chunk.max().x - 1, chunk.min().y, chunk.min().z)
                     }
-                    Dir::SouthWestDown => {
-                        UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z)
-                    }
+                    Dir::SouthWestDown => UVec3::new(chunk.min().x, chunk.min().y, chunk.min().z),
                     Dir::NorthWestDown => {
                         UVec3::new(chunk.min().x, chunk.max().y - 1, chunk.min().z)
                     }
@@ -1277,6 +1225,10 @@ impl<N: Neighborhood + Default> Grid<N> {
                 nodes_to_add.push(Node::new(pos, chunk.clone(), Some(dir)));
                 cleaned_edges.push(dir);
             }
+        }
+
+        if x == 1 && y == 1 && z == 1 {
+            println!("Nodes to add: {:?}", nodes_to_add);
         }
 
         Some((nodes_to_add, cleaned_edges))
@@ -1333,8 +1285,85 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    // Calculates the edge nodes for a given 2d face in the grid.
     fn calculate_face_nodes(
+        &self,
+        start_face: ArrayView2<NavCell>,
+        end_face: ArrayView2<NavCell>,
+        chunk: Chunk,
+        dir: Dir,
+    ) -> Vec<Node> {
+        // Step 1: Create boolean masks for passable regions
+        let mut start_mask = Array2::from_elem(start_face.raw_dim(), false);
+        let mut end_mask = Array2::from_elem(end_face.raw_dim(), false);
+
+        for ((x, y), cell) in start_face.indexed_iter() {
+            if !cell.is_impassable() {
+                start_mask[(x, y)] = true;
+            }
+        }
+        for ((x, y), cell) in end_face.indexed_iter() {
+            if !cell.is_impassable() {
+                end_mask[(x, y)] = true;
+            }
+        }
+
+        // Step 2: AND the masks to get intersection
+        let mut intersection = Array2::from_elem(start_face.raw_dim(), false);
+        Zip::from(&mut intersection)
+            .and(&start_mask)
+            .and(&end_mask)
+            .for_each(|out, &a, &b| *out = a && b);
+
+        // Step 3: Flood fill the intersection to get connected regions
+        let groups = flood_fill_bool_mask(intersection.view());
+
+        // Step 4: For each group, pick the center and create a node
+        let mut nodes = Vec::new();
+        for group in groups {
+            let (x, y) = group
+                .iter()
+                .min_by_key(|&&(gx, gy)| {
+                    let cx = (start_face.shape()[0] / 2) as isize;
+                    let cy = (start_face.shape()[1] / 2) as isize;
+                    (gx as isize - cx).abs() + (gy as isize - cy).abs()
+                })
+                .copied()
+                .unwrap();
+            let pos = UVec3::new(x as u32, y as u32, 0);
+            nodes.push(Node::new(pos, chunk.clone(), Some(dir)));
+        }
+        // If no nodes found and ordinal movement is allowed, try checking adjacent edge cells
+        if nodes.is_empty() && self.neighborhood.is_ordinal() {
+            let mut ordinal_nodes = Vec::new();
+            for ((x, y), start_cell) in start_face.indexed_iter() {
+                if start_cell.is_impassable() {
+                    continue;
+                }
+
+                if x > 0 {
+                    let left = end_face[[x - 1, y]].clone();
+                    if !left.is_impassable() {
+                        let pos = UVec3::new(x as u32, y as u32, 0);
+                        ordinal_nodes.push(Node::new(pos, chunk.clone(), Some(dir)));
+                    }
+                }
+
+                if x < end_face.shape()[0] - 1 {
+                    let right = end_face[[x + 1, y]].clone();
+                    if !right.is_impassable() {
+                        let pos = UVec3::new(x as u32, y as u32, 0);
+                        ordinal_nodes.push(Node::new(pos, chunk.clone(), Some(dir)));
+                    }
+                }
+            }
+            return ordinal_nodes;
+        }
+
+        nodes
+    }
+
+    // Calculates the edge nodes for a given 2d face in the grid.
+    /*fn calculate_face_nodes(
         &self,
         start_face: ArrayView2<NavCell>,
         end_face: ArrayView2<NavCell>,
@@ -1370,6 +1399,8 @@ impl<N: Neighborhood + Default> Grid<N> {
 
             x_diff <= 1 && y_diff <= 1
         };
+
+
 
         let mut split_nodes = Vec::new();
         let mut current_group: Vec<Node> = Vec::new();
@@ -1443,7 +1474,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
 
         ordinal_nodes
-    }
+    }*/
 
     /// Calculates the 1D edge nodes for a given direction.
     fn calculate_edge_nodes(
@@ -1486,7 +1517,11 @@ impl<N: Neighborhood + Default> Grid<N> {
             if i > 0 {
                 let left = &end_edge[i - 1];
                 if !left.is_impassable() {
-                    ordinal_nodes.push(Node::new(UVec3::new(i as u32, 0, 0), chunk.clone(), Some(dir)));
+                    ordinal_nodes.push(Node::new(
+                        UVec3::new(i as u32, 0, 0),
+                        chunk.clone(),
+                        Some(dir),
+                    ));
                     continue;
                 }
             }
@@ -1494,7 +1529,11 @@ impl<N: Neighborhood + Default> Grid<N> {
             if i + 1 < end_edge.len() {
                 let right = &end_edge[i + 1];
                 if !right.is_impassable() {
-                    ordinal_nodes.push(Node::new(UVec3::new(i as u32, 0, 0), chunk.clone(), Some(dir)));
+                    ordinal_nodes.push(Node::new(
+                        UVec3::new(i as u32, 0, 0),
+                        chunk.clone(),
+                        Some(dir),
+                    ));
                 }
             }
         }
@@ -1977,7 +2016,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_edges() {
+    pub fn test_faces() {
         let grid_settings = GridSettingsBuilder::new_2d(4, 4)
             .chunk_size(4)
             .enable_diagonal_connections()
@@ -1996,22 +2035,22 @@ mod tests {
 
         let chunk = grid.chunks[[0, 0, 0]].clone();
 
-        let mut edges = Vec::new();
+        let mut faces = Vec::new();
 
-        edges.push(chunk.face(&grid.grid, Dir::North));
-        edges.push(chunk.face(&grid.grid, Dir::East));
-        edges.push(chunk.face(&grid.grid, Dir::South));
-        edges.push(chunk.face(&grid.grid, Dir::West));
+        faces.push(chunk.face(&grid.grid, Dir::North));
+        faces.push(chunk.face(&grid.grid, Dir::East));
+        faces.push(chunk.face(&grid.grid, Dir::South));
+        faces.push(chunk.face(&grid.grid, Dir::West));
 
-        for edge in edges {
-            for cell in edge.iter() {
+        for face in faces {
+            for cell in face.iter() {
                 assert!(cell.is_impassable());
             }
         }
     }
 
     #[test]
-    pub fn test_calculate_edge_nodes() {
+    pub fn test_calculate_face_nodes() {
         let grid = Grid::<OrdinalNeighborhood3d>::new(&GRID_SETTINGS);
 
         let chunk = grid.chunks.iter().next().unwrap().clone();
@@ -2027,19 +2066,28 @@ mod tests {
         assert_eq!(edges.len(), 1);
 
         // 3D
-    }
-
-    #[test]
-    pub fn test_calculate_edge_nodes_3d() {
-        let grid_settings = GridSettingsBuilder::new_3d(8, 8, 8)
+        let grid_settings = GridSettingsBuilder::new_3d(12, 12, 12)
             .chunk_size(4)
             .chunk_depth(4)
             .enable_diagonal_connections()
             .build();
 
-        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        let grid_3d = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+        // Center chunk
+        let chunk_3d = grid_3d.chunks[[1, 1, 1]].clone();
+        // Neighbor chunk
+        let neighbor_chunk_3d = grid_3d.chunks[[1, 1, 2]].clone();
 
-        grid.build();
+        let edges_3d = grid_3d.calculate_face_nodes(
+            chunk_3d.face(&grid_3d.grid, Dir::North),
+            neighbor_chunk_3d.face(&grid_3d.grid, Dir::South),
+            chunk_3d.clone(),
+            Dir::North,
+        );
+
+        assert_eq!(edges_3d.len(), 1);
+        assert_eq!(edges_3d[0].pos, UVec3::new(2, 2, 0));
+        assert_eq!(edges_3d[0].dir, Some(Dir::North));
     }
 
     #[test]
@@ -2108,6 +2156,30 @@ mod tests {
         grid.build_nodes();
 
         assert_eq!(grid.graph.node_count(), 40);
+    }
+
+    #[test]
+    pub fn test_build_nodes_3d() {
+        // Test 3d
+        let grid_settings = GridSettingsBuilder::new_3d(48, 48, 48)
+            .chunk_size(16)
+            .chunk_depth(16)
+            .build();
+
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
+
+        grid.build_nodes();
+
+        // Get the center nodes of the center chunk
+        let center_chunk = grid.chunks[[1, 1, 1]].clone();
+        let center_nodes = grid.graph.nodes_in_chunk(&center_chunk);
+
+        // Print all nodes and their directions
+        for node in center_nodes.clone() {
+            println!("Node at {:?} with direction {:?}", node.pos, node.dir);
+        }
+
+        assert_eq!(center_nodes.len(), 14);
     }
 
     #[test]
@@ -2204,7 +2276,8 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_edge_nodes_returns_center() {
+    fn test_calculate_face_nodes_returns_center() {
+        //2D
         let grid_settings = GridSettingsBuilder::new_2d(64, 64).chunk_size(32).build();
 
         let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
@@ -2213,6 +2286,47 @@ mod tests {
         let end_edge = grid.chunks[[0, 1, 0]].face(&grid.grid, Dir::South);
 
         let nodes = grid.calculate_face_nodes(
+            start_edge,
+            end_edge,
+            grid.chunks[[0, 0, 0]].clone(),
+            Dir::North,
+        );
+
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].pos, UVec3::new(16, 0, 0));
+
+        //3D
+        let grid_settings_3d = GridSettingsBuilder::new_3d(64, 64, 64)
+            .chunk_size(32)
+            .chunk_depth(32)
+            .build();
+
+        let grid_3d: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings_3d);
+
+        let start_edge = grid_3d.chunks[[0, 0, 0]].face(&grid_3d.grid, Dir::North);
+        let end_edge = grid_3d.chunks[[0, 1, 0]].face(&grid_3d.grid, Dir::South);
+        let nodes_3d = grid_3d.calculate_face_nodes(
+            start_edge,
+            end_edge,
+            grid_3d.chunks[[0, 0, 0]].clone(),
+            Dir::North,
+        );
+
+        assert_eq!(nodes_3d.len(), 1);
+        assert_eq!(nodes_3d[0].pos, UVec3::new(16, 16, 0));
+        assert_eq!(nodes_3d[0].dir, Some(Dir::North));
+    }
+
+    #[test]
+    fn test_calculate_edge_nodes_returns_center() {
+        let grid_settings = GridSettingsBuilder::new_2d(64, 64).chunk_size(32).build();
+
+        let grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
+
+        let start_edge = grid.chunks[[0, 0, 0]].edge(&grid.grid, Dir::NorthUp);
+        let end_edge = grid.chunks[[0, 1, 0]].edge(&grid.grid, Dir::SouthDown);
+
+        let nodes = grid.calculate_edge_nodes(
             start_edge,
             end_edge,
             grid.chunks[[0, 0, 0]].clone(),

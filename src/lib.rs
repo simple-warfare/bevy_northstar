@@ -14,6 +14,7 @@ pub mod debug;
 mod dijkstra;
 pub mod dir;
 pub mod filter;
+mod flood_fill;
 mod graph;
 pub mod grid;
 pub mod nav;

@@ -1,6 +1,6 @@
 //! This module defines the `Chunk` struct, which represents a 3D region of the grid.
 use bevy::math::UVec3;
-use ndarray::{s, Array2, Array3, ArrayView1, ArrayView2, ArrayView3, Axis, Ix2};
+use ndarray::{s, Array3, ArrayView1, ArrayView2, ArrayView3};
 
 use crate::{dir::Dir, nav::NavCell};
 
@@ -293,7 +293,7 @@ impl Chunk {
     }*/
 
     pub(crate) fn face<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
-         match dir {
+        match dir {
             Dir::North => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.max.y as usize - 1,
@@ -480,7 +480,6 @@ impl Chunk {
         })
     }
 }
-
 
 #[cfg(test)]
 mod test {

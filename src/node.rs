@@ -14,7 +14,6 @@ pub(crate) struct Node {
     /// Edges are the other nodes that this node is connected to and the path to them.
     pub(crate) edges: HashMap<UVec3, Path>,
     /// The direction of the edge relative to the chunk.
-    #[allow(dead_code)]
     pub(crate) dir: Option<Dir>,
 }
 

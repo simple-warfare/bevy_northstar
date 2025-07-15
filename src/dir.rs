@@ -118,16 +118,12 @@ impl Dir {
     }
 
     pub fn cardinal_faces() -> impl Iterator<Item = Dir> {
-        [
-            North, East, South, West, Up, Down,
-        ]
-        .into_iter()
+        [North, East, South, West, Up, Down].into_iter()
     }
 
     pub fn cardinal_edges() -> impl Iterator<Item = Dir> {
         [
-           NorthUp, EastUp, SouthUp, WestUp,
-           NorthDown, EastDown, SouthDown, WestDown,
+            NorthUp, EastUp, SouthUp, WestUp, NorthDown, EastDown, SouthDown, WestDown,
         ]
         .into_iter()
     }
