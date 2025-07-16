@@ -15,6 +15,8 @@ pub(crate) struct Node {
     pub(crate) edges: HashMap<UVec3, Path>,
     /// The direction of the edge relative to the chunk.
     pub(crate) dir: Option<Dir>,
+    /// If this is a portal
+    pub(crate) portal: bool,
 }
 
 impl Node {
@@ -24,6 +26,7 @@ impl Node {
             chunk_index: chunk.index(),
             dir,
             edges: HashMap::new(),
+            portal: false,
         }
     }
 

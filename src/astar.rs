@@ -263,6 +263,7 @@ mod tests {
     use crate::grid::{Grid, GridSettingsBuilder};
     use crate::nav::Nav;
     use crate::neighbor::OrdinalNeighborhood3d;
+    use crate::node::Node;
 
     #[test]
     fn test_astar_grid() {
@@ -428,21 +429,21 @@ mod tests {
     fn test_astar_graph() {
         let mut graph = Graph::new();
 
-        let _ = graph.add_node(
+        let _ = graph.add_node(Node::new(
             UVec3::new(0, 0, 0),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
-        let _ = graph.add_node(
+        ));
+        let _ = graph.add_node(Node::new(
             UVec3::new(1, 1, 1),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
-        let _ = graph.add_node(
+        ));
+        let _ = graph.add_node(Node::new(
             UVec3::new(2, 2, 2),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
+        ));
 
         graph.connect_node(
             UVec3::new(0, 0, 0),

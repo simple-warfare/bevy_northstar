@@ -18,7 +18,7 @@ use crate::{
     filter::NeighborFilter,
     flood_fill::flood_fill_bool_mask,
     graph::Graph,
-    nav::{Nav, NavCell},
+    nav::{Nav, NavCell, Portal},
     neighbor::Neighborhood,
     node::Node,
     path::Path,
@@ -669,6 +669,9 @@ impl<N: Neighborhood + Default> Grid<N> {
 
         timed!("Precomputed neighbors", { self.precompute_neighbors() });
         timed!("Built nodes", { self.build_nodes() });
+        timed!("Create portal nodes", {
+            self.create_portal_nodes();
+        });
         timed!("Connected internal chunk nodes", {
             self.connect_internal_chunk_nodes()
         });
@@ -1125,6 +1128,63 @@ impl<N: Neighborhood + Default> Grid<N> {
         ordinal_nodes
     }
 
+    fn create_portal_nodes(&mut self) {
+        for (x, y, z) in self.dirty_chunks.iter().copied() {
+            let chunk = &self.chunks[[x, y, z]];
+
+            // Iterate over all cells in the grid and check for portals.
+            for (pos, cell) in chunk.view(&self.grid).indexed_iter() {
+                if cell.is_portal() {
+                    if let Nav::Portal(Portal { cost, target, .. }) = cell.nav() {
+                        // If the current cell and target are in the same chunk, skip.
+                        let pos_uvec3 = UVec3::new(
+                            pos.0 as u32 + chunk.min().x,
+                            pos.1 as u32 + chunk.min().y,
+                            pos.2 as u32 + chunk.min().z,
+                        );
+
+                        if let Some(target_chunk) = self.chunk_at_position(target) {
+                            if chunk == target_chunk {
+                                continue;
+                            }
+
+                            let node = Node {
+                                pos: pos_uvec3,
+                                chunk_index: chunk.index(),
+                                edges: HashMap::new(),
+                                dir: None,
+                                portal: true,
+                            };
+
+                            // Create node at the target position and give it a reverse path
+                            let target_node = Node {
+                                pos: target,
+                                chunk_index: target_chunk.index(),
+                                edges: HashMap::new(),
+                                dir: None,
+                                portal: true,
+                            };
+
+                            // Create a Node for the portal and insert it into the graph.
+                            self.graph.add_node(node);
+                            self.graph.add_node(target_node);
+                            self.graph.connect_node(
+                                pos_uvec3,
+                                target,
+                                Path::from_slice(&[pos_uvec3, target], cost),
+                            );
+                            self.graph.connect_node(
+                                target,
+                                pos_uvec3,
+                                Path::from_slice(&[target, pos_uvec3], cost),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn connect_internal_chunk_nodes(&mut self) {
         #[cfg(feature = "parallel")]
         {
@@ -1205,6 +1265,14 @@ impl<N: Neighborhood + Default> Grid<N> {
             let all_connections: Vec<_> = nodes
                 .par_iter()
                 .flat_map_iter(|node| {
+                    if node.portal {
+                        println!(
+                            "Portal node: {:?} at Chunk {:?}:{:?}",
+                            node,
+                            chunk.min(),
+                            chunk.max()
+                        );
+                    }
                     let start = node.pos - chunk.min();
                     let goals = nodes
                         .iter()
@@ -1245,6 +1313,11 @@ impl<N: Neighborhood + Default> Grid<N> {
         let mut connections = Vec::new();
 
         for node in nodes {
+            if node.portal {
+                // Skip portal nodes, they are handled separately
+                continue;
+            }
+
             // Check all the adjacent positions of the node, taking into account cardinal/ordinal settings
             let directions: Box<dyn Iterator<Item = Dir>> =
                 if self.chunk_settings.diagonal_connections {
@@ -1530,7 +1603,7 @@ mod tests {
             ChunkSettings, CollisionSettings, Grid, GridInternalSettings, GridSettings,
             GridSettingsBuilder, NavCell, NavSettings, NeighborhoodSettings,
         },
-        nav::Nav,
+        nav::{Nav, Portal},
         neighbor::OrdinalNeighborhood3d,
         prelude::{CardinalNeighborhood, OrdinalNeighborhood},
     };
@@ -2250,5 +2323,56 @@ mod tests {
             !grid.needs_build(),
             "Grid should not need build after rebuild"
         );
+    }
+
+    #[test]
+    fn test_path_with_portal() {
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&GRID_SETTINGS);
+
+        // Create a portal at (5,5,0) leading to (10,10,0)
+        grid.set_nav(
+            UVec3::new(2, 2, 0),
+            Nav::Portal(Portal {
+                target: UVec3::new(10, 10, 0),
+                cost: 1,
+                one_way: false,
+            }),
+        );
+
+        // Fill 5,0,0 to 5,12,0 with impassable nav
+        for y in 0..12 {
+            grid.set_nav(UVec3::new(5, y, 0), Nav::Impassable);
+        }
+
+        grid.build();
+
+        // 10x10x0 should be passable
+        assert!(
+            grid.nav(UVec3::new(10, 10, 0))
+                == Some(Nav::Passable(1)),
+            "Node at (10,10,0) should be passable"
+        );
+
+        // Ensure node is at portal position
+        let portal_node = grid.graph.node_at(UVec3::new(2, 2, 0));
+        assert!(portal_node.is_some(), "Portal node should exist");
+        let portal_node = portal_node.unwrap();
+        portal_node.edges.iter().for_each(|(neighbor, edge)| {
+            assert_eq!(
+                neighbor, &UVec3::new(10, 10, 0),
+                "Portal node should connect to target position"
+            );
+            assert_eq!(edge.cost(), 1, "Portal cost should be 1");
+        });
+
+
+        let path = grid.pathfind(
+            UVec3::new(0, 0, 0),
+            UVec3::new(11, 11, 0),
+            &HashMap::new(),
+            false,
+        );
+
+        assert!(path.is_some(), "Path should exist with portal");
     }
 }
