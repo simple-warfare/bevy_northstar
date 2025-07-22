@@ -993,7 +993,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         chunk: Chunk,
         dir: Dir,
     ) -> Vec<Node> {
-        // Step 1: Create boolean masks for passable regions
+        // Create the boolean masks for passable regions
         let mut start_mask = Array2::from_elem(start_face.raw_dim(), false);
         let mut end_mask = Array2::from_elem(end_face.raw_dim(), false);
 
@@ -1008,17 +1008,15 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
         }
 
-        // Step 2: AND the masks to get intersection
+        // AND the masks and get the intersection
         let mut intersection = Array2::from_elem(start_face.raw_dim(), false);
         Zip::from(&mut intersection)
             .and(&start_mask)
             .and(&end_mask)
             .for_each(|out, &a, &b| *out = a && b);
 
-        // Step 3: Flood fill the intersection to get connected regions
         let groups = flood_fill_bool_mask(intersection.view());
 
-        // Step 4: For each group, pick the center and create a node
         let mut nodes = Vec::new();
         for group in groups {
             let (x, y) = group
@@ -1255,14 +1253,6 @@ impl<N: Neighborhood + Default> Grid<N> {
             let all_connections: Vec<_> = nodes
                 .par_iter()
                 .flat_map_iter(|node| {
-                    if node.portal {
-                        println!(
-                            "Portal node: {:?} at Chunk {:?}:{:?}",
-                            node,
-                            chunk.min(),
-                            chunk.max()
-                        );
-                    }
                     let start = node.pos - chunk.min();
                     let goals = nodes
                         .iter()
@@ -1306,7 +1296,12 @@ impl<N: Neighborhood + Default> Grid<N> {
             if node.portal {
                 // Connect the portal node to its target directly
                 // Collect the portal info
-                if let Nav::Portal(Portal { target, cost, one_way: _ }) = self.nav(node.pos).unwrap_or(Nav::Impassable) {
+                if let Nav::Portal(Portal {
+                    target,
+                    cost,
+                    one_way: _,
+                }) = self.nav(node.pos).unwrap_or(Nav::Impassable)
+                {
                     // If the target is in the same chunk, skip
                     if node.chunk_index == self.chunk_at_position(target).unwrap().index() {
                         continue;
@@ -1314,10 +1309,13 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                     // Create a path from the portal node to its target
                     let path = Path::from_slice(&[node.pos, target], cost);
-                    
+
                     connections.push((node.pos, target, path));
                 } else {
-                    log::warn!("Node at {:?} is a portal but has no valid portal settings.", node.pos);
+                    log::warn!(
+                        "Node at {:?} is a portal but has no valid portal settings.",
+                        node.pos
+                    );
                 }
                 continue;
             }
@@ -1354,6 +1352,18 @@ impl<N: Neighborhood + Default> Grid<N> {
         for (node_pos, neighbor_pos, path) in connections {
             self.graph.connect_node(node_pos, neighbor_pos, path);
         }
+
+        /*for node in self.graph.nodes() {
+            if node.portal {
+                let chunk = self.chunk_at_position(node.pos).unwrap();
+                println!(
+                    "Portal node: {:?} at Chunk {:?}:{:?}",
+                    node,
+                    chunk.min(),
+                    chunk.max()
+                );
+            }
+        }*/
     }
 
     /// Returns the `Chunk` for the given position `UVec3` in the grid.
@@ -2349,22 +2359,24 @@ mod tests {
         }
 
         grid.build();
- 
+
         // Ensure node is at portal position
         let portal_node = grid.graph.node_at(UVec3::new(2, 2, 0));
         assert!(portal_node.is_some(), "Portal node should exist");
         let portal_node = portal_node.unwrap();
 
-
-        portal_node.edges.iter().find_map(|(neighbor, edge)| {
-            if *neighbor == UVec3::new(10, 10, 0) {
-                assert_eq!(edge.cost(), 1, "Portal cost should be 1");
-                Some(())
-            } else {
-                None
-            }
-        }).expect("Portal edge to (10,10,0) should exist");
-
+        portal_node
+            .edges
+            .iter()
+            .find_map(|(neighbor, edge)| {
+                if *neighbor == UVec3::new(10, 10, 0) {
+                    assert_eq!(edge.cost(), 1, "Portal cost should be 1");
+                    Some(())
+                } else {
+                    None
+                }
+            })
+            .expect("Portal edge to (10,10,0) should exist");
 
         let path = grid.pathfind(
             UVec3::new(0, 0, 0),
@@ -2372,6 +2384,65 @@ mod tests {
             &HashMap::new(),
             false,
         );
+
+        assert!(path.is_some(), "Path should exist with portal");
+    }
+
+    #[test]
+    fn test_stairs() {
+        let grid_settings = GridSettingsBuilder::new_3d(16, 16, 4)
+            .chunk_size(4)
+            .chunk_depth(1)
+            .default_impassable()
+            .build();
+
+        let mut grid: Grid<OrdinalNeighborhood3d> = Grid::new(&grid_settings);
+
+        // Fill 0,0,0 to 7,7,0 with passable nav
+        for x in 0..8 {
+            for y in 0..16 {
+                grid.set_nav(UVec3::new(x, y, 0), Nav::Passable(1));
+            }
+        }
+
+        // Fill 8,8,2 to 15, 15,3 with passable nav
+        for x in 8..16 {
+            for y in 0..16 {
+                grid.set_nav(UVec3::new(x, y, 2), Nav::Passable(1));
+            }
+        }
+
+        grid.set_nav(
+            UVec3::new(7, 4, 0),
+            Nav::Portal(Portal {
+                target: UVec3::new(7, 4, 2),
+                cost: 1,
+                one_way: false,
+            }),
+        );
+
+        grid.set_nav(
+            UVec3::new(7, 4, 2),
+            Nav::Portal(Portal {
+                target: UVec3::new(7, 4, 0),
+                cost: 1,
+                one_way: false,
+            }),
+        );
+
+        grid.build();
+
+        let path = grid.pathfind(
+            UVec3::new(0, 0, 0),
+            UVec3::new(8, 5, 2),
+            &HashMap::new(),
+            false,
+        );
+
+        // Print every node debug in the graph
+        for node in grid.graph.nodes() {
+            println!("Node at {:?} with edges: {:?}", node.pos, node.edges);
+        }
 
         assert!(path.is_some(), "Path should exist with portal");
     }

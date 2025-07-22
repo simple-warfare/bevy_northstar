@@ -3,6 +3,7 @@ use bevy::{
     color::palettes::css,
     ecs::entity::Entity,
     math::{UVec3, Vec3},
+    platform::collections::HashMap,
     prelude::{Color, Component},
     reflect::Reflect,
     transform::components::Transform,
@@ -184,9 +185,13 @@ pub struct RerouteFailed;
 #[derive(Component, Default, Reflect)]
 pub struct DebugOffset(pub Vec3);
 
+/// You can add DebugDepthOffsets to your DebugGrid entity and the debug gizmo's y position
+/// will be offset by the depth (z-coordinate) of the grid/path position.
+#[derive(Component, Default, Reflect)]
+pub struct DebugDepthYOffsets(pub HashMap<u32, f32>);
+
 /// Component for debugging an entity's [`crate::path::Path`].
 #[derive(Component, Reflect)]
-#[require(DebugOffset)]
 pub struct DebugPath {
     /// The [`Color`] of the path gizmo.
     pub color: Color,
@@ -218,7 +223,7 @@ impl Default for DebugPath {
 /// Component for debugging [`crate::grid::Grid`].
 /// You need to insert [`DebugGrid`] as a child of your map.
 #[derive(Reflect, Component)]
-#[require(Transform)]
+#[require(Transform, DebugOffset)]
 pub struct DebugGrid {
     pub(crate) tile_width: u32,
     pub(crate) tile_height: u32,
@@ -242,6 +247,11 @@ impl DebugGrid {
     pub fn set_depth(&mut self, depth: u32) -> &Self {
         self.depth = depth;
         self
+    }
+
+    /// Gets the z depth that the debug grid is drawing for 3D tilemaps.
+    pub fn depth(&self) -> u32 {
+        self.depth
     }
 
     /// Set the [`DebugTilemapType`] which is used to determine how the grid is visualized (e.g., square or isometric). Align this with the style of your tilemap.

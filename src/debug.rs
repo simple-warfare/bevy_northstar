@@ -1,12 +1,12 @@
 //! Plugin to add systems for drawing gizmos. For debugging pathfinding.
-use bevy::{color::palettes::css, math::Vec2, prelude::*};
+use bevy::{color::palettes::css, math::Vec2, platform::collections::HashMap, prelude::*};
 
 use crate::{
     components::{DebugGrid, DebugPath},
     grid::Grid,
     neighbor::Neighborhood,
     path::Path,
-    prelude::{AgentOfGrid, DebugOffset},
+    prelude::{AgentOfGrid, DebugDepthYOffsets, DebugOffset},
 };
 
 /// Required to calculate how to draw the debug gizmos
@@ -63,13 +63,14 @@ impl<N: Neighborhood + 'static> Plugin for NorthstarDebugPlugin<N> {
             .register_type::<DebugGrid>()
             .register_type::<DebugTilemapType>()
             .register_type::<DebugOffset>()
-            .register_type::<DebugPath>();
+            .register_type::<DebugPath>()
+            .register_type::<DebugDepthYOffsets>();
     }
 }
 
 // / Draw the debug gizmos for the chunks, cells, entrances, and cached paths.
 fn draw_debug_map<N: Neighborhood + 'static>(
-    query: Query<(&DebugOffset, &DebugGrid)>,
+    query: Query<(&DebugOffset, &DebugGrid, Option<&DebugDepthYOffsets>)>,
     grid: Query<&Grid<N>>,
     mut gizmos: Gizmos,
 ) {
@@ -79,9 +80,20 @@ fn draw_debug_map<N: Neighborhood + 'static>(
         return;
     };
 
-    for (debug_offset, debug_grid) in query.iter() {
+    for (debug_offset, debug_grid, debug_depth_offsets) in query.iter() {
         //let offset = transform.translation.truncate();
         let offset = debug_offset.0.truncate();
+
+        let debug_depth_offsets = if let Some(debug_depth_offsets) = debug_depth_offsets {
+            debug_depth_offsets.0.clone()
+        } else {
+            HashMap::new()
+        };
+
+        let y_offset = debug_depth_offsets
+            .get(&debug_grid.depth)
+            .cloned()
+            .unwrap_or_default();
 
         let half_tile_width = debug_grid.tile_width as f32 * 0.5;
         let half_tile_height = debug_grid.tile_height as f32 * 0.5;
@@ -118,10 +130,10 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                             let top_left = top_left + offset - half_tile_width;
                             let top_right = top_right + offset - half_tile_height;
 
-                            gizmos.line_2d(bottom_left, bottom_right, css::WHITE);
-                            gizmos.line_2d(bottom_right, top_right, css::WHITE);
-                            gizmos.line_2d(top_right, top_left, css::WHITE);
-                            gizmos.line_2d(top_left, bottom_left, css::WHITE);
+                            gizmos.line_2d(bottom_left, bottom_right + y_offset, css::WHITE);
+                            gizmos.line_2d(bottom_right, top_right + y_offset, css::WHITE);
+                            gizmos.line_2d(top_right, top_left + y_offset, css::WHITE);
+                            gizmos.line_2d(top_left, bottom_left + y_offset, css::WHITE);
                         }
                     }
                 }
@@ -130,7 +142,8 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                         for y in 1..chunk_height {
                             let position = Vec2::new(
                                 (y as f32 + x as f32) * half_tile_width * chunk_size as f32,
-                                (y as f32 - x as f32) * half_tile_height * chunk_size as f32,
+                                (y as f32 - x as f32) * half_tile_height * chunk_size as f32
+                                    + y_offset,
                             );
 
                             let top = position
@@ -172,11 +185,11 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                     let position = match debug_grid.map_type {
                         DebugTilemapType::Square => Vec2::new(
                             (x * debug_grid.tile_width) as f32,
-                            (y * debug_grid.tile_height) as f32,
+                            (y * debug_grid.tile_height) as f32 + y_offset,
                         ),
                         DebugTilemapType::Isometric => Vec2::new(
                             (y as f32 + x as f32) * half_tile_width,
-                            (y as f32 - x as f32) * half_tile_height - half_tile_height,
+                            (y as f32 - x as f32) * half_tile_height - half_tile_height + y_offset,
                         ),
                     };
 
@@ -191,12 +204,13 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                 let position = match debug_grid.map_type {
                     DebugTilemapType::Square => Vec2::new(
                         (node.pos.x * debug_grid.tile_width) as f32,
-                        (node.pos.y * debug_grid.tile_height) as f32,
+                        (node.pos.y * debug_grid.tile_height) as f32 + y_offset,
                     ),
                     DebugTilemapType::Isometric => Vec2::new(
                         (node.pos.y as f32 + node.pos.x as f32) * half_tile_width,
                         (node.pos.y as f32 - node.pos.x as f32) * half_tile_height
-                            - half_tile_height,
+                            - half_tile_height
+                            + y_offset,
                     ),
                 };
 
@@ -210,14 +224,15 @@ fn draw_debug_map<N: Neighborhood + 'static>(
                             let neighbor_position = match debug_grid.map_type {
                                 DebugTilemapType::Square => Vec2::new(
                                     (neighbor.pos.x * debug_grid.tile_width) as f32,
-                                    (neighbor.pos.y * debug_grid.tile_height) as f32,
+                                    (neighbor.pos.y * debug_grid.tile_height) as f32 + y_offset,
                                 ),
                                 DebugTilemapType::Isometric => Vec2::new(
                                     (neighbor.pos.y as f32 + neighbor.pos.x as f32)
                                         * half_tile_width,
                                     (neighbor.pos.y as f32 - neighbor.pos.x as f32)
                                         * half_tile_height
-                                        - half_tile_height,
+                                        - half_tile_height
+                                        + y_offset,
                                 ),
                             };
                             gizmos.line_2d(
@@ -299,7 +314,7 @@ fn draw_debug_map<N: Neighborhood + 'static>(
 
 fn draw_debug_paths<N: Neighborhood + 'static>(
     grid_children: Query<(Entity, &Children), With<Grid<N>>>,
-    debug_grid: Query<(&DebugGrid, &DebugOffset)>,
+    debug_grid: Query<(&DebugGrid, &DebugOffset, Option<&DebugDepthYOffsets>)>,
     debug_paths: Query<(&DebugPath, &Path, &AgentOfGrid)>,
     mut gizmos: Gizmos,
 ) {
@@ -321,7 +336,7 @@ fn draw_debug_paths<N: Neighborhood + 'static>(
             );
         }
 
-        let (debug_grid, debug_offset) = debug_grid_vec[0];
+        let (debug_grid, debug_offset, debug_depth_offsets) = debug_grid_vec[0];
 
         let center_offset = debug_offset.0.truncate();
 
@@ -342,25 +357,39 @@ fn draw_debug_paths<N: Neighborhood + 'static>(
             let mut prev = iter.next().unwrap();
 
             for next in iter {
+                let prev_y_offset = if let Some(depth_offsets) = debug_depth_offsets {
+                    depth_offsets.0.get(&prev.z).cloned().unwrap_or_default()
+                } else {
+                    0.0
+                };
+
+                let next_y_offset = if let Some(depth_offsets) = debug_depth_offsets {
+                    depth_offsets.0.get(&next.z).cloned().unwrap_or_default()
+                } else {
+                    0.0
+                };
+
                 let prev_position = match debug_grid.map_type {
                     DebugTilemapType::Square => Vec2::new(
                         (prev.x * debug_grid.tile_width) as f32,
-                        (prev.y * debug_grid.tile_height) as f32,
+                        (prev.y * debug_grid.tile_height) as f32 + prev_y_offset,
                     ),
                     DebugTilemapType::Isometric => Vec2::new(
                         (prev.y as f32 + prev.x as f32) * half_tile_width,
-                        (prev.y as f32 - prev.x as f32) * half_tile_height - half_tile_height,
+                        (prev.y as f32 - prev.x as f32) * half_tile_height - half_tile_height
+                            + prev_y_offset,
                     ),
                 };
 
                 let next_position = match debug_grid.map_type {
                     DebugTilemapType::Square => Vec2::new(
                         (next.x * debug_grid.tile_width) as f32,
-                        (next.y * debug_grid.tile_height) as f32,
+                        (next.y * debug_grid.tile_height) as f32 + next_y_offset,
                     ),
                     DebugTilemapType::Isometric => Vec2::new(
                         (next.y as f32 + next.x as f32) * half_tile_width,
-                        (next.y as f32 - next.x as f32) * half_tile_height - half_tile_height,
+                        (next.y as f32 - next.x as f32) * half_tile_height - half_tile_height
+                            + next_y_offset,
                     ),
                 };
 

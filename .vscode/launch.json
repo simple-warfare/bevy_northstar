@@ -64,6 +64,26 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug isometric example",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "isometric",
+                    "--features",
+                    "stats"
+                ]
+            },
+            "args": [],
+            "env": {
+                "CARGO_MANIFEST_DIR": "${workspaceFolder}",
+                "RUST_BACKTRACE": "1"
+            },
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug collision_testing example",
             "cargo": {
                 "args": [
