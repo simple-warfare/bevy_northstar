@@ -289,7 +289,18 @@ pub(crate) fn bresenham_path_filtered(
 
     path.push(goal);
 
-    Some(path)
+    // Ensure that that no shortcut ever breaks the neighbor rules
+    if path.windows(2).all(|w| {
+        let a = w[0];
+        let b = w[1];
+        grid[[a.x as usize, a.y as usize, a.z as usize]]
+            .neighbor_iter(a)
+            .any(|n| n == b)
+    }) {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 // Trace a line from start to goal and get the Bresenham path only if the path doesn't collide with a wall

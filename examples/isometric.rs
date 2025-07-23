@@ -132,12 +132,12 @@ fn main() {
 fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
-    let grid_settings = GridSettingsBuilder::new_3d(64, 64, 10)
+    let grid_settings = GridSettingsBuilder::new_3d(64, 64, 13)
         .chunk_size(16)
         .default_impassable()
         // This is a great example of when to use a neighbor filter.
         // Since we're Y Sorting, we don't want to allow the player to move diagonally around walls as the sprite will z transition through the wall.
-        .add_neighbor_filter(filter::NoCornerCutting)
+        .add_neighbor_filter(filter::NoCornerCuttingFlat)
         .build();
 
     let map_handle: Handle<TiledMap> = asset_server.load("isotilemap.tmx");
@@ -174,7 +174,12 @@ fn tile_created(
         let layer = trigger.event().layer;
 
         // Treat the higher layers as having a higher height offset.
-        let layer_height_offset = if layer.id == 1 { 4 } else { 0 };
+        let layer_height_offset = match layer.id {
+            0 => 0,
+            1 => 4,
+            2 => 8,
+            _ => 0,
+        };
 
         // Readjust the tile_info height based on the layer.
         tile_info.height += layer_height_offset as i32;
@@ -303,21 +308,21 @@ fn update_cursor(
     let window = window.into_inner();
     let (camera, camera_transform, _) = camera.into_inner();
 
-    if let Some(cursor_position) = window
+    if let Some(mut cursor_position) = window
         .cursor_position()
         .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
     {
         let map = map_query.iter().next().expect("No map found in the query");
 
         let offset = Vec2::new(0.0, map.grid_size.y / 2.0);
+        cursor_position = cursor_position + offset;
 
         let mut selected_tile = None;
 
         // Test from highest to lowest height
         for test_height in (0..=MAX_HEIGHT).rev() {
             let height_visual_offset = test_height as f32 * HEIGHT_OFFSET;
-
-            let adjusted_cursor = cursor_position + offset + Vec2::new(0.0, -height_visual_offset);
+            let adjusted_cursor = cursor_position + Vec2::new(0.0, -height_visual_offset);
 
             if let Some(tile_pos) = TilePos::from_world_pos(
                 &adjusted_cursor,
@@ -332,6 +337,22 @@ fn update_cursor(
                 for storage in tile_storage.iter() {
                     if let Some(tile) = storage.get(&tile_pos) {
                         if let Ok(info) = tile_info.get(tile) {
+                            let tile_height = info.height as f32;
+                            let mut tile_world = TilePos::center_in_world(
+                                &tile_pos,
+                                map.map_size,
+                                map.grid_size,
+                                map.tile_size,
+                                map.map_type,
+                                map.anchor,
+                            );
+                            // Add height offset to the tile world position
+                            tile_world.y += tile_height as f32 * HEIGHT_OFFSET;
+                            
+                            if (cursor_position.y - tile_world.y).abs() > LAYER_Z_OFFSET {
+                                continue; // Skip tiles that are too far y offset
+                            }
+
                             if top_tile.is_none() || info.height > top_tile.unwrap().1 {
                                 top_tile = Some((tile, info.height));
                             }

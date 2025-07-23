@@ -1,3 +1,5 @@
+## v0.3.2
+
 ## v0.3.1
 ### Features
 * The grid can now be updated during gameplay. After calling `Grid::set_nav()` to change navigation at a position just call `Grid::build()` again. 

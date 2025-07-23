@@ -1133,7 +1133,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             // Iterate over all cells in the grid and check for portals.
             for (pos, cell) in chunk.view(&self.grid).indexed_iter() {
                 if cell.is_portal() {
-                    if let Nav::Portal(Portal { cost, target, .. }) = cell.nav() {
+                    if let Nav::Portal(Portal { target, .. }) = cell.nav() {
                         // If the current cell and target are in the same chunk, skip.
                         let pos_uvec3 = UVec3::new(
                             pos.0 as u32 + chunk.min().x,

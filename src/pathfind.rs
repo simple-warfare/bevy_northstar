@@ -197,6 +197,17 @@ pub(crate) fn pathfind<N: Neighborhood>(
                     return None;
                 }
 
+                // On some occassions extending the goal path can add in a duplicate goal position at the end.
+                // It's cheaper/cleaner to just clean up after it.
+                if path.len() >= 2 && path[path.len() - 1] == path[path.len() - 2] {
+                    path.pop();
+                }
+
+                // Same with the start
+                if path.len() >= 2 && path[0] == path[1] {
+                    log::warn!("Start contains duplicate nodes: {:?}", path);
+                }
+
                 if !refined {
                     // If we're not refining, return the path as is
                     let mut path = Path::new(path, cost);
