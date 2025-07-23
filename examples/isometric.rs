@@ -76,11 +76,12 @@ struct MapQuery {
 }
 
 const LAYER_Z_OFFSET: f32 = 16.0; // Z offset for each layer
-const HEIGHT_OFFSETS: [f32; 10] = [0.0, 4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 28.0, 32.0, 36.0];
+const HEIGHT_OFFSET: f32 = 4.0;
+const MAX_HEIGHT: u32 = 9;
 // We need to adjust the z offset based on the layer that the height is in.
-const PLAYER_CENTER_OFFSET: f32 = 0.0; // Center offset for player sprite
+const PLAYER_CENTER_OFFSET: f32 = 4.0; // Center offset for player sprite
 
-pub const LERP_SPEED: f32 = 30.;
+pub const LERP_SPEED: f32 = 22.0;
 pub const POSITION_TOLERANCE: f32 = 0.1;
 
 fn main() {
@@ -95,18 +96,28 @@ fn main() {
         .add_event::<AnimationWaitEvent>()
         .add_systems(Startup, startup)
         .add_systems(
-            Update,
+            PreUpdate,
             (
                 input,
+                debug_input,
                 update_cursor,
                 move_pathfinders,
-                animate_move.after(move_pathfinders),
+            ).run_if(in_state(State::Playing))
+        )
+        .add_systems(
+            Update,
+            (
+                animate_move,
                 pathfind_error,
-                debug_input,
-                y_sort.after(animate_move),
-                camera_follow_player
             )
                 .run_if(in_state(State::Playing)),
+        )
+        .add_systems(
+            PostUpdate,
+            (
+                y_sort,
+                camera_follow_player,
+            ).run_if(in_state(State::Playing)),
         )
         .add_observer(tile_created)
         .add_observer(loading_complete)
@@ -124,6 +135,9 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let grid_settings = GridSettingsBuilder::new_3d(64, 64, 10)
         .chunk_size(16)
         .default_impassable()
+        // This is a great example of when to use a neighbor filter.
+        // Since we're Y Sorting, we don't want to allow the player to move diagonally around walls as the sprite will z transition through the wall.
+        .add_neighbor_filter(filter::NoCornerCutting)
         .build();
 
     let map_handle: Handle<TiledMap> = asset_server.load("isotilemap.tmx");
@@ -236,10 +250,8 @@ fn loading_complete(
                     .extend(0.0),
             ),
             DebugDepthYOffsets(
-                HEIGHT_OFFSETS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| (i as u32, *v))
+                (0..=MAX_HEIGHT)
+                    .map(|h| (h, h as f32 * HEIGHT_OFFSET))
                     .collect(),
             ),
         ));
@@ -267,7 +279,7 @@ fn loading_complete(
         AgentPos(player_start),
         Transform::from_translation(Vec3::new(center.x, center.y + PLAYER_CENTER_OFFSET, 0.0)),
         YSort(0.0),
-        Pivot(Vec2::new(0.0, 4.0)),
+        Pivot(Vec2::new(0.0, -10.0)),
     ));
 
     // Zoom camera into the player
@@ -301,12 +313,9 @@ fn update_cursor(
 
         let mut selected_tile = None;
 
-        let layer_count = tile_storage.iter().count();
-
         // Test from highest to lowest height
-        for test_height in (0..10).rev() {
-            let layer_offset = (layer_count as f32 - (test_height / 5) as f32) * -LAYER_Z_OFFSET;
-            let height_visual_offset = HEIGHT_OFFSETS.get(test_height).copied().unwrap_or(0.0);
+        for test_height in (0..=MAX_HEIGHT).rev() {
+            let height_visual_offset = test_height as f32 * HEIGHT_OFFSET;
 
             let adjusted_cursor = cursor_position + offset + Vec2::new(0.0, -height_visual_offset);
 
@@ -383,6 +392,18 @@ fn input(
     }
 }
 
+
+fn pathfind_error(query: Query<Entity, With<PathfindingFailed>>, mut commands: Commands) {
+    for entity in query.iter() {
+        log::error!("Pathfinding failed for entity: {:?}", entity);
+        commands
+            .entity(entity)
+            .remove::<PathfindingFailed>()
+            .remove::<Pathfind>()
+            .remove::<NextPos>();
+    }
+}
+
 fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut DebugGrid>) {
     if let Ok(mut debug_grid) = debug_query.single_mut() {
         if keyboard.just_pressed(KeyCode::Backquote) {
@@ -394,7 +415,7 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
         if keyboard.just_pressed(KeyCode::Equal) {
             let new_depth = debug_grid.depth() + 1;
 
-            if new_depth < 10 {
+            if new_depth <= MAX_HEIGHT {
                 debug_grid.set_depth(new_depth);
             }
         }
@@ -405,6 +426,24 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
         }
     }
 }
+
+
+fn move_pathfinders(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
+    animation_reader: EventReader<AnimationWaitEvent>,
+) {
+    if animation_reader.len() > 0 {
+        return;
+    }
+
+    for (entity, mut position, next) in query.iter_mut() {
+        position.0 = next.0;
+
+        commands.entity(entity).remove::<NextPos>();
+    }
+}
+
 
 fn animate_move(
     mut query: Query<(&AgentPos, &mut Transform, &mut YSort)>,
@@ -429,12 +468,9 @@ fn animate_move(
             map.anchor,
         );
 
-        let height_offset = HEIGHT_OFFSETS
-            .get(position.0.z as usize)
-            .cloned()
-            .unwrap_or(0.0);
+        let height_offset = position.0.z as f32 * HEIGHT_OFFSET;
 
-        ysort.0 = height_offset;
+        ysort.0 = height_offset - (MAX_HEIGHT - 1) as f32 * HEIGHT_OFFSET;
 
         let target = Vec3::new(
             base_vec.x,
@@ -459,63 +495,18 @@ fn animate_move(
     }
 }
 
-fn move_pathfinders(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
-    animation_reader: EventReader<AnimationWaitEvent>,
-) {
-    if animation_reader.len() > 0 {
-        return;
-    }
-
-    for (entity, mut position, next) in query.iter_mut() {
-        position.0 = next.0;
-
-        commands.entity(entity).remove::<NextPos>();
-    }
-}
-
-fn pathfind_error(query: Query<Entity, With<PathfindingFailed>>, mut commands: Commands) {
-    for entity in query.iter() {
-        log::error!("Pathfinding failed for entity: {:?}", entity);
-        commands
-            .entity(entity)
-            .remove::<PathfindingFailed>()
-            .remove::<Pathfind>()
-            .remove::<NextPos>();
-    }
-}
-
 fn y_sort(
-    mut query: Query<(&mut Transform, &AgentPos, &YSort, &Pivot)>,
+    mut query: Query<(&mut Transform, &YSort, &Pivot)>,
     map_query: Query<(&TilemapSize, &TilemapTileSize)>,
-    tile_storage: Query<&TileStorage>,
 ) {
-    let (map_size, tile_size) = if let Some((map_size, tile_size)) = map_query.iter().next() {
-        (map_size, tile_size)
-    } else {
-        return;
-    };
+    let Some((map_size, tile_size)) = map_query.iter().next() else { return; };
 
     let max_y = map_size.y as f32 * tile_size.y;
 
-    for (mut transform, position, ysort, pivot) in query.iter_mut() {
-        let layer_count = tile_storage.iter().count() - 1;
+    for (mut transform, ysort, pivot) in query.iter_mut() {
+        let y = transform.translation.y + pivot.0.y;
 
-        let layer_offset = (layer_count as f32 - (position.0.z / 5) as f32) * -LAYER_Z_OFFSET;
-
-        let y = transform.translation.y - pivot.0.y + ysort.0;
-
-        transform.translation.z = layer_offset + ysort.0 + (1.0 - (y / max_y));
-
-        log::info!(
-            "Transform: {:?}, Position: {:?}, YSort: {}, Pivot: {:?}, Layer Offset: {}",
-            transform.translation,
-            position.0,
-            ysort.0,
-            pivot.0,
-            layer_offset
-        );
+        transform.translation.z = ysort.0 + (1.0 - (y / max_y));
     }
 }
 
@@ -526,25 +517,17 @@ fn camera_follow_player(
     time: Res<Time>,
     windows: Query<&Window>,
     mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
-    player_query: Query<&Transform, With<Player>>,
+    player_query: Single<&Transform, With<Player>>,
 ) {
-    let window = if let Some(window) = windows.iter().next() {
-        window
-    } else {
+    let Some(window) = windows.iter().next() else {
         return;
     };
 
-    let mut camera_transform = if let Ok(transform) = camera_query.single_mut() {
-        transform
-    } else {
+    let Some(mut camera_transform) = camera_query.iter_mut().next() else {
         return;
     };
 
-    let player_transform = if let Ok(transform) = player_query.single() {
-        transform
-    } else {
-        return;
-    };
+    let player_transform = player_query.into_inner();
 
     let player_pos = player_transform.translation.truncate();
     let camera_pos = camera_transform.translation.truncate();
