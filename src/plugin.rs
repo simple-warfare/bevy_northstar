@@ -234,7 +234,10 @@ fn pathfind<N: Neighborhood + 'static>(
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
 #[allow(clippy::too_many_arguments)]
 fn next_position<N: Neighborhood + 'static>(
-    mut query: Query<(Entity, &mut Path, &AgentPos, &Pathfind), WithoutPathingFailures>,
+    mut query: Query<
+        (Entity, &mut Path, &AgentPos, &Pathfind),
+        (WithoutPathingFailures, Without<NextPos>),
+    >,
     grid: Single<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
@@ -305,9 +308,8 @@ fn next_position<N: Neighborhood + 'static>(
                     .0
                     .insert(entity, next.as_vec3() - position.0.as_vec3());
 
-                // Let's try it...
-                if blocking.0.contains_key(&next) {
-                    // Someone beat us to it — requeue without inserting NextPos
+                if blocking.0.contains_key(&next) && grid.collision() {
+                    // Someone beat us to it - requeue without inserting NextPos
                     queue.push_back(entity);
                     continue;
                 }

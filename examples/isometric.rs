@@ -4,7 +4,7 @@ use bevy_ecs_tiled::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_northstar::prelude::*;
 
-// Portal is at 1,36,4
+// Portal is at 11,28,8 and 1,46,4
 
 // Game state
 #[derive(Clone, Debug, Default, Hash, Eq, States, PartialEq)]
@@ -47,7 +47,6 @@ pub struct YSort(pub f32);
 // Place the pivot point for the player sprite for correct y-sorting
 #[derive(Component, Debug, Reflect)]
 pub struct Pivot(pub Vec2);
-
 
 // Event that lets other systems know to wait until animations are completed.
 #[derive(Debug, Event)]
@@ -97,27 +96,15 @@ fn main() {
         .add_systems(Startup, startup)
         .add_systems(
             PreUpdate,
-            (
-                input,
-                debug_input,
-                update_cursor,
-                move_pathfinders,
-            ).run_if(in_state(State::Playing))
+            (input, debug_input, update_cursor, move_pathfinders).run_if(in_state(State::Playing)),
         )
         .add_systems(
             Update,
-            (
-                animate_move,
-                pathfind_error,
-            )
-                .run_if(in_state(State::Playing)),
+            (animate_move, pathfind_error).run_if(in_state(State::Playing)),
         )
         .add_systems(
             PostUpdate,
-            (
-                y_sort,
-                camera_follow_player,
-            ).run_if(in_state(State::Playing)),
+            (y_sort, camera_follow_player).run_if(in_state(State::Playing)),
         )
         .add_observer(tile_created)
         .add_observer(loading_complete)
@@ -184,7 +171,18 @@ fn tile_created(
         // Readjust the tile_info height based on the layer.
         tile_info.height += layer_height_offset as i32;
 
-        if tile_info.ramp {
+        // Manual way of setting our portals without needing an object layer.
+        if tile_pos.x == 11 && tile_pos.y == 28 && tile_info.height == 8 {
+            grid.set_nav(
+                UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
+                Nav::Portal(Portal::new(UVec3::new(1, 46, 4), 1, false)),
+            )
+        } else if tile_pos.x == 1 && tile_pos.y == 46 && tile_info.height == 4 {
+            grid.set_nav(
+                UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
+                Nav::Portal(Portal::new(UVec3::new(11, 28, 8), 1, false)),
+            )
+        } else if tile_info.ramp {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
                 Nav::Portal(Portal::new(
@@ -246,9 +244,7 @@ fn loading_complete(
     // Insert the debug grid as a child to the grid entity
     if let Some(map) = map_query.iter().next() {
         commands.entity(entity).with_child((
-            DebugGridBuilder::new(32, 16)
-                .isometric()
-                .build(),
+            DebugGridBuilder::new(32, 16).isometric().build(),
             DebugOffset(
                 map.anchor
                     .as_offset(map.map_size, map.grid_size, map.tile_size, map.map_type)
@@ -348,7 +344,7 @@ fn update_cursor(
                             );
                             // Add height offset to the tile world position
                             tile_world.y += tile_height as f32 * HEIGHT_OFFSET;
-                            
+
                             if (cursor_position.y - tile_world.y).abs() > LAYER_Z_OFFSET {
                                 continue; // Skip tiles that are too far y offset
                             }
@@ -413,7 +409,6 @@ fn input(
     }
 }
 
-
 fn pathfind_error(query: Query<Entity, With<PathfindingFailed>>, mut commands: Commands) {
     for entity in query.iter() {
         log::error!("Pathfinding failed for entity: {:?}", entity);
@@ -448,7 +443,6 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
     }
 }
 
-
 fn move_pathfinders(
     mut commands: Commands,
     mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
@@ -464,7 +458,6 @@ fn move_pathfinders(
         commands.entity(entity).remove::<NextPos>();
     }
 }
-
 
 fn animate_move(
     mut query: Query<(&AgentPos, &mut Transform, &mut YSort)>,
@@ -520,7 +513,9 @@ fn y_sort(
     mut query: Query<(&mut Transform, &YSort, &Pivot)>,
     map_query: Query<(&TilemapSize, &TilemapTileSize)>,
 ) {
-    let Some((map_size, tile_size)) = map_query.iter().next() else { return; };
+    let Some((map_size, tile_size)) = map_query.iter().next() else {
+        return;
+    };
 
     let max_y = map_size.y as f32 * tile_size.y;
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.11.0" orientation="isometric" renderorder="right-down" width="48" height="48" tilewidth="32" tileheight="16" infinite="0" nextlayerid="4" nextobjectid="1">
+<map version="1.10" tiledversion="1.11.2" orientation="isometric" renderorder="right-down" width="48" height="48" tilewidth="32" tileheight="16" infinite="0" nextlayerid="5" nextobjectid="1">
  <tileset firstgid="1" name="isotileset" tilewidth="32" tileheight="32" tilecount="20" columns="5">
   <image source="isotileset.png" width="160" height="128"/>
   <tile id="0">
@@ -90,16 +90,6 @@
   </tile>
   <tile id="19">
    <properties>
-    <property name="Portal" type="class" propertytype="isometric::Portal">
-     <properties>
-      <property name="target" type="class" propertytype="(u16, u16)">
-       <properties>
-        <property name="0" type="int" value="32"/>
-        <property name="1" type="int" value="32"/>
-       </properties>
-      </property>
-     </properties>
-    </property>
     <property name="TileInfo" type="class" propertytype="isometric::TileInfo">
      <properties>
       <property name="height" type="int" value="4"/>

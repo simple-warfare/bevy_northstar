@@ -172,10 +172,7 @@ impl NeighborFilter for NoCornerCuttingFlat {
                 continue;
             }
 
-            let cardinal_dirs = [
-                IVec3::new(dx, 0, 0),
-                IVec3::new(0, dy, 0),
-            ];
+            let cardinal_dirs = [IVec3::new(dx, 0, 0), IVec3::new(0, dy, 0)];
 
             if cardinal_dirs.iter().any(|dir| solid_dirs.contains(dir)) {
                 mask &= !(1 << i); // Disallow this ordinal
@@ -185,7 +182,6 @@ impl NeighborFilter for NoCornerCuttingFlat {
         mask
     }
 }
-
 
 /// Disallow diagonal movement involving Z.
 /// Keeps cardinal movement and 2D (XY) diagonals.
