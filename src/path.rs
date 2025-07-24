@@ -99,6 +99,12 @@ impl Path {
         self.path.pop_front()
     }
 
+    /// Returns the next position in the path without removing it.
+    pub fn next(&self) -> Option<UVec3> {
+        // Get the next position in the path
+        self.path.front().cloned()
+    }
+
     /// Shifts all positions in the path by the given offset.
     pub(crate) fn translate_by(&mut self, offset: UVec3) {
         for pos in &mut self.path {

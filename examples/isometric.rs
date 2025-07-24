@@ -96,7 +96,14 @@ fn main() {
         .add_systems(Startup, startup)
         .add_systems(
             PreUpdate,
-            (input, debug_input, update_cursor, move_pathfinders).run_if(in_state(State::Playing)),
+            (
+                input,
+                debug_input,
+                update_cursor,
+                move_pathfinders,
+                warp.after(move_pathfinders),
+            )
+                .run_if(in_state(State::Playing)),
         )
         .add_systems(
             Update,
@@ -175,12 +182,12 @@ fn tile_created(
         if tile_pos.x == 11 && tile_pos.y == 28 && tile_info.height == 8 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(UVec3::new(1, 46, 4), 1, false)),
+                Nav::Portal(Portal::new(UVec3::new(2, 45, 0), 1, false)),
             )
         } else if tile_pos.x == 1 && tile_pos.y == 46 && tile_info.height == 4 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(UVec3::new(11, 28, 8), 1, false)),
+                Nav::Portal(Portal::new(UVec3::new(12, 28, 8), 1, false)),
             )
         } else if tile_info.ramp {
             grid.set_nav(
@@ -439,6 +446,51 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
         if keyboard.just_pressed(KeyCode::Minus) {
             let current_depth = debug_grid.depth();
             debug_grid.set_depth(current_depth.saturating_sub(1));
+        }
+    }
+}
+
+fn warp(
+    mut query: Query<(&mut AgentPos, &mut Path, &mut Transform)>,
+    map_query: Query<MapQuery>,
+    grid: Single<&OrdinalGrid3d>,
+) {
+    let map = map_query.iter().next().expect("No map found in the query");
+    let grid = grid.into_inner();
+
+    for (mut position, mut path, mut transform) in query.iter_mut() {
+        if let Some(Nav::Portal(portal)) = grid.nav(position.0) {
+            // Update the position to the portal's target
+            position.0 = portal.target;
+
+            // Update the transform to the portal's target position
+            let tile_pos = TilePos::new(position.0.x, position.0.y);
+            let base_vec = TilePos::center_in_world(
+                &tile_pos,
+                map.map_size,
+                map.grid_size,
+                map.tile_size,
+                map.map_type,
+                map.anchor,
+            );
+
+            // Set the transform position to the portal's target position,
+            // We're going to cheat a bit not bother with proper z height calculation and
+            // just let animate_move clean it up.
+            transform.translation = Vec3::new(
+                base_vec.x,
+                base_vec.y + (portal.target.z as f32 * HEIGHT_OFFSET) + PLAYER_CENTER_OFFSET,
+                transform.translation.z,
+            );
+
+            // Check if the next position in the path is the target of the portal
+            // We do this because the player may just step into the portal as the goal,
+            // if not we need to remove a step from the path.
+            if let Some(next_pos) = path.next() {
+                if next_pos == portal.target {
+                    path.pop();
+                }
+            }
         }
     }
 }
