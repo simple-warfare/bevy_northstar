@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 #[cfg(feature = "stats")]
 use std::time::Instant;
 
-use bevy::{log, platform::collections::HashMap, prelude::*};
+use bevy::{ecs::query::QueryData, log, platform::collections::HashMap, prelude::*};
 
 use crate::{prelude::*, WithoutPathingFailures};
 
@@ -230,9 +230,19 @@ fn pathfind<N: Neighborhood + 'static>(
     }
 }
 
+#[derive(QueryData)]
+#[query_data(derive(Debug), mutable)]
+struct NextPosQuery {
+    entity: Entity,
+    path: &'static mut Path,
+    position: &'static AgentPos,
+    pathfind: &'static Pathfind,
+}
+
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 fn next_position<N: Neighborhood + 'static>(
     mut query: Query<
         (Entity, &mut Path, &AgentPos, &Pathfind),

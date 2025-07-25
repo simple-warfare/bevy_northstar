@@ -714,28 +714,12 @@ impl<N: Neighborhood + Default> Grid<N> {
         }
     }
 
-    fn compute_cell_neighbors(
-        &self,
-        neighborhood: &N,
-        grid_view: &ArrayView3<NavCell>,
-        pos: UVec3,
-    ) -> (UVec3, u32, Vec<UVec3>) {
-        let bits = neighborhood.neighbors(grid_view, pos);
-        let nav = grid_view[[pos.x as usize, pos.y as usize, pos.z as usize]].nav();
-
-        let special = match nav {
-            Nav::Portal(p) => vec![p.target],
-            _ => Vec::new(),
-        };
-
-        (pos, bits, special)
-    }
-
     /// Precomputes the neighbors for each cell in the grid.
     #[cfg(not(feature = "parallel"))]
     fn precompute_neighbors_single(&mut self) {
         let mut updates = Vec::new();
         let grid_view = self.grid.view();
+        let neighborhood = &self.neighborhood;
 
         for (_, chunk) in self.chunks.indexed_iter_mut() {
             if !self.dirty_chunks.contains(&chunk.index()) {
@@ -743,8 +727,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             }
 
             for pos in chunk.bounds() {
-                let (pos, bits, special) =
-                    self.compute_chunk_neighbors(neighborhood, &grid_view, pos);
+                let (pos, bits, special) = compute_cell_neighbors(neighborhood, &grid_view, pos);
                 updates.push((pos, bits, special));
             }
         }
@@ -775,7 +758,7 @@ impl<N: Neighborhood + Default> Grid<N> {
                     .bounds()
                     .map(|pos| {
                         let (pos, bits, special) =
-                            self.compute_cell_neighbors(neighborhood, &grid_view, pos);
+                            compute_cell_neighbors(neighborhood, &grid_view, pos);
                         (pos, bits, special)
                     })
                     .collect::<Vec<_>>();
@@ -1607,6 +1590,22 @@ impl<N: Neighborhood + Default> Grid<N> {
     }
 }
 
+fn compute_cell_neighbors<N: Neighborhood>(
+    neighborhood: &N,
+    grid_view: &ArrayView3<NavCell>,
+    pos: UVec3,
+) -> (UVec3, u32, Vec<UVec3>) {
+    let bits = neighborhood.neighbors(grid_view, pos);
+    let nav = grid_view[[pos.x as usize, pos.y as usize, pos.z as usize]].nav();
+
+    let special = match nav {
+        Nav::Portal(p) => vec![p.target],
+        _ => Vec::new(),
+    };
+
+    (pos, bits, special)
+}
+
 #[cfg(test)]
 mod tests {
     use bevy::{math::UVec3, platform::collections::HashMap};
@@ -2412,6 +2411,8 @@ mod tests {
             }
         }
 
+        grid.set_nav(UVec3::new(7, 4, 1), Nav::Passable(1));
+
         grid.set_nav(
             UVec3::new(7, 4, 0),
             Nav::Portal(Portal {
@@ -2434,16 +2435,20 @@ mod tests {
 
         let path = grid.pathfind(
             UVec3::new(0, 0, 0),
-            UVec3::new(8, 5, 2),
+            UVec3::new(12, 4, 2),
             &HashMap::new(),
             false,
         );
 
-        // Print every node debug in the graph
-        for node in grid.graph.nodes() {
-            println!("Node at {:?} with edges: {:?}", node.pos, node.edges);
-        }
-
         assert!(path.is_some(), "Path should exist with portal");
+
+        let path = grid.pathfind(
+            UVec3::new(12, 4, 2),
+            UVec3::new(0, 0, 0),
+            &HashMap::new(),
+            false,
+        );
+
+        assert!(path.is_some(), "Path should exist with portal in reverse");
     }
 }

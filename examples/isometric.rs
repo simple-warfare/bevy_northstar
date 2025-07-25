@@ -318,7 +318,7 @@ fn update_cursor(
         let map = map_query.iter().next().expect("No map found in the query");
 
         let offset = Vec2::new(0.0, map.grid_size.y / 2.0);
-        cursor_position = cursor_position + offset;
+        cursor_position += offset;
 
         let mut selected_tile = None;
 
@@ -350,7 +350,7 @@ fn update_cursor(
                                 map.anchor,
                             );
                             // Add height offset to the tile world position
-                            tile_world.y += tile_height as f32 * HEIGHT_OFFSET;
+                            tile_world.y += tile_height * HEIGHT_OFFSET;
 
                             if (cursor_position.y - tile_world.y).abs() > LAYER_Z_OFFSET {
                                 continue; // Skip tiles that are too far y offset
@@ -364,9 +364,8 @@ fn update_cursor(
                 }
 
                 if let Some((_, height)) = top_tile {
-                    if height as u32 == test_height as u32 {
-                        selected_tile =
-                            Some(UVec3::new(tile_pos.x, tile_pos.y, test_height as u32));
+                    if height as u32 == test_height {
+                        selected_tile = Some(UVec3::new(tile_pos.x, tile_pos.y, test_height));
                         break; // Found the topmost tile
                     }
                 }
@@ -460,6 +459,12 @@ fn warp(
 
     for (mut position, mut path, mut transform) in query.iter_mut() {
         if let Some(Nav::Portal(portal)) = grid.nav(position.0) {
+            // Check if this is just a ramp, if so, we don't need to warp.
+            // You could also check the tilemap type from your map.
+            if position.0.x == portal.target.x && position.0.y == portal.target.y {
+                continue;
+            }
+
             // Update the position to the portal's target
             position.0 = portal.target;
 
@@ -500,7 +505,7 @@ fn move_pathfinders(
     mut query: Query<(Entity, &mut AgentPos, &NextPos)>,
     animation_reader: EventReader<AnimationWaitEvent>,
 ) {
-    if animation_reader.len() > 0 {
+    if !animation_reader.is_empty() {
         return;
     }
 
@@ -521,8 +526,8 @@ fn animate_move(
 
     for (position, mut transform, mut ysort) in query.iter_mut() {
         let tile_pos = TilePos {
-            x: position.0.x as u32,
-            y: position.0.y as u32,
+            x: position.0.x,
+            y: position.0.y,
         };
 
         let base_vec = TilePos::center_in_world(
