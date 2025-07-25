@@ -1,10 +1,9 @@
-// Example of a "3d" isometric tilemap using Bevy Northstar
+// Example of a 2.5D isometric tilemap using Bevy Northstar
 use bevy::{ecs::query::QueryData, log, prelude::*};
 use bevy_ecs_tiled::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_northstar::prelude::*;
 
-// Portal is at 11,28,8 and 1,46,4
 
 // Game state
 #[derive(Clone, Debug, Default, Hash, Eq, States, PartialEq)]
@@ -14,14 +13,14 @@ pub enum State {
     Playing,
 }
 
-// Tiled tile properties component
+// Tiled tile properties component, see bevy_ecs_tiled for how to use Tiled properties.
 #[derive(Component, Default, Debug, Reflect)]
 #[reflect(Component)]
 pub struct Tile {
     pub info: TileInfo,
 }
 
-// Tiled TileInfo properties
+// Tiled TileInfo properties, see bevy_ecs_tiled for how to use Tiled properties.
 #[derive(Component, Default, Debug, Reflect, Clone)]
 #[reflect(Component)]
 pub struct TileInfo {
@@ -29,22 +28,15 @@ pub struct TileInfo {
     pub ramp: bool,
 }
 
-// Tiled Portal property
-#[derive(Component, Default, Debug, Reflect)]
-#[reflect(Component)]
-pub struct PortalInfo {
-    pub target: (u16, u16),
-}
-
 // Player marker
 #[derive(Component)]
 pub struct Player;
 
-// For holding z offset data
+// Marks entity that needs to be Y Sorted and holds additional height offset information.
 #[derive(Component, Reflect, Debug)]
 pub struct YSort(pub f32);
 
-// Place the pivot point for the player sprite for correct y-sorting
+// The sprite offset where the sprite should be Y sorted, this would usually be placed at the foot of the player etc.
 #[derive(Component, Debug, Reflect)]
 pub struct Pivot(pub Vec2);
 
@@ -56,14 +48,13 @@ pub struct AnimationWaitEvent;
 #[derive(Debug, Event)]
 pub struct LoadCompleteEvent;
 
-// Cursor resource to track the mouse position and hovered tile
+// Cursor resource to track the moused over tile
 #[derive(Default, Resource, Reflect)]
 pub struct Cursor {
-    pub position: Vec2,
     pub tile: Option<UVec3>,
 }
 
-// Common map query to find positioning
+// Common bevy_ecs_tilemap query often used for tile<->world position calculations.
 #[derive(QueryData)]
 #[query_data(derive(Debug))]
 struct MapQuery {
@@ -74,12 +65,18 @@ struct MapQuery {
     anchor: &'static TilemapAnchor,
 }
 
-const LAYER_Z_OFFSET: f32 = 16.0; // Z offset for each layer
+// The Y offset for each higher tile layer in our isometric Tiled map.
+// Higher layers in isometric need to be y offset so that they align properly in the isometric view.
+const LAYER_Y_OFFSET: f32 = 16.0;
+// In our example the tileset tiles are used to determine the height of a tile, not just the layer.
+// Each taller tile increases in 4 pixels. 
 const HEIGHT_OFFSET: f32 = 4.0;
+// The maximum height our height/layer multipliers can reach in our example map.
 const MAX_HEIGHT: u32 = 9;
-// We need to adjust the z offset based on the layer that the height is in.
-const PLAYER_CENTER_OFFSET: f32 = 4.0; // Center offset for player sprite
+// Offset to position our sprite propery onto the center of a tile.
+const PLAYER_CENTER_OFFSET: f32 = 4.0;
 
+// Constants for animation
 pub const LERP_SPEED: f32 = 22.0;
 pub const POSITION_TOLERANCE: f32 = 0.1;
 
@@ -117,7 +114,6 @@ fn main() {
         .add_observer(loading_complete)
         .register_type::<Tile>()
         .register_type::<TileInfo>()
-        .register_type::<PortalInfo>()
         .insert_resource(Cursor::default())
         .insert_state(State::Loading)
         .run();
@@ -131,6 +127,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .default_impassable()
         // This is a great example of when to use a neighbor filter.
         // Since we're Y Sorting, we don't want to allow the player to move diagonally around walls as the sprite will z transition through the wall.
+        // We use `NoCornerCuttingFlat` here instead of `NoCornerCutting` because we want to allow diagonal movement to other height levels.
         .add_neighbor_filter(filter::NoCornerCuttingFlat)
         .build();
 
@@ -143,7 +140,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             render_chunk_size: UVec2::new(1, 1),
             y_sort: true,
         },
-        TiledMapLayerZOffset(LAYER_Z_OFFSET),
+        TiledMapLayerZOffset(LAYER_Y_OFFSET),
         Grid::<OrdinalNeighborhood3d>::new(&grid_settings),
     ));
 }
@@ -350,7 +347,7 @@ fn update_cursor(
                             // Add height offset to the tile world position
                             tile_world.y += tile_height * HEIGHT_OFFSET;
 
-                            if (cursor_position.y - tile_world.y).abs() > LAYER_Z_OFFSET {
+                            if (cursor_position.y - tile_world.y).abs() > LAYER_Y_OFFSET {
                                 continue; // Skip tiles that are too far y offset
                             }
 
@@ -370,7 +367,6 @@ fn update_cursor(
             }
         }
 
-        cursor.position = cursor_position;
         cursor.tile = selected_tile;
     }
 }
