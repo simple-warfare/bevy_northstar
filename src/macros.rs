@@ -1,4 +1,5 @@
 #[macro_export]
+/// THIS SHOULD NOT BE PUBLIC
 macro_rules! timed {
     ($name:literal, $block:block) => {{
         #[cfg(feature = "stats")]

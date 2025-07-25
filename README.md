@@ -123,9 +123,8 @@ opt-level = 3
 
 
 ## Roadmap / TODO
-- **Add Support For Multiple HPA Levels** – Implement multiple hierarchical levels for improved efficiency.  
-- **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
-- **Optimize 3D Performance** – 3d grids appear to take a performance hit higher than expected currently. 
+- **Add Support For Multiple Grids & HPA Levels** – Implement multiple hierarchical levels for improved efficiency.
+- **Add Godot Support** - Break up crate into multiple crates and create a gdextension for Godot.
 
 ## Assets credits
 - [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)

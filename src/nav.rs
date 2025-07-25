@@ -120,10 +120,7 @@ pub struct Portal {
 impl Portal {
     /// Creates a new `Portal` with the given target position and movement cost.
     pub fn new(target: UVec3, cost: MovementCost) -> Self {
-        Self {
-            target,
-            cost,
-        }
+        Self { target, cost }
     }
 
     /// Returns the target position of the portal.

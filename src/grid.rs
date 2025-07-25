@@ -23,8 +23,7 @@ use crate::{
     node::Node,
     path::Path,
     pathfind::{pathfind, pathfind_astar, reroute_path},
-    position_in_cubic_window, MovementCost,
-    timed,
+    position_in_cubic_window, timed, MovementCost,
 };
 
 /// Settings for how the grid is divided into chunks.
@@ -1282,10 +1281,8 @@ impl<N: Neighborhood + Default> Grid<N> {
             if node.portal {
                 // Connect the portal node to its target directly
                 // Collect the portal info
-                if let Nav::Portal(Portal {
-                    target,
-                    cost,
-                }) = self.nav(node.pos).unwrap_or(Nav::Impassable)
+                if let Nav::Portal(Portal { target, cost }) =
+                    self.nav(node.pos).unwrap_or(Nav::Impassable)
                 {
                     // If the target is in the same chunk, skip
                     if node.chunk_index == self.chunk_at_position(target).unwrap().index() {
