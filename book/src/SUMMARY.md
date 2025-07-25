@@ -3,6 +3,7 @@
 # Usage
 - [Getting Started](./getting_started.md)
 - [Grid Settings](./grid_settings.md)
+- [Navigation Data](./nav_data.md)
 - [Grid Updates](./grid_updates.md)
 # Pathfinding
 - [With NorthstarPlugin](./pathfinding/01_plugin.md)

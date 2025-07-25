@@ -3,16 +3,18 @@ use std::collections::VecDeque;
 #[cfg(feature = "stats")]
 use std::time::Instant;
 
-use bevy::{ecs::query::QueryData, log, platform::collections::HashMap, prelude::*};
+use bevy::{log, platform::collections::HashMap, prelude::*};
 
 use crate::{prelude::*, WithoutPathingFailures};
 
+/// General settings for the Northstar plugin.
 #[derive(Resource, Debug, Copy, Clone)]
 pub struct NorthstarPluginSettings {
     /// The maximum number of agents that can be processed per frame.
     /// This is useful to stagger the pathfinding and collision avoidance systems
     /// to prevent stutters when too many agents are pathfinding at once.
     pub max_pathfinding_agents_per_frame: usize,
+    /// The maximum number of agents that can be processed for collision avoidance per frame.
     pub max_collision_avoidance_agents_per_frame: usize,
 }
 
@@ -61,12 +63,14 @@ pub struct CollisionStats {
 /// The `Stats` `Resource` holds the pathfinding and collision avoidance statistics.
 #[derive(Resource, Default, Debug)]
 pub struct Stats {
+    /// Pathfinding frame time statistics.
     pub pathfinding: PathfindingStats,
+    /// Collision avoidance frame time statistics.
     pub collision: CollisionStats,
 }
 
 impl Stats {
-    pub fn add_pathfinding(&mut self, time: f64, length: f64) {
+    pub(crate) fn add_pathfinding(&mut self, time: f64, length: f64) {
         self.pathfinding.pathfind_time.push(time);
         self.pathfinding.pathfind_length.push(length);
 
@@ -76,6 +80,7 @@ impl Stats {
             / self.pathfinding.pathfind_length.len() as f64;
     }
 
+    /// Resets the pathfinding statistics.
     pub fn reset_pathfinding(&mut self) {
         self.pathfinding.average_time = 0.0;
         self.pathfinding.average_length = 0.0;
@@ -83,7 +88,7 @@ impl Stats {
         self.pathfinding.pathfind_length.clear();
     }
 
-    pub fn add_collision(&mut self, time: f64, length: f64) {
+    pub(crate) fn add_collision(&mut self, time: f64, length: f64) {
         self.collision.avoidance_time.push(time);
         self.collision.avoidance_length.push(length);
 
@@ -93,6 +98,7 @@ impl Stats {
             / self.collision.avoidance_length.len() as f64;
     }
 
+    /// Resets the collision statistics.
     pub fn reset_collision(&mut self) {
         self.collision.average_time = 0.0;
         self.collision.average_length = 0.0;
@@ -228,15 +234,6 @@ fn pathfind<N: Neighborhood + 'static>(
 
         count += 1;
     }
-}
-
-#[derive(QueryData)]
-#[query_data(derive(Debug), mutable)]
-struct NextPosQuery {
-    entity: Entity,
-    path: &'static mut Path,
-    position: &'static AgentPos,
-    pathfind: &'static Pathfind,
 }
 
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.

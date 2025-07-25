@@ -13,7 +13,9 @@ use crate::{
 #[derive(Reflect, Debug, Clone, Default)]
 pub enum DebugTilemapType {
     #[default]
+    /// Square tilemap, where each tile is a square.
     Square,
+    /// Isometric tilemap, where each tile is a diamond.
     Isometric,
 }
 

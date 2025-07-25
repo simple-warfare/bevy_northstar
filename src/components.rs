@@ -355,6 +355,7 @@ impl DebugGridBuilder {
         self
     }
 
+    /// Utility function to set the [`DebugGrid`] to draw in isometric.
     pub fn isometric(mut self) -> Self {
         self.tilemap_type = DebugTilemapType::Isometric;
         self
@@ -421,6 +422,7 @@ pub struct AgentOfGrid(pub Entity);
 pub struct GridAgents(Vec<Entity>);
 
 impl GridAgents {
+    /// Returns all the entities that have a relationship with the grid.
     pub fn entities(&self) -> &[Entity] {
         &self.0
     }

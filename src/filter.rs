@@ -11,6 +11,7 @@ use crate::{nav::NavCell, prelude::ORDINAL_3D_OFFSETS};
 /// [`NeighborFilter`] trait to add custom filtering logic to the neighbors returned by the [`crate::neighbor::Neighborhood::neighbors()`] method.
 /// Add a filter to the grid settings with [`crate::grid::GridSettingsBuilder::add_neighbor_filter()`].
 pub trait NeighborFilter {
+    /// Filters the neighbors of a given position in the grid.
     fn filter(&self, pos: UVec3, mask: u32, grid: &ArrayView3<NavCell>) -> u32;
 }
 

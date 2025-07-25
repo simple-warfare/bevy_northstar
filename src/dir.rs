@@ -6,6 +6,7 @@ use std::ops::Neg;
 pub use self::Dir::*;
 
 /// Enum that represents the 26 directions in 3D space.
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Dir {
@@ -40,6 +41,7 @@ pub enum Dir {
 }
 
 impl Dir {
+    /// Returns the offset vector for the direction.
     pub const fn offset(self) -> IVec3 {
         use Dir::*;
         match self {
@@ -74,6 +76,7 @@ impl Dir {
         }
     }
 
+    /// Return the direction variant from an offset vector.
     pub fn from_offset(offset: IVec3) -> Option<Self> {
         use Dir::*;
         match offset {
@@ -113,14 +116,17 @@ impl Dir {
         }
     }
 
+    /// All direction variants as an iterator.
     pub fn all() -> impl Iterator<Item = Dir> {
         (0..26).filter_map(Dir::from_bit_index)
     }
 
+    /// Returns an iterator of only the cardinal faces in a 3d cube.
     pub fn cardinal_faces() -> impl Iterator<Item = Dir> {
         [North, East, South, West, Up, Down].into_iter()
     }
 
+    /// Returns an iterator of only the cardinal edges in a 3d cube.
     pub fn cardinal_edges() -> impl Iterator<Item = Dir> {
         [
             NorthUp, EastUp, SouthUp, WestUp, NorthDown, EastDown, SouthDown, WestDown,
@@ -128,6 +134,7 @@ impl Dir {
         .into_iter()
     }
 
+    /// Returns an iterator of all the cardinal directions in a 3d cube.
     pub fn cardinal() -> impl Iterator<Item = Dir> {
         [
             North, East, South, West, Up, Down, NorthUp, NorthDown, SouthUp, SouthDown, WestUp,
@@ -136,6 +143,7 @@ impl Dir {
         .into_iter()
     }
 
+    /// Returns an iterator of all the diagonal directions in a 3d cube.
     pub fn ordinal() -> impl Iterator<Item = Dir> {
         [
             NorthEast,
@@ -154,6 +162,7 @@ impl Dir {
         .into_iter()
     }
 
+    /// Enum bit index -> `Dir` mapping.
     pub(crate) fn from_bit_index(index: usize) -> Option<Self> {
         use Dir::*;
         match index {
@@ -194,6 +203,7 @@ impl Dir {
             .collect()
     }
 
+    /// Returns the direction from a start position to an end position.
     pub fn dir_to(start: &Vec3, end: &Vec3) -> Self {
         let delta = (*end - *start).normalize_or_zero();
         let vec = IVec3::new(
@@ -204,6 +214,7 @@ impl Dir {
         Dir::from_offset(vec).expect("Not a valid direction")
     }
 
+    /// Returns the opposite direction.
     pub fn opposite(self) -> Dir {
         self.offset()
             .neg()
@@ -211,6 +222,7 @@ impl Dir {
             .expect("Invalid opposite direction")
     }
 
+    /// Whether the dirction changes the z coordinate.
     pub fn is_vertical(self) -> bool {
         self.offset().z != 0
     }

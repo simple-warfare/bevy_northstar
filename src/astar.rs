@@ -358,7 +358,6 @@ mod tests {
             Nav::Portal(crate::nav::Portal {
                 target: UVec3::new(1, 1, 2),
                 cost: 1,
-                one_way: false,
             }),
         );
         // Make sure the ramp destination is passable

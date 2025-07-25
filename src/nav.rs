@@ -110,18 +110,19 @@ impl Default for NavCell {
 /// Represents a portal that can be used to transition to another cell in the grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Portal {
+    /// The movement cost
     pub cost: MovementCost,
+    /// The target position this portal goes to.
+    /// For ramps you can set the target to same x,y and use a higher z position.
     pub target: UVec3,
-    pub one_way: bool,
 }
 
 impl Portal {
     /// Creates a new `Portal` with the given target position and movement cost.
-    pub fn new(target: UVec3, cost: MovementCost, one_way: bool) -> Self {
+    pub fn new(target: UVec3, cost: MovementCost) -> Self {
         Self {
             target,
             cost,
-            one_way,
         }
     }
 

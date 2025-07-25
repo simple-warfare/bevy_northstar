@@ -182,12 +182,12 @@ fn tile_created(
         if tile_pos.x == 11 && tile_pos.y == 28 && tile_info.height == 8 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(UVec3::new(2, 45, 0), 1, false)),
+                Nav::Portal(Portal::new(UVec3::new(2, 45, 0), 1)),
             )
         } else if tile_pos.x == 1 && tile_pos.y == 46 && tile_info.height == 4 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(UVec3::new(12, 28, 8), 1, false)),
+                Nav::Portal(Portal::new(UVec3::new(12, 28, 8), 1)),
             )
         } else if tile_info.ramp {
             grid.set_nav(
@@ -195,7 +195,6 @@ fn tile_created(
                 Nav::Portal(Portal::new(
                     UVec3::new(tile_pos.x, tile_pos.y, 4 + layer_height_offset),
                     1,
-                    false,
                 )),
             );
 
@@ -212,7 +211,6 @@ fn tile_created(
                     Nav::Portal(Portal::new(
                         UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
                         1,
-                        false,
                     )),
                 );
             }

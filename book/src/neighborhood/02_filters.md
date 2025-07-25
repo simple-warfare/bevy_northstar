@@ -12,15 +12,6 @@ let grid_settings = GridSettingsBuilder::new_3d(64, 64, 4)
     .build();
 ```
 
-## NoCornerClipping
-
-Prevents diagonal movement from clipping through impassable (wall) corners.
-Don't use with `NoCornerCutting` as `NoCornerCutting` already handles this case.
-
-Apply to `GridSettingsBuilder` with `.add_neighbor_filter(filter::NoCornerClipping)`.
-
-![NoCornerClipping](../images/nocornerclipping.png)
-
 ## NoCornerCutting
 
 Forces cardinal movement around impassable (wall) cells by preventing diagonal movement around ANY adjacent impassable (wall) cell.
@@ -30,10 +21,26 @@ Apply to `GridSettingsBuilder` with `.add_neighbor_filter(filter::NoCornerCuttin
 
 ![NoCornerCutting](../images/nocornercutting.png)
 
+## NoCornerCuttingFlat
+
+Works the same as `NoCornerCutting` with the exception that paths can jump z depth diagonally around corners. *This is an ideal filter to use in 2.5D games*. You may want to disable agents from cutting diagonally around corners so your sprites don't clip through wall corners causing y sorting glitches, but retain the ability for your agents to jump to higher heights.
+
+![No corner cutting is allowed in the same depth](..//images/nocornercuttingflatnoz.png)
+![Corner cutting is allowed to different depths](..//images/nocornercuttingflatyesz.png)
+
+## NoCornerClipping
+
+Prevents diagonal movement from clipping through impassable (wall) corners.
+Don't use with `NoCornerCutting` as `NoCornerCutting` already handles this case.
+
+Apply to `GridSettingsBuilder` with `.add_neighbor_filter(filter::NoCornerClipping)`.
+
+![NoCornerClipping](../images/nocornerclipping.png)
+
 ## DisallowZDiagonalMovement
 
 The `OrdinalNeighborhood3d` neighborhood allows diagonal movement along the Z axis.
-If this isn't desired you can apply the `DisallowZDiagonalMovement` filter and it will limit diagonal movement to only cells on the same depth while still allowing Up and Down movement. This is a good filter "3D" isometric map movement.
+If this isn't desired you can apply the `DisallowZDiagonalMovement` filter and it will limit diagonal movement to only cells on the same depth while still allowing Up and Down movement. 
 
 # Implementing Your Own Filter
 

@@ -23,7 +23,8 @@ use crate::{
     node::Node,
     path::Path,
     pathfind::{pathfind, pathfind_astar, reroute_path},
-    position_in_cubic_window, timed, MovementCost,
+    position_in_cubic_window, MovementCost,
+    timed,
 };
 
 /// Settings for how the grid is divided into chunks.
@@ -90,6 +91,8 @@ impl Default for CollisionSettings {
 /// Settings for filtering determined neighbors.
 #[derive(Clone, Default)]
 pub struct NeighborhoodSettings {
+    /// Provide a `Vec` of [`NeighborFilter`]s to apply custom filtering logic.
+    /// The filters will be chained in order added.
     pub filters: Vec<Arc<dyn NeighborFilter + Send + Sync + 'static>>,
 }
 
@@ -524,7 +527,7 @@ impl<N: Neighborhood + Default> Grid<N> {
         self.chunk_settings.size
     }
 
-    // Returns the depth of the chunks in the grid.
+    /// Returns the depth of the chunks in the grid.
     pub fn chunk_depth(&self) -> u32 {
         self.chunk_settings.depth
     }
@@ -1282,7 +1285,6 @@ impl<N: Neighborhood + Default> Grid<N> {
                 if let Nav::Portal(Portal {
                     target,
                     cost,
-                    one_way: _,
                 }) = self.nav(node.pos).unwrap_or(Nav::Impassable)
                 {
                     // If the target is in the same chunk, skip
@@ -2348,7 +2350,6 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(10, 10, 0),
                 cost: 1,
-                one_way: false,
             }),
         );
 
@@ -2418,7 +2419,6 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(7, 4, 2),
                 cost: 1,
-                one_way: false,
             }),
         );
 
@@ -2427,7 +2427,6 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(7, 4, 0),
                 cost: 1,
-                one_way: false,
             }),
         );
 

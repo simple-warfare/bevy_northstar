@@ -1,3 +1,4 @@
+#![deny(missing_docs)]
 #![doc = include_str!("../README.md")]
 
 use bevy::ecs::query::Without;
@@ -19,12 +20,14 @@ mod graph;
 pub mod grid;
 pub mod nav;
 pub mod neighbor;
+mod macros;
 mod node;
 pub mod path;
 pub mod pathfind;
 pub mod plugin;
 pub mod raycast;
 
+/// Crate Prelude
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::debug::{DebugTilemapType, NorthstarDebugPlugin};
@@ -135,25 +138,4 @@ fn position_in_cubic_window(pos: UVec3, center: IVec3, radius: i32, grid_shape: 
         || pos.as_ivec3().cmpeq(min).all()
         || pos.as_ivec3().cmpeq(max).all()
         || (pos.as_ivec3() - center).abs().max_element() <= radius
-}
-
-#[macro_use]
-mod internal_macros {
-    #[macro_export(local_inner_macros)]
-    macro_rules! timed {
-        ($name:literal, $block:block) => {{
-            #[cfg(feature = "stats")]
-            {
-                let start = std::time::Instant::now();
-                let result = $block;
-                log::debug!("{} in {:?}", $name, start.elapsed());
-                result
-            }
-
-            #[cfg(not(feature = "stats"))]
-            {
-                $block
-            }
-        }};
-    }
 }
