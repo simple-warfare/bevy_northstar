@@ -7,12 +7,13 @@
 
 ## A 2d/3d hierarchical pathfinding crate for Bevy. 
 
-`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal position it's refined to get a more accurate path.
+`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal position it can be refined to get a more accurate path. The crate is designed to significantly reduce the performance hit of A* pathfinding on complex maps.
+
 The crate provides:
 
 ## Features
 - **Pathfinding Options** - Choose between optimized HPA* algorithms or traditional A* per call. You can retrieve paths directly even when using the plugin systems.
-- **Supports 2D and 3D Tilemaps** – Works with both 2D and 3D tilemaps.
+- **Supports 2D, 2.5D, and 3D Pathfinding** - Handles top-down, isometric, and layered maps with support for vertical transitions. Free 3D movement is also supported.
 - **Neighbor Filtering and Caching** - Precomputed, optionally filtered neighbors are cached to avoid redundant processing.
 - **Dynamic Changes** - Modify your tilemap and only affected areas will be recalculated during grid rebuilds.
 - **Parallel Building** - Chunk calculations run in parallel for faster builds. Can be disabled to support WASM.
@@ -124,7 +125,6 @@ opt-level = 3
 
 ## Roadmap / TODO
 - **Add Support For Multiple Grids & HPA Levels** – Implement multiple hierarchical levels for improved efficiency.
-- **Add Godot Support** - Break up crate into multiple crates and create a gdextension for Godot.
 
 ## Assets credits
 - [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)

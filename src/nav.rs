@@ -115,12 +115,20 @@ pub struct Portal {
     /// The target position this portal goes to.
     /// For ramps you can set the target to same x,y and use a higher z position.
     pub target: UVec3,
+    /// If one_way is true, a reverse portal at the target position will be created.
+    /// This is useful for ramps or ladders whare you'd expect to go up or down.
+    pub one_way: bool,
 }
 
 impl Portal {
     /// Creates a new `Portal` with the given target position and movement cost.
-    pub fn new(target: UVec3, cost: MovementCost) -> Self {
-        Self { target, cost }
+    /// Set `one_way` to true if you do not want to crate a reverse portal at the target position.
+    pub fn to(target: UVec3, cost: MovementCost, one_way: bool) -> Self {
+        Self {
+            target,
+            cost,
+            one_way,
+        }
     }
 
     /// Returns the target position of the portal.

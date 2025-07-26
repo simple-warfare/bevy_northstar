@@ -186,46 +186,26 @@ fn tile_created(
                 Nav::Portal(Portal {
                     target: UVec3::new(2, 45, 0),
                     cost: 1,
+                    one_way: true,
                 }),
             )
         } else if tile_pos.x == 1 && tile_pos.y == 46 && tile_info.height == 4 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
                 // Short hand way, new takes the target UVec3 and cost.
-                Nav::Portal(Portal::new(UVec3::new(12, 28, 8), 1)),
+                Nav::Portal(Portal::to(UVec3::new(12, 28, 8), 1, true)),
             )
         // If the tile is a ramp, we set it as a portal with the target being the same x,y but a higher z position.
         // This allows the player to climb higher elevations in the map.
         } else if tile_info.ramp {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(
+                Nav::Portal(Portal::to(
                     UVec3::new(tile_pos.x, tile_pos.y, 4 + layer_height_offset),
                     1,
+                    false,
                 )),
             );
-
-            // Ensure that the elevation change destination is set to passable
-            let target_pos = UVec3::new(tile_pos.x, tile_pos.y, 4 + layer_height_offset);
-            // You can use `Grid::in_bounds` to ensure a position you're setting in the nav is in bounds.
-            if !grid.in_bounds(target_pos) {
-                log::warn!(
-                    "Target position {:?} is out of bounds for elevation change",
-                    target_pos
-                );
-            } else {
-                // Since this is a ramp, we want to make sure the player can also walk back down it.
-                // We can make a portal on the opposite side to do that.
-                // If you wanted players to be able to jump from a specific part on your map,
-                // you could create a portal down but not allow the reverse.
-                grid.set_nav(
-                    target_pos,
-                    Nav::Portal(Portal::new(
-                        UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                        1,
-                    )),
-                );
-            }
         } else {
             // We've hit a bog standard walkable tile, so we'll set nav as passable there.
             let pos = UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32);

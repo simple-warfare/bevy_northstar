@@ -474,13 +474,32 @@ impl<N: Neighborhood + Default> Grid<N> {
     /// Set the [`Nav`] settings at a given [`bevy::math::UVec3`] position in the grid.
     pub fn set_nav(&mut self, pos: UVec3, nav: Nav) {
         if !self.in_bounds(pos) {
-            panic!("Attempted to set nav at out-of-bounds position");
+            panic!("Attempted to set nav at out-of-bounds position at {pos}");
         }
 
         // If the grid not dirty, we need to flag every chunk, edge, and nodes that needs to be rebuilt.
         if self.built {
             self.dirty = true;
             self.mark_dirty_for_pos(pos);
+        }
+
+        // Handle portals
+        if let Nav::Portal(portal) = nav {
+            let target = portal.target;
+
+            // Check if the target is in bounds as well
+            if !self.in_bounds(target) {
+                panic!("Portal {target} is out of bounds");
+            }
+
+            if !portal.one_way {
+                // Mark the target chunk as dirty
+                self.mark_dirty_for_pos(target);
+
+                // Create a reverse portal at the target position.
+                let reverse_portal = Portal::to(pos, portal.cost, true);
+                self.set_nav(target, Nav::Portal(reverse_portal));
+            }
         }
 
         let navcell = NavCell::new(nav);
@@ -1281,7 +1300,7 @@ impl<N: Neighborhood + Default> Grid<N> {
             if node.portal {
                 // Connect the portal node to its target directly
                 // Collect the portal info
-                if let Nav::Portal(Portal { target, cost }) =
+                if let Nav::Portal(Portal { target, cost, .. }) =
                     self.nav(node.pos).unwrap_or(Nav::Impassable)
                 {
                     // If the target is in the same chunk, skip
@@ -2343,6 +2362,7 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(10, 10, 0),
                 cost: 1,
+                one_way: false,
             }),
         );
 
@@ -2412,6 +2432,7 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(7, 4, 2),
                 cost: 1,
+                one_way: false,
             }),
         );
 
@@ -2420,6 +2441,7 @@ mod tests {
             Nav::Portal(Portal {
                 target: UVec3::new(7, 4, 0),
                 cost: 1,
+                one_way: false,
             }),
         );
 

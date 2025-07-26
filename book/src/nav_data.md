@@ -17,8 +17,9 @@ You can use cost to discourage agents from entering certain areas. For example, 
 grid.set_nav(UVec3::new(1, 1, 1), Nav::Impassable)
 // Set 2, 2, 2 as "walkable" with a cost of 4.
 grid.set_nav(UVec3::new(2, 2, 2), Nav::Passable(4))
-// Set 3, 3, 3 as a portal that warps the agent to 7, 7, 7 with a cost of 1.
-grid.set_nav(UVec3::new(3, 3, 3), Nav::Portal(Portal::new(UVec3::new(7, 7, 7), 1))) 
+// Set 3, 3, 3 as a portal that warps the agent to 7, 7, 7 with a cost of 1,
+// one_way is set to true which means a reverse portal at the target will not be created.
+grid.set_nav(UVec3::new(3, 3, 3), Nav::Portal(Portal::to(UVec3::new(7, 7, 7), 1, true))) 
 ```
 
 ### `Nav::Impassable`
@@ -55,15 +56,9 @@ grid.set_nav(
     UVec3::new(tile_pos.x, tile_pos.y, 0),
     // You can set the destination to the same x,y position but change the z height
     // We'll set the cost to 2, this is arbitrary.
-    Nav::Portal(Portal::new(target_pos, 2)),
-);
-
-// We want to make sure the target position can also ramp back DOWN
-// You'll need to create a portal at the target end.
-// Let's make the cost 1 to make it cheaper to path down a slope.
-grid.set_nav(
-    target_pos,
-    Nav::Portal(Portal::new(UVec3::new(tile_pos.x, tile_pos.y, 0), 1)),
+    Nav::Portal(Portal::to(target_pos, 2, false)),
+    // As one_way is set to false, we don't need to worry about creating a reverse portal at the target
+    // set_nav will handle that for you.
 );
 ```
 
@@ -73,9 +68,7 @@ Alternatively, place the portals on tiles adjacent to the ramp:
 
 ```rust,no_run
 // Have the bottom adjacent cell to the ramp portal to the top adjacent cell to the ramp.
-grid.set_nav(UVec3::new(0, 0, 0), Nav::Portal(Portal::new(2, 0, 2), 1))
-// Reverse it back
-grid.set_nav(UVec3::new(2, 0, 2), Nav::Portal(Portal::new(0, 0, 0), 1))
+grid.set_nav(UVec3::new(0, 0, 0), Nav::Portal(Portal::to(2, 0, 2), 1, false))
 ```
 
 ### Teleporting
@@ -89,7 +82,7 @@ let current_tile = UVec3::new(5, 5, 4);
 grid.set_nav(
     current_tile,
     /// This cell can be used as a warp to 45, 45, 0 at a cost of 1.
-    Nav::Portal(Portal::new(UVec3::new(45, 45, 0), 1))
+    Nav::Portal(Portal::to(UVec3::new(45, 45, 0), 1, true))
 )
 ```
 
