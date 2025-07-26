@@ -4,7 +4,6 @@ use bevy_ecs_tiled::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_northstar::prelude::*;
 
-
 // Game state
 #[derive(Clone, Debug, Default, Hash, Eq, States, PartialEq)]
 pub enum State {
@@ -69,9 +68,10 @@ struct MapQuery {
 // Higher layers in isometric need to be y offset so that they align properly in the isometric view.
 const LAYER_Y_OFFSET: f32 = 16.0;
 // In our example the tileset tiles are used to determine the height of a tile, not just the layer.
-// Each taller tile increases in 4 pixels. 
+// Each taller tile increases in 4 pixels.
 const HEIGHT_OFFSET: f32 = 4.0;
 // The maximum height our height/layer multipliers can reach in our example map.
+// Technically the map goes to height 13, but the player can't reach those heights.
 const MAX_HEIGHT: u32 = 9;
 // Offset to position our sprite propery onto the center of a tile.
 const PLAYER_CENTER_OFFSET: f32 = 4.0;
@@ -94,9 +94,9 @@ fn main() {
         .add_systems(
             PreUpdate,
             (
+                update_cursor,
                 input,
                 debug_input,
-                update_cursor,
                 move_pathfinders,
                 warp.after(move_pathfinders),
             )
@@ -140,6 +140,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
             render_chunk_size: UVec2::new(1, 1),
             y_sort: true,
         },
+        // Ensure that bevy_ecs_tiled uses layer z offsets that align with our height offsets.
         TiledMapLayerZOffset(LAYER_Y_OFFSET),
         Grid::<OrdinalNeighborhood3d>::new(&grid_settings),
     ));
@@ -175,17 +176,26 @@ fn tile_created(
         // Readjust the tile_info height based on the layer.
         tile_info.height += layer_height_offset as i32;
 
-        // Manual way of setting our portals without needing an object layer.
+        // Manual way of setting our teleporter without needing to add a bunch of object layer handling to the example.
         if tile_pos.x == 11 && tile_pos.y == 28 && tile_info.height == 8 {
+            // We want a two-way teleporter, but we want to ensure the player doesn't warp back and forth,
+            // so we set the target of the first teleporter to be adjacent to the second teleporter.
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
-                Nav::Portal(Portal::new(UVec3::new(2, 45, 0), 1)),
+                // Long hand way to create a portal.
+                Nav::Portal(Portal {
+                    target: UVec3::new(2, 45, 0),
+                    cost: 1,
+                }),
             )
         } else if tile_pos.x == 1 && tile_pos.y == 46 && tile_info.height == 4 {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
+                // Short hand way, new takes the target UVec3 and cost.
                 Nav::Portal(Portal::new(UVec3::new(12, 28, 8), 1)),
             )
+        // If the tile is a ramp, we set it as a portal with the target being the same x,y but a higher z position.
+        // This allows the player to climb higher elevations in the map.
         } else if tile_info.ramp {
             grid.set_nav(
                 UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32),
@@ -197,12 +207,17 @@ fn tile_created(
 
             // Ensure that the elevation change destination is set to passable
             let target_pos = UVec3::new(tile_pos.x, tile_pos.y, 4 + layer_height_offset);
+            // You can use `Grid::in_bounds` to ensure a position you're setting in the nav is in bounds.
             if !grid.in_bounds(target_pos) {
                 log::warn!(
                     "Target position {:?} is out of bounds for elevation change",
                     target_pos
                 );
             } else {
+                // Since this is a ramp, we want to make sure the player can also walk back down it.
+                // We can make a portal on the opposite side to do that.
+                // If you wanted players to be able to jump from a specific part on your map,
+                // you could create a portal down but not allow the reverse.
                 grid.set_nav(
                     target_pos,
                     Nav::Portal(Portal::new(
@@ -212,11 +227,14 @@ fn tile_created(
                 );
             }
         } else {
+            // We've hit a bog standard walkable tile, so we'll set nav as passable there.
             let pos = UVec3::new(tile_pos.x, tile_pos.y, tile_info.height as u32);
             grid.set_nav(pos, Nav::Passable(1));
 
+            // You don't have to do the following, but it makes designing maps easier.
+            // All of our tiles are technically walkable, so when tiles are stacked on top of each other it can create paths through the stack.
+            // You could design that out of our your tilemap, but it's easier on design to just make a few tiles below impassable.
             if tile_info.height > 4 {
-                // We need to squash the few positions below so creating maps isn't a pain.
                 for z in 2..tile_info.height {
                     let squash_pos = UVec3::new(tile_pos.x, tile_pos.y, z as u32);
                     if grid.in_bounds(squash_pos) {
@@ -276,12 +294,15 @@ fn loading_complete(
 
     log::info!("Spawning player at: {:?}", center);
 
+    // Spawn the player.
     commands.spawn((
         Player,
         Sprite::from_image(asset_server.load("player.png")),
         AgentPos(player_start),
         Transform::from_translation(Vec3::new(center.x, center.y + PLAYER_CENTER_OFFSET, 0.0)),
+        // Tag our Player as Y Sortable
         YSort(0.0),
+        // Adds a pivot to where we want to start the Y sort on the player sprite.
         Pivot(Vec2::new(0.0, -10.0)),
     ));
 
@@ -317,7 +338,7 @@ fn update_cursor(
 
         let mut selected_tile = None;
 
-        // Test from highest to lowest height
+        // Test the highest to lowest tile near the cursor position and select the higher tile if there's a conflict. 
         for test_height in (0..=MAX_HEIGHT).rev() {
             let height_visual_offset = test_height as f32 * HEIGHT_OFFSET;
             let adjusted_cursor = cursor_position + Vec2::new(0.0, -height_visual_offset);
@@ -345,8 +366,12 @@ fn update_cursor(
                                 map.anchor,
                             );
                             // Add height offset to the tile world position
+                            // The visual "click" area of each tile's height is different to the view of the user
+                            // so we adjust that here.
                             tile_world.y += tile_height * HEIGHT_OFFSET;
 
+                            // At a certain point the tiles in this tile position are actually a full tile y offset away from the cursor
+                            // so we want to ensure we ignore these.
                             if (cursor_position.y - tile_world.y).abs() > LAYER_Y_OFFSET {
                                 continue; // Skip tiles that are too far y offset
                             }
@@ -409,17 +434,6 @@ fn input(
     }
 }
 
-fn pathfind_error(query: Query<Entity, With<PathfindingFailed>>, mut commands: Commands) {
-    for entity in query.iter() {
-        log::error!("Pathfinding failed for entity: {:?}", entity);
-        commands
-            .entity(entity)
-            .remove::<PathfindingFailed>()
-            .remove::<Pathfind>()
-            .remove::<NextPos>();
-    }
-}
-
 fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut DebugGrid>) {
     if let Ok(mut debug_grid) = debug_query.single_mut() {
         if keyboard.just_pressed(KeyCode::Backquote) {
@@ -443,6 +457,20 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
     }
 }
 
+// PathfindingFailed is added to the entity when a route to the requested goal is not found.
+// Normally you might want to provide some feedback ot the player, but for this example we just log it.
+fn pathfind_error(query: Query<Entity, With<PathfindingFailed>>, mut commands: Commands) {
+    for entity in query.iter() {
+        log::error!("Pathfinding failed for entity: {:?}", entity);
+        commands
+            .entity(entity)
+            .remove::<PathfindingFailed>()
+            .remove::<Pathfind>()
+            .remove::<NextPos>();
+    }
+}
+
+// Warp system to bypass the animation system for teleporters.
 fn warp(
     mut query: Query<(&mut AgentPos, &mut Path, &mut Transform)>,
     map_query: Query<MapQuery>,
@@ -454,7 +482,7 @@ fn warp(
     for (mut position, mut path, mut transform) in query.iter_mut() {
         if let Some(Nav::Portal(portal)) = grid.nav(position.0) {
             // Check if this is just a ramp, if so, we don't need to warp.
-            // You could also check the tilemap type from your map.
+            // You could also just check the tilemap type from your map.
             if position.0.x == portal.target.x && position.0.y == portal.target.y {
                 continue;
             }
@@ -573,6 +601,9 @@ fn y_sort(
     for (mut transform, ysort, pivot) in query.iter_mut() {
         let y = transform.translation.y + pivot.0.y;
 
+        // Match the y-sort algorithm that bevy_ecs_tilemap uses.
+        // We don't need to worry about Tiled layers because we handle our own height offsets and sort all that out in the 
+        // animate_move system and ensure that the bevy_ecs_tiled TiledMapLayerZOffset aligns with our height offsets.
         transform.translation.z = ysort.0 + (1.0 - (y / max_y));
     }
 }

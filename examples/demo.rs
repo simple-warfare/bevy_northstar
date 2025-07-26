@@ -224,7 +224,7 @@ fn spawn_minions(
 
         commands
             .spawn(Sprite {
-                image: asset_server.load("tile_0018_edit.png"),
+                image: asset_server.load("tiles/tile_0018_edit.png"),
                 color,
                 ..Default::default()
             })

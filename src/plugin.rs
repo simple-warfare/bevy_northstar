@@ -70,7 +70,9 @@ pub struct Stats {
 }
 
 impl Stats {
-    pub(crate) fn add_pathfinding(&mut self, time: f64, length: f64) {
+    /// If you're manually pathfinding and want to keep track of the pathfinding statistics,
+    /// you can use this method to add the time and length of the path found.
+    pub fn add_pathfinding(&mut self, time: f64, length: f64) {
         self.pathfinding.pathfind_time.push(time);
         self.pathfinding.pathfind_length.push(length);
 
@@ -88,7 +90,9 @@ impl Stats {
         self.pathfinding.pathfind_length.clear();
     }
 
-    pub(crate) fn add_collision(&mut self, time: f64, length: f64) {
+    /// If you're manually pathfinding and want to keep track of the collision avoidance statistics,
+    /// you can use this method to add the time and length of the path found after collision avoidance.
+    pub fn add_collision(&mut self, time: f64, length: f64) {
         self.collision.avoidance_time.push(time);
         self.collision.avoidance_length.push(length);
 

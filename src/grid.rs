@@ -1293,12 +1293,8 @@ impl<N: Neighborhood + Default> Grid<N> {
                     let path = Path::from_slice(&[node.pos, target], cost);
 
                     connections.push((node.pos, target, path));
-                } else {
-                    log::warn!(
-                        "Node at {:?} is a portal but has no valid portal settings.",
-                        node.pos
-                    );
                 }
+
                 continue;
             }
 
