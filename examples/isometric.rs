@@ -338,7 +338,7 @@ fn update_cursor(
 
         let mut selected_tile = None;
 
-        // Test the highest to lowest tile near the cursor position and select the higher tile if there's a conflict. 
+        // Test the highest to lowest tile near the cursor position and select the higher tile if there's a conflict.
         for test_height in (0..=MAX_HEIGHT).rev() {
             let height_visual_offset = test_height as f32 * HEIGHT_OFFSET;
             let adjusted_cursor = cursor_position + Vec2::new(0.0, -height_visual_offset);
@@ -602,7 +602,7 @@ fn y_sort(
         let y = transform.translation.y + pivot.0.y;
 
         // Match the y-sort algorithm that bevy_ecs_tilemap uses.
-        // We don't need to worry about Tiled layers because we handle our own height offsets and sort all that out in the 
+        // We don't need to worry about Tiled layers because we handle our own height offsets and sort all that out in the
         // animate_move system and ensure that the bevy_ecs_tiled TiledMapLayerZOffset aligns with our height offsets.
         transform.translation.z = ysort.0 + (1.0 - (y / max_y));
     }
