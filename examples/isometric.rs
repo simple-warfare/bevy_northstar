@@ -1,4 +1,7 @@
 // Example of a 2.5D isometric tilemap using Bevy Northstar
+// Press ` to toggle the debug view, +/- to change the z depth of the debug view.
+// In the debug view hover over an entrance node to see its internal connections.
+
 use bevy::{ecs::query::QueryData, log, prelude::*};
 use bevy_ecs_tiled::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
@@ -123,7 +126,10 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
     let grid_settings = GridSettingsBuilder::new_3d(64, 64, 13)
-        .chunk_size(16)
+        .chunk_size(8)
+        // For 2.5D you will likely want a chunk depth greater than 1.
+        // This will allow short paths to use direct A* to create more natural paths to height changes.
+        .chunk_depth(4)
         .default_impassable()
         // This is a great example of when to use a neighbor filter.
         // Since we're Y Sorting, we don't want to allow the player to move diagonally around walls as the sprite will z transition through the wall.
@@ -235,7 +241,7 @@ fn loading_complete(
     mut state: ResMut<NextState<State>>,
     mut commands: Commands,
 ) {
-    let (entity, mut grid) = grid.into_inner();
+    let (grid_entity, mut grid) = grid.into_inner();
 
     grid.build();
 
@@ -243,7 +249,7 @@ fn loading_complete(
 
     // Insert the debug grid as a child to the grid entity
     if let Some(map) = map_query.iter().next() {
-        commands.entity(entity).with_child((
+        commands.entity(grid_entity).with_child((
             DebugGridBuilder::new(32, 16).isometric().build(),
             DebugOffset(
                 map.anchor
@@ -279,11 +285,13 @@ fn loading_complete(
         Player,
         Sprite::from_image(asset_server.load("player.png")),
         AgentPos(player_start),
+        AgentOfGrid(grid_entity),
         Transform::from_translation(Vec3::new(center.x, center.y + PLAYER_CENTER_OFFSET, 0.0)),
         // Tag our Player as Y Sortable
         YSort(0.0),
         // Adds a pivot to where we want to start the Y sort on the player sprite.
         Pivot(Vec2::new(0.0, -10.0)),
+        DebugPath::new(Color::srgb(1.0, 0.0, 0.0)),
     ));
 
     // Zoom camera into the player
@@ -303,9 +311,11 @@ fn update_cursor(
     map_query: Query<MapQuery>,
     tile_storage: Query<&TileStorage>,
     tile_info: Query<&TileInfo>,
+    debug_cursor: Single<&mut DebugCursor>,
 ) {
     let window = window.into_inner();
     let (camera, camera_transform, _) = camera.into_inner();
+    let mut debug_cursor = debug_cursor.into_inner();
 
     if let Some(mut cursor_position) = window
         .cursor_position()
@@ -314,6 +324,7 @@ fn update_cursor(
         let map = map_query.iter().next().expect("No map found in the query");
 
         let offset = Vec2::new(0.0, map.grid_size.y / 2.0);
+        debug_cursor.0 = Some(cursor_position);
         cursor_position += offset;
 
         let mut selected_tile = None;
@@ -420,6 +431,8 @@ fn debug_input(keyboard: Res<ButtonInput<KeyCode>>, mut debug_query: Query<&mut 
             debug_grid.toggle_cells();
             debug_grid.toggle_chunks();
             debug_grid.toggle_entrances();
+            debug_grid.toggle_cached_paths();
+            debug_grid.toggle_show_connections_on_hover();
         }
 
         if keyboard.just_pressed(KeyCode::Equal) {

@@ -32,6 +32,8 @@ jobs:
 
       - name: Run tests
         run: |
+          # Run tests for single-threaded.
+          cargo test --workspace --no-default-features --all-targets
           cargo test --workspace --all-features --all-targets
           # Workaround for https://github.com/rust-lang/cargo/issues/6669
           cargo test --workspace --all-features --doc

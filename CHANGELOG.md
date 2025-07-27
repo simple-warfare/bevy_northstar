@@ -7,15 +7,17 @@
 ### Features
 - Improved 3D support to better handle 2.5D (isometric maps, 2d tilemaps with height).
 - New `isometric` example showcasing full 2.5D pathfinding and `Nav::Portal` usage.
-- All crate components now derive `Reflect` and are registered for inspection.
+- `Nav::Portal` to support ramps/stairs, elevators, or teleporters during pathfinding.
 - Added `NoCornerCuttingFlat` neighbor filter: blocks diagonal moves on the same Z level but allows vertical diagonal jumps. Useful for 2.5D movement.
-- `Nav::Portal` to support warps, ramps, or elevators during pathfinding.
 - Added `Path::next()` to peek ahead in the path. Useful for checking the next position against your map.
-* Added trimming to `PathfindMode::Coarse` to ensure that only one high level node is pathed to in the goal chunk.
+- Added trimming to `PathfindMode::Coarse` to ensure that only one high level node is pathed to in the goal chunk.
+- Chunk depth is no longer required to be divisible by the grid depth.
+- All crate components now derive `Reflect` and are registered for inspection.
 
 ### Debug Features
 - `DebugGrid::set_depth(u32)` and `depth()` added to allow drawing debug grid at a specific Z depth.
 - `DebugDepthYOffsets` component aligns the debug grid with custom Z-level Y offsets.
+- `DebugCursor` component and `DebugGridBuilder::show_connections_on_hover()` added to only show cached paths and edges on node hover.
 
 ### Fixes
 - Fixed race condition in `next_position` that sometimes caused missed `NextPos` component inserts.

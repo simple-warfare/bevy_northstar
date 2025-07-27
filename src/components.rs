@@ -2,7 +2,7 @@
 use bevy::{
     color::palettes::css,
     ecs::entity::Entity,
-    math::{UVec3, Vec3},
+    math::{UVec3, Vec2, Vec3},
     platform::collections::HashMap,
     prelude::{Color, Component},
     reflect::Reflect,
@@ -190,6 +190,16 @@ pub struct DebugOffset(pub Vec3);
 #[derive(Component, Default, Reflect)]
 pub struct DebugDepthYOffsets(pub HashMap<u32, f32>);
 
+/// Add [`DebugCursor`] to your DebugGrid entity and provide it with the current position
+/// of your mouse cursor.
+/// This will allow [`DebugGrid::set_show_connections_on_hover()`] to only draw connections graph node under the cursor.
+#[derive(Component, Debug, Default, Reflect)]
+pub struct DebugCursor(pub Option<Vec2>);
+
+// Internal component to hold which cell the mouse is hovering over.
+#[derive(Component, Debug, Default)]
+pub(crate) struct DebugNode(pub(crate) Option<UVec3>);
+
 /// Component for debugging an entity's [`crate::path::Path`].
 #[derive(Component, Reflect)]
 pub struct DebugPath {
@@ -223,16 +233,26 @@ impl Default for DebugPath {
 /// Component for debugging [`crate::grid::Grid`].
 /// You need to insert [`DebugGrid`] as a child of your map.
 #[derive(Reflect, Component)]
-#[require(Transform, DebugOffset)]
+#[require(Transform, DebugOffset, DebugDepthYOffsets, DebugCursor, DebugNode)]
 pub struct DebugGrid {
-    pub(crate) tile_width: u32,
-    pub(crate) tile_height: u32,
-    pub(crate) depth: u32,
-    pub(crate) map_type: DebugTilemapType,
-    pub(crate) draw_chunks: bool,
-    pub(crate) draw_cells: bool,
-    pub(crate) draw_entrances: bool,
-    pub(crate) draw_cached_paths: bool,
+    /// The width of your tiles in pixels.
+    pub tile_width: u32,
+    /// The height of your tiles in pixels.
+    pub tile_height: u32,
+    /// The depth of your 3D grid.
+    pub depth: u32,
+    /// The type of tilemap being used.
+    pub map_type: DebugTilemapType,
+    /// Will outline the chunks that the grid is divided into.
+    pub draw_chunks: bool,
+    /// Will draw the [`crate::nav::NavCell`]s in your grid.
+    pub draw_cells: bool,
+    /// Will draw the HPA* graph entrance nodes in each chunk.
+    pub draw_entrances: bool,
+    /// Will draw the internal cached paths between the entrances.
+    pub draw_cached_paths: bool,
+    /// Will show the connections between nodes only when hovering over them.
+    pub show_connections_on_hover: bool,
 }
 
 impl DebugGrid {
@@ -310,6 +330,20 @@ impl DebugGrid {
         self.draw_cached_paths = !self.draw_cached_paths;
         self
     }
+
+    /// Settings this to true will ONLY draw connections (edges, cached_paths) for entrances that are under the mouse cursor.
+    /// This is useful to get a clearer view of the HPA* connections without other entrances paths overlapping.
+    /// You will need to manually update [`DebugCursor`] to the UVec3 tile/cell your mouse is over.
+    pub fn set_show_connections_on_hover(&mut self, value: bool) -> &Self {
+        self.show_connections_on_hover = value;
+        self
+    }
+
+    /// Toggle show_connections_on_hover.
+    pub fn toggle_show_connections_on_hover(&mut self) -> &Self {
+        self.show_connections_on_hover = !self.show_connections_on_hover;
+        self
+    }
 }
 
 /// Builder for [`DebugGrid`].
@@ -324,6 +358,7 @@ pub struct DebugGridBuilder {
     draw_cells: bool,
     draw_entrances: bool,
     draw_cached_paths: bool,
+    show_connections_on_hover: bool,
 }
 
 impl DebugGridBuilder {
@@ -338,6 +373,7 @@ impl DebugGridBuilder {
             draw_cells: false,
             draw_entrances: false,
             draw_cached_paths: false,
+            show_connections_on_hover: false,
         }
     }
 
@@ -388,6 +424,14 @@ impl DebugGridBuilder {
         self
     }
 
+    /// Enables drawing connections (edges, cached_paths) only for the entrance under the mouse cursor.
+    /// This is useful to get a clearer view of the HPA* connections without other entrances paths overlapping.
+    /// You will need to manually update [`DebugCursor`] to the UVec3 tile/cell your mouse is over.
+    pub fn enable_show_connections_on_hover(mut self) -> Self {
+        self.show_connections_on_hover = true;
+        self
+    }
+
     /// Builds the final [`DebugGrid`] component with the configured settings to be inserted into your map entity.
     /// You need to call this methdod to finalize the builder and create the component.
     pub fn build(self) -> DebugGrid {
@@ -400,6 +444,7 @@ impl DebugGridBuilder {
             draw_cells: self.draw_cells,
             draw_entrances: self.draw_entrances,
             draw_cached_paths: self.draw_cached_paths,
+            show_connections_on_hover: self.show_connections_on_hover,
         }
     }
 }

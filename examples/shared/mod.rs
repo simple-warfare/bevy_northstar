@@ -43,6 +43,7 @@ impl<N: Neighborhood + 'static> Plugin for SharedPlugin<N> {
                     update_stat_text.run_if(in_state(State::Playing)),
                     update_pathfind_type_text.run_if(in_state(State::Playing)),
                     update_collision_text::<N>.run_if(in_state(State::Playing)),
+                    update_debug_cursor.run_if(in_state(State::Playing)),
                 ),
             )
             .add_event::<Tick>()
@@ -291,5 +292,22 @@ pub fn input<N: Neighborhood + 'static>(
         // Important! We need to restore the Z values when moving the camera around.
         // Bevy has a specific camera setup and this can mess with how our layers are shown.
         transform.translation.z = z;
+    }
+}
+
+pub fn update_debug_cursor(
+    window: Single<&Window>,
+    camera: Single<(&Camera, &GlobalTransform)>,
+    debug_cursor: Single<&mut DebugCursor>,
+) {
+    let window = window.into_inner();
+    let (camera, camera_transform) = camera.into_inner();
+    let mut debug_cursor = debug_cursor.into_inner();
+
+    if let Some(cursor_position) = window
+        .cursor_position()
+        .and_then(|cursor| camera.viewport_to_world_2d(camera_transform, cursor).ok())
+    {
+        debug_cursor.0 = Some(cursor_position);
     }
 }

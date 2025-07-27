@@ -22,6 +22,7 @@ The crate provides:
 - **Dynamic Collision & Avoidance** – Optional collision avoidance system. Just the add the `Blocking` component to flag blockers.
 - **Bevy Integration** – Systems and components for pathfinding and collision avoidance. Pathfindng systems are able to stagger agents across multiple frames.
 
+![Isometric Example](https://github.com/JtotheThree/bevy_northstar/raw/main/assets/images/isometric_demo.gif)
 
 ## Demo
 `cargo run --example demo --features stats --release`
@@ -30,7 +31,8 @@ Press P to switch between Refined HPA*, Coarse HPA*, and traditional A*
 Press C to disable/enable collision
 Press R to change the nav data for random tiles every 5 seconds. 
 
-![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
+![Demo](https://github.com/JtotheThree/bevy_northstar/raw/main/assets/images/demo.png)
+
 
 ## Documentation
 
@@ -124,6 +126,7 @@ opt-level = 3
 
 
 ## Roadmap / TODO
+- **Add Refinement Filters** - Improve path quality with additional heuristics and optional filters to smooth jagged paths.
 - **Add Support For Multiple Grids & HPA Levels** – Implement multiple hierarchical levels for improved efficiency.
 
 ## Assets credits

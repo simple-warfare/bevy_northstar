@@ -187,12 +187,6 @@ impl GridSettingsBuilder {
             panic!("Chunk depth must be at least 1");
         }
 
-        //FIXME: User should be able to set the chunk depth so there's no z chunking but still allow x/y chunking
-        // Right now we need dimension.z to be divisible by chunk_depth
-        if self.dimensions.z % chunk_depth != 0 {
-            panic!("Depth must be divisible by chunk depth");
-        }
-
         self.chunk_settings.depth = chunk_depth;
         self
     }
@@ -1313,8 +1307,6 @@ impl<N: Neighborhood + Default> Grid<N> {
 
                     connections.push((node.pos, target, path));
                 }
-
-                continue;
             }
 
             // Check all the adjacent positions of the node, taking into account cardinal/ordinal settings
