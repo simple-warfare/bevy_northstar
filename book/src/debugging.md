@@ -98,31 +98,31 @@ Sets the debug gizmos to draw in isometric perspective.
 
 Outline the grid chunk regions.
 
-<img src="../images/debugchunk.png" width="300"/>
+<img src="../bevy_northstar/images/debugchunk.png" width="300"/>
 
 ### `enable_entrances()`
 
 Highlights the entrances created between each chunk. Very useful for debugging HPA* issues.
 
-<img src="../images/debugentrances.png" width="300"/>
+<img src="../bevy_northstar/images/debugentrances.png" width="300"/>
 
 ### `enable_cells()`
 
 Overlay over each tile whether it's passable or impassable. Useful for debugging if you're calling `set_nav` correctly for your tilemap. 
 
-<img src="../images/debugcells.png" width="300"/>
+<img src="../bevy_northstar/images/debugcells.png" width="300"/>
 
 ### `enable_cached_paths()`
 
 `Grid` precaches paths between all entrances inside each chunk. Noisy, but can help debug HPA* pathing issues.
 
-<img src="../images/debugcachedpaths.png" width="300"/>
+<img src="../bevy_northstar/images/debugcachedpaths.png" width="300"/>
 
 ### `enable_show_connections_on_hover()`
 
 As you can see above, viewing all the connections at once is quite noisy. Enabling show_connections_on_hover will only draw chunk entrance cached connections when the `DebugCursor` position is over the node. Very useful for debugging possible failed node connections without all of the other connections overlapping.
 
-<img src="../images/debugonlyonhover.png" width="300"/>
+<img src="../bevy_northstar/images/debugonlyonhover.png" width="300"/>
 
 # `DebugCursor` Component
 
