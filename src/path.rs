@@ -1,6 +1,7 @@
 //! This module defines the important `Path` component.
 use bevy::math::UVec3;
 use bevy::prelude::Component;
+use bevy::reflect::Reflect;
 use std::collections::VecDeque;
 
 /// The path struct and component containing the path result of a pathfinding operation.
@@ -9,7 +10,7 @@ use std::collections::VecDeque;
 /// If using [`crate::plugin::NorthstarPlugin`] this is inserted as a component on an entity after the plugin
 /// systems have pathfound to the goal position.
 ///
-#[derive(Debug, Clone, Component)]
+#[derive(Debug, Clone, Component, Reflect)]
 pub struct Path {
     pub(crate) path: VecDeque<UVec3>,
     pub(crate) graph_path: VecDeque<UVec3>,
@@ -96,6 +97,12 @@ impl Path {
     pub fn pop(&mut self) -> Option<UVec3> {
         // Remove the first element of the path
         self.path.pop_front()
+    }
+
+    /// Returns the next position in the path without removing it.
+    pub fn next(&self) -> Option<UVec3> {
+        // Get the next position in the path
+        self.path.front().cloned()
     }
 
     /// Shifts all positions in the path by the given offset.

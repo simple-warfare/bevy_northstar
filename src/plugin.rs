@@ -7,12 +7,14 @@ use bevy::{log, platform::collections::HashMap, prelude::*};
 
 use crate::{prelude::*, WithoutPathingFailures};
 
+/// General settings for the Northstar plugin.
 #[derive(Resource, Debug, Copy, Clone)]
 pub struct NorthstarPluginSettings {
     /// The maximum number of agents that can be processed per frame.
     /// This is useful to stagger the pathfinding and collision avoidance systems
     /// to prevent stutters when too many agents are pathfinding at once.
     pub max_pathfinding_agents_per_frame: usize,
+    /// The maximum number of agents that can be processed for collision avoidance per frame.
     pub max_collision_avoidance_agents_per_frame: usize,
 }
 
@@ -61,11 +63,15 @@ pub struct CollisionStats {
 /// The `Stats` `Resource` holds the pathfinding and collision avoidance statistics.
 #[derive(Resource, Default, Debug)]
 pub struct Stats {
+    /// Pathfinding frame time statistics.
     pub pathfinding: PathfindingStats,
+    /// Collision avoidance frame time statistics.
     pub collision: CollisionStats,
 }
 
 impl Stats {
+    /// If you're manually pathfinding and want to keep track of the pathfinding statistics,
+    /// you can use this method to add the time and length of the path found.
     pub fn add_pathfinding(&mut self, time: f64, length: f64) {
         self.pathfinding.pathfind_time.push(time);
         self.pathfinding.pathfind_length.push(length);
@@ -76,6 +82,7 @@ impl Stats {
             / self.pathfinding.pathfind_length.len() as f64;
     }
 
+    /// Resets the pathfinding statistics.
     pub fn reset_pathfinding(&mut self) {
         self.pathfinding.average_time = 0.0;
         self.pathfinding.average_length = 0.0;
@@ -83,6 +90,8 @@ impl Stats {
         self.pathfinding.pathfind_length.clear();
     }
 
+    /// If you're manually pathfinding and want to keep track of the collision avoidance statistics,
+    /// you can use this method to add the time and length of the path found after collision avoidance.
     pub fn add_collision(&mut self, time: f64, length: f64) {
         self.collision.avoidance_time.push(time);
         self.collision.avoidance_length.push(length);
@@ -93,6 +102,7 @@ impl Stats {
             / self.collision.avoidance_length.len() as f64;
     }
 
+    /// Resets the collision statistics.
     pub fn reset_collision(&mut self) {
         self.collision.average_time = 0.0;
         self.collision.average_length = 0.0;
@@ -118,7 +128,13 @@ impl<N: 'static + Neighborhood> Plugin for NorthstarPlugin<N> {
         .insert_resource(NorthstarPluginSettings::default())
         .insert_resource(BlockingMap::default())
         .insert_resource(Stats::default())
-        .insert_resource(DirectionMap::default());
+        .insert_resource(DirectionMap::default())
+        .register_type::<Path>()
+        .register_type::<Pathfind>()
+        .register_type::<PathfindMode>()
+        .register_type::<NextPos>()
+        .register_type::<AgentOfGrid>()
+        .register_type::<GridAgents>();
     }
 }
 
@@ -227,8 +243,12 @@ fn pathfind<N: Neighborhood + 'static>(
 // The `next_position` system is responsible for popping the front of the path into a `NextPos` component.
 // If collision is enabled it will check for nearyby blocked paths and reroute the path if necessary.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::type_complexity)]
 fn next_position<N: Neighborhood + 'static>(
-    mut query: Query<(Entity, &mut Path, &AgentPos, &Pathfind), WithoutPathingFailures>,
+    mut query: Query<
+        (Entity, &mut Path, &AgentPos, &Pathfind),
+        (WithoutPathingFailures, Without<NextPos>),
+    >,
     grid: Single<&Grid<N>>,
     mut blocking: ResMut<BlockingMap>,
     mut direction: ResMut<DirectionMap>,
@@ -299,9 +319,8 @@ fn next_position<N: Neighborhood + 'static>(
                     .0
                     .insert(entity, next.as_vec3() - position.0.as_vec3());
 
-                // Let's try it...
-                if blocking.0.contains_key(&next) {
-                    // Someone beat us to it — requeue without inserting NextPos
+                if blocking.0.contains_key(&next) && grid.collision() {
+                    // Someone beat us to it - requeue without inserting NextPos
                     queue.push_back(entity);
                     continue;
                 }
@@ -357,6 +376,11 @@ fn avoidance<N: Neighborhood + 'static>(
         .take(count)
         .filter(|pos| {
             if let Some(blocking_entity) = blocking.get(*pos) {
+                // If the blocking entity is the same as the current entity, skip it
+                if *blocking_entity == entity {
+                    return true;
+                }
+
                 // Too risky to move to the next position regardless of the direction
                 if *pos == next_position {
                     return false;

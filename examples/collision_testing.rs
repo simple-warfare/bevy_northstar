@@ -114,6 +114,7 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     map_entity.with_child((
         DebugGridBuilder::new(8, 8).build(),
+        DebugOffset(offset.extend(0.0)),
         Transform::from_translation(offset.extend(0.0)),
     ));
 }
@@ -203,7 +204,7 @@ fn spawn_minions(
 
         commands
             .spawn(Sprite {
-                image: asset_server.load("tile_0018_edit.png"),
+                image: asset_server.load("tiles/tile_0018_edit.png"),
                 color,
                 ..Default::default()
             })

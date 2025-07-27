@@ -1,6 +1,6 @@
 //! This module defines the `Chunk` struct, which represents a 3D region of the grid.
 use bevy::math::UVec3;
-use ndarray::{s, Array3, ArrayView2, ArrayView3};
+use ndarray::{s, Array3, ArrayView1, ArrayView2, ArrayView3};
 
 use crate::{dir::Dir, nav::NavCell};
 
@@ -14,7 +14,7 @@ pub(crate) struct Chunk {
     /// The maximum coordinates of the chunk.
     max: UVec3,
     /// Flags which indicate which edges are dirty.
-    dirty_edges: [bool; 18],
+    dirty_edges: [bool; 26],
 }
 
 impl PartialEq for Chunk {
@@ -32,7 +32,7 @@ impl Chunk {
             index,
             min,
             max,
-            dirty_edges: [true; 18],
+            dirty_edges: [true; 26],
         }
     }
 
@@ -98,125 +98,171 @@ impl Chunk {
         ])
     }
 
-    /// Returns a 2D `ArrayView2`` of the edge of the chunk in the given direction.
-    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
+    pub(crate) fn face<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView2<'a, NavCell> {
         match dir {
-            Dir::NORTH => grid.slice(s![
+            Dir::North => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.max.y as usize - 1,
                 self.min.z as usize..self.max.z as usize,
             ]),
-            Dir::EAST => grid.slice(s![
+            Dir::East => grid.slice(s![
                 self.max.x as usize - 1,
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize..self.max.z as usize,
             ]),
-            Dir::SOUTH => grid.slice(s![
+            Dir::South => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize,
                 self.min.z as usize..self.max.z as usize,
             ]),
-            Dir::WEST => grid.slice(s![
+            Dir::West => grid.slice(s![
                 self.min.x as usize,
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize..self.max.z as usize,
             ]),
-            Dir::UP => grid.slice(s![
+            Dir::Up => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize..self.max.y as usize,
                 self.max.z as usize - 1,
             ]),
-            Dir::DOWN => grid.slice(s![
+            Dir::Down => grid.slice(s![
                 self.min.x as usize..self.max.x as usize,
                 self.min.y as usize..self.max.y as usize,
                 self.min.z as usize,
             ]),
-            _ => panic!("Ordinal directions do not have an edge."),
+            _ => panic!("{dir:?} does not correspond to a face."),
+        }
+    }
+
+    pub(crate) fn edge<'a>(&self, grid: &'a Array3<NavCell>, dir: Dir) -> ArrayView1<'a, NavCell> {
+        match dir {
+            Dir::NorthUp => grid.slice(s![
+                self.min.x as usize..self.max.x as usize,
+                self.max.y as usize - 1,
+                self.max.z as usize - 1
+            ]),
+            Dir::EastUp => grid.slice(s![
+                self.max.x as usize - 1,
+                self.min.y as usize..self.max.y as usize,
+                self.max.z as usize - 1
+            ]),
+            Dir::SouthUp => grid.slice(s![
+                self.min.x as usize..self.max.x as usize,
+                self.min.y as usize,
+                self.max.z as usize - 1
+            ]),
+            Dir::WestUp => grid.slice(s![
+                self.min.x as usize,
+                self.min.y as usize..self.max.y as usize,
+                self.max.z as usize - 1
+            ]),
+            Dir::NorthDown => grid.slice(s![
+                self.min.x as usize..self.max.x as usize,
+                self.max.y as usize - 1,
+                self.min.z as usize
+            ]),
+            Dir::EastDown => grid.slice(s![
+                self.max.x as usize - 1,
+                self.min.y as usize..self.max.y as usize,
+                self.min.z as usize
+            ]),
+            Dir::SouthDown => grid.slice(s![
+                self.min.x as usize..self.max.x as usize,
+                self.min.y as usize,
+                self.min.z as usize
+            ]),
+            Dir::WestDown => grid.slice(s![
+                self.min.x as usize,
+                self.min.y as usize..self.max.y as usize,
+                self.min.z as usize
+            ]),
+            _ => panic!("{dir:?} does not correspond to an edge."),
         }
     }
 
     /// Returns the chunk corner `NavCell` for the given ordinal direction.
     pub(crate) fn corner(&self, grid: &Array3<NavCell>, dir: Dir) -> NavCell {
         match dir {
-            Dir::NORTHEAST => grid[[
+            Dir::NorthEast => grid[[
                 self.max.x as usize - 1,
                 self.max.y as usize - 1,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::SOUTHEAST => grid[[
+            Dir::SouthEast => grid[[
                 self.max.x as usize - 1,
                 self.min.y as usize,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::SOUTHWEST => grid[[
+            Dir::SouthWest => grid[[
                 self.min.x as usize,
                 self.min.y as usize,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::NORTHWEST => grid[[
+            Dir::NorthWest => grid[[
                 self.min.x as usize,
                 self.max.y as usize - 1,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::NORTHEASTUP => grid[[
+            Dir::NorthEastUp => grid[[
                 self.max.x as usize - 1,
                 self.max.y as usize - 1,
                 self.max.z as usize - 1,
             ]]
             .clone(),
-            Dir::SOUTHEASTUP => grid[[
+            Dir::SouthEastUp => grid[[
                 self.max.x as usize - 1,
                 self.min.y as usize,
                 self.max.z as usize - 1,
             ]]
             .clone(),
-            Dir::SOUTHWESTUP => grid[[
+            Dir::SouthWestUp => grid[[
                 self.min.x as usize,
                 self.min.y as usize,
                 self.max.z as usize - 1,
             ]]
             .clone(),
-            Dir::NORTHWESTUP => grid[[
+            Dir::NorthWestUp => grid[[
                 self.min.x as usize,
                 self.max.y as usize - 1,
                 self.max.z as usize - 1,
             ]]
             .clone(),
-            Dir::NORTHEASTDOWN => grid[[
+            Dir::NorthEastDown => grid[[
                 self.max.x as usize - 1,
                 self.max.y as usize - 1,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::SOUTHEASTDOWN => grid[[
+            Dir::SouthEastDown => grid[[
                 self.max.x as usize - 1,
                 self.min.y as usize,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::SOUTHWESTDOWN => grid[[
+            Dir::SouthWestDown => grid[[
                 self.min.x as usize,
                 self.min.y as usize,
                 self.min.z as usize,
             ]]
             .clone(),
-            Dir::NORTHWESTDOWN => grid[[
+            Dir::NorthWestDown => grid[[
                 self.min.x as usize,
                 self.max.y as usize - 1,
                 self.min.z as usize,
             ]]
             .clone(),
-            _ => panic!("Cardinal directions have no corner."),
+            _ => panic!("{dir:?} does not correspond to a corner."),
         }
     }
 
     pub(crate) fn touching_edges(&self, pos: UVec3) -> impl Iterator<Item = Dir> + '_ {
         Dir::all().filter(move |&dir| {
-            let (dx, dy, dz) = dir.vector();
+            let offset = dir.offset();
+            let (dx, dy, dz) = (offset.x, offset.y, offset.z);
 
             let x_match = match dx {
                 -1 => pos.x == self.min().x,
@@ -239,6 +285,46 @@ impl Chunk {
             x_match && y_match && z_match
         })
     }
+
+    pub(crate) fn boundary_pos_to_global(&self, pos: UVec3, dir: Dir) -> UVec3 {
+        match dir {
+            Dir::North => UVec3::new(pos.x + self.min().x, self.max().y - 1, pos.y + self.min().z),
+            Dir::South => UVec3::new(pos.x + self.min().x, self.min().y, pos.y + self.min().z),
+            Dir::East => UVec3::new(self.max().x - 1, pos.x + self.min().y, pos.y + self.min().z),
+            Dir::West => UVec3::new(self.min().x, pos.x + self.min().y, pos.y + self.min().z),
+            Dir::Up => UVec3::new(pos.x + self.min().x, pos.y + self.min().y, self.max().z - 1),
+            Dir::Down => UVec3::new(pos.x + self.min().x, pos.y + self.min().y, self.min().z),
+            Dir::NorthUp => UVec3::new(pos.x + self.min().x, self.max().y - 1, self.max().z - 1),
+            Dir::EastUp => UVec3::new(self.max().x - 1, pos.x + self.min().y, self.max().z - 1),
+            Dir::SouthUp => UVec3::new(pos.x + self.min().x, self.min().y, self.max().z - 1),
+            Dir::WestUp => UVec3::new(self.min().x, pos.x + self.min().y, self.max().z - 1),
+            Dir::NorthDown => UVec3::new(pos.x + self.min().x, self.max().y - 1, self.min().z),
+            Dir::EastDown => UVec3::new(self.max().x - 1, pos.x + self.min().y, self.min().z),
+            Dir::SouthDown => UVec3::new(pos.x + self.min().x, self.min().y, self.min().z),
+            Dir::WestDown => UVec3::new(self.min().x, pos.x + self.min().y, self.min().z),
+            _ => panic!("{dir:?} is a corner. This function only supports edges and faces."),
+        }
+    }
+
+    pub fn corner_pos(&self, dir: Dir) -> UVec3 {
+        match dir {
+            Dir::NorthEast => UVec3::new(self.max().x - 1, self.max().y - 1, self.min().z),
+            Dir::SouthEast => UVec3::new(self.max().x - 1, self.min().y, self.min().z),
+            Dir::SouthWest => UVec3::new(self.min().x, self.min().y, self.min().z),
+            Dir::NorthWest => UVec3::new(self.min().x, self.max().y - 1, self.min().z),
+            Dir::NorthEastUp => UVec3::new(self.max().x - 1, self.max().y - 1, self.max().z - 1),
+            Dir::SouthEastUp => UVec3::new(self.max().x - 1, self.min().y, self.max().z - 1),
+            Dir::SouthWestUp => UVec3::new(self.min().x, self.min().y, self.max().z - 1),
+            Dir::NorthWestUp => UVec3::new(self.min().x, self.max().y - 1, self.max().z - 1),
+            Dir::NorthEastDown => UVec3::new(self.max().x - 1, self.max().y - 1, self.min().z),
+            Dir::SouthEastDown => UVec3::new(self.max().x - 1, self.min().y, self.min().z),
+            Dir::SouthWestDown => UVec3::new(self.min().x, self.min().y, self.min().z),
+            Dir::NorthWestDown => UVec3::new(self.min().x, self.max().y - 1, self.min().z),
+            _ => {
+                panic!("{dir:?} is not a corner. This function only supports corner directions.");
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -258,7 +344,7 @@ mod test {
     fn test_chunk_edge() {
         let grid = Array3::from_elem((10, 10, 10), NavCell::default());
         let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(4, 4, 4));
-        let edge = chunk.edge(&grid, Dir::NORTH);
+        let edge = chunk.face(&grid, Dir::North);
 
         assert_eq!(edge.shape(), [4, 4]);
     }
@@ -269,9 +355,9 @@ mod test {
         let pos = UVec3::new(3, 2, 0);
 
         let edges: Vec<Dir> = chunk.touching_edges(pos).collect();
-        assert!(!edges.contains(&Dir::WEST));
-        assert!(!edges.contains(&Dir::NORTH));
-        assert!(edges.contains(&Dir::EAST));
-        assert!(!edges.contains(&Dir::SOUTH));
+        assert!(!edges.contains(&Dir::West));
+        assert!(!edges.contains(&Dir::North));
+        assert!(edges.contains(&Dir::East));
+        assert!(!edges.contains(&Dir::South));
     }
 }

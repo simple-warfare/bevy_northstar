@@ -7,12 +7,13 @@
 
 ## A 2d/3d hierarchical pathfinding crate for Bevy. 
 
-`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal position it's refined to get a more accurate path.
+`bevy_northstar` works by dividing the map into chunks and then calculates nodes based on the entrances between chunks. The nodes are used in pathfinding to get a higher level path that is significantly faster to calculate over long distances. Once the high level path is determined between a start and goal position it can be refined to get a more accurate path. The crate is designed to significantly reduce the performance hit of A* pathfinding on complex maps.
+
 The crate provides:
 
 ## Features
 - **Pathfinding Options** - Choose between optimized HPA* algorithms or traditional A* per call. You can retrieve paths directly even when using the plugin systems.
-- **Supports 2D and 3D Tilemaps** – Works with both 2D and 3D tilemaps.
+- **Supports 2D, 2.5D, and 3D Pathfinding** - Handles top-down, isometric, and layered maps with support for vertical transitions. Free 3D movement is also supported.
 - **Neighbor Filtering and Caching** - Precomputed, optionally filtered neighbors are cached to avoid redundant processing.
 - **Dynamic Changes** - Modify your tilemap and only affected areas will be recalculated during grid rebuilds.
 - **Parallel Building** - Chunk calculations run in parallel for faster builds. Can be disabled to support WASM.
@@ -21,6 +22,7 @@ The crate provides:
 - **Dynamic Collision & Avoidance** – Optional collision avoidance system. Just the add the `Blocking` component to flag blockers.
 - **Bevy Integration** – Systems and components for pathfinding and collision avoidance. Pathfindng systems are able to stagger agents across multiple frames.
 
+![Isometric Example](https://github.com/JtotheThree/bevy_northstar/raw/main/assets/images/isometric_demo.gif)
 
 ## Demo
 `cargo run --example demo --features stats --release`
@@ -29,7 +31,8 @@ Press P to switch between Refined HPA*, Coarse HPA*, and traditional A*
 Press C to disable/enable collision
 Press R to change the nav data for random tiles every 5 seconds. 
 
-![Screenshot 2025-03-30 at 9 34 05 AM](https://github.com/user-attachments/assets/e1ec3d27-3c64-4955-a8d0-afbad95c4107)
+![Demo](https://github.com/JtotheThree/bevy_northstar/raw/main/assets/images/demo.png)
+
 
 ## Documentation
 
@@ -123,9 +126,8 @@ opt-level = 3
 
 
 ## Roadmap / TODO
-- **Add Support For Multiple HPA Levels** – Implement multiple hierarchical levels for improved efficiency.  
-- **Pseudo-3D Tilemap Support** – Add support for features like stairs and ramps without full 3D calculations.  
-- **Optimize 3D Performance** – 3d grids appear to take a performance hit higher than expected currently. 
+- **Add Refinement Filters** - Improve path quality with additional heuristics and optional filters to smooth jagged paths.
+- **Add Support For Multiple Grids & HPA Levels** – Implement multiple hierarchical levels for improved efficiency.
 
 ## Assets credits
 - [kenny-minimap-pack](https://kenney.nl/assets/minimap-pack): an 8x8 tileset from [Kenney](https://kenney.nl/), licensed under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)

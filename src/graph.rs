@@ -43,15 +43,13 @@ impl Graph {
 
     /// Add a new `Node` to the graph at the given position with the specified `Chunk`
     /// and optional direction.
-    #[allow(dead_code)]
-    pub(crate) fn add_node(&mut self, pos: UVec3, chunk: Chunk, dir: Option<Dir>) -> usize {
-        if let Some(old_id) = self.node_ids.insert(pos, usize::MAX) {
+    pub(crate) fn add_node(&mut self, node: Node) -> NodeId {
+        if let Some(old_id) = self.node_ids.insert(node.pos, usize::MAX) {
             self.nodes.remove(old_id);
         }
 
-        let node = Node::new(pos, chunk, dir);
         let id = self.nodes.insert(node.clone());
-        self.node_ids.insert(pos, id);
+        self.node_ids.insert(node.pos, id);
         id
     }
 
@@ -273,7 +271,7 @@ mod tests {
         let mut graph = Graph::new();
         let pos = UVec3::new(0, 0, 0);
         let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
-        let id = graph.add_node(pos, chunk.clone(), None);
+        let id = graph.add_node(Node::new(pos, chunk.clone(), None));
 
         let node = graph.node_at(pos).unwrap();
         assert_eq!(node.pos, pos);
@@ -288,8 +286,8 @@ mod tests {
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
         let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
-        graph.add_node(pos1, chunk.clone(), None);
-        graph.add_node(pos2, chunk.clone(), None);
+        graph.add_node(Node::new(pos1, chunk.clone(), None));
+        graph.add_node(Node::new(pos2, chunk.clone(), None));
 
         let nodes = graph.nodes_in_chunk(&chunk);
         assert_eq!(nodes.len(), 2);
@@ -303,8 +301,8 @@ mod tests {
         let pos1 = UVec3::new(0, 0, 0);
         let pos2 = UVec3::new(1, 1, 1);
         let chunk = Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16));
-        graph.add_node(pos1, chunk.clone(), None);
-        graph.add_node(pos2, chunk.clone(), None);
+        graph.add_node(Node::new(pos1, chunk.clone(), None));
+        graph.add_node(Node::new(pos2, chunk.clone(), None));
 
         let pos = UVec3::new(0, 1, 0);
         let node = graph.closest_node_in_chunk(pos, &chunk).unwrap();

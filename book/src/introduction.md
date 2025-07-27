@@ -14,6 +14,19 @@ The crate provides:
 
 The crate is currently designed for use with 2d and 3d grid based tilemaps. It is not dependent on any specific tilemap Bevy crate, though it's been designed for ease of use with [`bevy_ecs_tilemap`](https://github.com/StarArawn/bevy_ecs_tilemap) and any related crates such as [`bevy_ecs_tiled`](https://github.com/adrien-bon/bevy_ecs_tiled) and [`bevy_ecs_ldtk`](https://github.com/Trouv/bevy_ecs_ldtk).
 
+# How It Works
+<img src="../images/hpaoverview.png" width="80%"/>
+
+Hierarchical pathfinding works by dividing the map into chunks and identifying viable connections between each chunk at their edges. This creates a network of high-level graph nodes across the map.
+
+Instead of searching the entire map at once, pathfinding can use these high-level nodes to run a simplified A* search over a much smaller set of positions, which significantly speeds up the process.
+
+Additionally, for each high-level node, paths through the local chunk to all other chunk nodes can be precomputed and stored. After the high-level search is complete, these precomputed paths are reused, so the algorithm doesn't need to search through every chunk individually.
+
+Once the high-level path is found, it is refined using a line tracing algorithm to make the path more optimal.
+
+In the picture above, the high-level path is shown in blue, and the red line shows the final refined path built from it.
+
 # Who This Crate Is For
 
 The current target for this crate is for games with large tile based maps and designed to support large sim games like Dwarf Fortress or Rimworld, RPGs with grid like movement like Fallout 1/2, and Roguelikes. 
@@ -34,6 +47,6 @@ Other crates that might fit those projects better:
 
 # 3D: Why and When
 
-Even if your game is technically 2D, many 2D tilemap games feature 3D movement. Isometric games are a great example, but even top-down games like Zelda often include a concept of depth. There are also fully 3D games that use grid-based movement in three dimensions, such as X-COM.
+Even if your game is technically 2D, many 2D tilemap games feature 3D movement often referred to as 2.5D. Isometric games are a great example, but even top-down games like Zelda often include a concept of depth. There are also fully 3D games that use grid-based movement in three dimensions, such as X-COM.
 
 If your 2D game allows regular movement between floors or terrain levels, you’ll likely want to use a 3D grid.

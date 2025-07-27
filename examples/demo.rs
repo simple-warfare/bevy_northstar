@@ -124,6 +124,8 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         DebugGridBuilder::new(8, 8)
             .enable_chunks()
             .enable_entrances()
+            .enable_cached_paths()
+            .enable_show_connections_on_hover()
             .build(),
         // Add the offset to the debug gizmo so that it aligns with your tilemap.
         DebugOffset(offset.extend(0.0)),
@@ -224,12 +226,12 @@ fn spawn_minions(
 
         commands
             .spawn(Sprite {
-                image: asset_server.load("tile_0018_edit.png"),
+                image: asset_server.load("tiles/tile_0018_edit.png"),
                 color,
                 ..Default::default()
             })
             .insert(Name::new(format!("{color:?}")))
-            .insert(DebugPath::new(color))
+            //.insert(DebugPath::new(color))
             .insert(AgentOfGrid(grid_entity))
             .insert(Blocking)
             .insert(Transform::from_translation(transform))

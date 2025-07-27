@@ -1,3 +1,29 @@
+## v0.3.2
+
+**BREAKING**
+- `Dir` enum variants renamed to CamelCase and reordered as more directions were added.
+- `Nav::Ramp` replaced with `Nav::Portal` for general purpose transitions (ramps, portals, elevators, etc).
+
+### Features
+- Improved 3D support to better handle 2.5D (isometric maps, 2d tilemaps with height).
+- New `isometric` example showcasing full 2.5D pathfinding and `Nav::Portal` usage.
+- `Nav::Portal` to support ramps/stairs, elevators, or teleporters during pathfinding.
+- Added `NoCornerCuttingFlat` neighbor filter: blocks diagonal moves on the same Z level but allows vertical diagonal jumps. Useful for 2.5D movement.
+- Added `Path::next()` to peek ahead in the path. Useful for checking the next position against your map.
+- Added trimming to `PathfindMode::Coarse` to ensure that only one high level node is pathed to in the goal chunk.
+- Chunk depth is no longer required to be divisible by the grid depth.
+- All crate components now derive `Reflect` and are registered for inspection.
+
+### Debug Features
+- `DebugGrid::set_depth(u32)` and `depth()` added to allow drawing debug grid at a specific Z depth.
+- `DebugDepthYOffsets` component aligns the debug grid with custom Z-level Y offsets.
+- `DebugCursor` component and `DebugGridBuilder::show_connections_on_hover()` added to only show cached paths and edges on node hover.
+
+### Fixes
+- Fixed race condition in `next_position` that sometimes caused missed `NextPos` component inserts.
+- Fixed agents in rare occasions blocking themselves on next path step.
+- Fixed HPA* refinement sometimes violating `NeighborFilter` constraints.
+
 ## v0.3.1
 ### Features
 * The grid can now be updated during gameplay. After calling `Grid::set_nav()` to change navigation at a position just call `Grid::build()` again. 

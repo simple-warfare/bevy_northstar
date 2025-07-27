@@ -17,8 +17,12 @@ The full cost of the path. It is the sum of all movement costs for each cell in 
 
 The total number of positions **currently** in the path.
 
+### `next() -> Option<UVec3>`
+
+Returns the next position in the path without removing it. Very useful in animation systems to play a different animation based on tile transition for example, playing a jumping animation when the next position is a higher z depth.
+
 ### `pop() -> Option<UVec3>`
 
-Removes and returns the first position of the path.
+Removes and returns the next position of the path.
 
 #### See the crate docs for more. A couple of notable ones are `reverse()` and `translate_by(offset)`

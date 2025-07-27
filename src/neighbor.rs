@@ -222,11 +222,24 @@ impl Neighborhood for OrdinalNeighborhood {
         &DIRECTIONS
     }
 
-    #[inline(always)]
+    /*#[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
         let dx = pos.x.abs_diff(target.x);
         let dy = pos.y.abs_diff(target.y);
         dx.max(dy)
+    }*/
+
+    #[inline(always)]
+    fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
+        let dx = (target.x as i32 - pos.x as i32).unsigned_abs();
+        let dy = (target.y as i32 - pos.y as i32).unsigned_abs();
+        let dz = (target.z as i32 - pos.z as i32).unsigned_abs();
+
+        let base = dx.max(dy).max(dz) * 1000;
+
+        let tie_breaker = dx + dy + dz;
+
+        base + tie_breaker // returns scaled u32
     }
 
     #[inline(always)]
@@ -298,6 +311,17 @@ impl Neighborhood for OrdinalNeighborhood3d {
 
     #[inline(always)]
     fn heuristic(&self, pos: UVec3, target: UVec3) -> u32 {
+        /* let dx = (target.x as i32 - pos.x as i32).abs() as u32;
+        let dy = (target.y as i32 - pos.y as i32).abs() as u32;
+        let dz = (target.z as i32 - pos.z as i32).abs() as u32;
+
+        let base = dx + dy + dz;
+
+        // Tie breaker: prefer straighter (less "jittery") paths
+        let max_axis = dx.max(dy).max(dz);
+
+        // Scaled to preserve integer math
+        base * 1000 + max_axis */
         let dx = pos.x.abs_diff(target.x);
         let dy = pos.y.abs_diff(target.y);
         let dz = pos.z.abs_diff(target.z);

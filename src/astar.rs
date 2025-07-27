@@ -83,8 +83,6 @@ pub(crate) fn astar_grid<N: Neighborhood>(
                 current_pos.z as usize,
             ]];
 
-            //let mut neighbors = SmallVec::new();
-            //neighborhood.neighbors(grid, *current_pos, &mut neighbors);
             cell.neighbor_iter(*current_pos)
         };
 
@@ -265,6 +263,7 @@ mod tests {
     use crate::grid::{Grid, GridSettingsBuilder};
     use crate::nav::Nav;
     use crate::neighbor::OrdinalNeighborhood3d;
+    use crate::node::Node;
 
     #[test]
     fn test_astar_grid() {
@@ -333,6 +332,69 @@ mod tests {
     }
 
     #[test]
+    fn test_astar_grid_with_ramp() {
+        let grid_settings = GridSettingsBuilder::new_3d(3, 3, 3)
+            .chunk_size(3)
+            .default_impassable()
+            .build();
+        let mut grid = Grid::<OrdinalNeighborhood3d>::new(&grid_settings);
+
+        // Fill the bottoom left hand layer with passable cells
+        for x in 0..1 {
+            for y in 0..3 {
+                grid.set_nav(UVec3::new(x, y, 0), Nav::Passable(1));
+            }
+        }
+
+        for x in 2..3 {
+            for y in 0..3 {
+                grid.set_nav(UVec3::new(x, y, 2), Nav::Passable(1));
+            }
+        }
+
+        // Add a single ramp to transition from the bottom layer to the top layer
+        grid.set_nav(
+            UVec3::new(1, 1, 0),
+            Nav::Portal(crate::nav::Portal {
+                target: UVec3::new(1, 1, 2),
+                cost: 1,
+                one_way: false,
+            }),
+        );
+        // Make sure the ramp destination is passable
+        grid.set_nav(UVec3::new(1, 1, 2), Nav::Passable(1));
+
+        grid.build();
+
+        let start = UVec3::new(0, 0, 0);
+        let goal = UVec3::new(2, 2, 2);
+
+        let path = astar_grid(
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert!(!path.is_empty());
+        // Ensure the path is using the ramp
+        assert!(
+            path.path.contains(&UVec3::new(1, 1, 0)),
+            "Ramp origin missing"
+        );
+        assert!(
+            path.path.contains(&UVec3::new(1, 1, 2)),
+            "Ramp target missing"
+        );
+    }
+
+    #[test]
     fn test_astar_grid_8x8() {
         let grid_settings = crate::grid::GridSettingsBuilder::new_3d(8, 8, 8)
             .chunk_size(4)
@@ -367,21 +429,21 @@ mod tests {
     fn test_astar_graph() {
         let mut graph = Graph::new();
 
-        let _ = graph.add_node(
+        let _ = graph.add_node(Node::new(
             UVec3::new(0, 0, 0),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
-        let _ = graph.add_node(
+        ));
+        let _ = graph.add_node(Node::new(
             UVec3::new(1, 1, 1),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
-        let _ = graph.add_node(
+        ));
+        let _ = graph.add_node(Node::new(
             UVec3::new(2, 2, 2),
             Chunk::new((0, 0, 0), UVec3::new(0, 0, 0), UVec3::new(16, 16, 16)),
             None,
-        );
+        ));
 
         graph.connect_node(
             UVec3::new(0, 0, 0),

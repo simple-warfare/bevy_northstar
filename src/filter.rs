@@ -11,6 +11,7 @@ use crate::{nav::NavCell, prelude::ORDINAL_3D_OFFSETS};
 /// [`NeighborFilter`] trait to add custom filtering logic to the neighbors returned by the [`crate::neighbor::Neighborhood::neighbors()`] method.
 /// Add a filter to the grid settings with [`crate::grid::GridSettingsBuilder::add_neighbor_filter()`].
 pub trait NeighborFilter {
+    /// Filters the neighbors of a given position in the grid.
     fn filter(&self, pos: UVec3, mask: u32, grid: &ArrayView3<NavCell>) -> u32;
 }
 
@@ -112,6 +113,67 @@ impl NeighborFilter for NoCornerCutting {
                 IVec3::new(0, dy, 0),
                 IVec3::new(0, 0, dz),
             ];
+
+            if cardinal_dirs.iter().any(|dir| solid_dirs.contains(dir)) {
+                mask &= !(1 << i); // Disallow this ordinal
+            }
+        }
+
+        mask
+    }
+}
+
+/// This filter is the same as [`NoCornerCutting`]` with the exception that it only disallows purely horizontal diagonals.
+/// This will work better in a 3d tilemap situation where you want your player to be able to jump heights but not cut corners horizontally.
+#[derive(Debug, Clone, Copy)]
+pub struct NoCornerCuttingFlat;
+
+impl NeighborFilter for NoCornerCuttingFlat {
+    fn filter(&self, pos: UVec3, mut mask: u32, grid: &ArrayView3<NavCell>) -> u32 {
+        let origin = pos.as_ivec3();
+        let shape = grid.shape();
+
+        // Build a lookup set of which cardinals are solid
+        let mut solid_dirs = HashSet::new();
+        for offset in ORDINAL_3D_OFFSETS.iter() {
+            let neighbor = origin + *offset;
+            if neighbor.cmplt(IVec3::ZERO).any()
+                || neighbor.x >= shape[0] as i32
+                || neighbor.y >= shape[1] as i32
+                || neighbor.z >= shape[2] as i32
+            {
+                continue;
+            }
+
+            let neighbor = UVec3::new(neighbor.x as u32, neighbor.y as u32, neighbor.z as u32);
+
+            if grid[[
+                neighbor.x as usize,
+                neighbor.y as usize,
+                neighbor.z as usize,
+            ]]
+            .is_impassable()
+            {
+                solid_dirs.insert(*offset);
+            }
+        }
+
+        // For each diagonal, disallow only if it is purely horizontal and blocked
+        for (i, offset) in ORDINAL_3D_OFFSETS.iter().enumerate() {
+            if (mask >> i) & 1 == 0 {
+                continue;
+            }
+
+            let dx = offset.x.signum();
+            let dy = offset.y.signum();
+            let dz = offset.z.signum();
+
+            // Skip diagonals that involve a vertical (z-axis) change
+            if dz != 0 {
+                continue;
+            }
+
+            let cardinal_dirs = [IVec3::new(dx, 0, 0), IVec3::new(0, dy, 0)];
 
             if cardinal_dirs.iter().any(|dir| solid_dirs.contains(dir)) {
                 mask &= !(1 << i); // Disallow this ordinal

@@ -1,6 +1,11 @@
 //! This module defines pathfinding functions which can be called directly.
 
-use bevy::{ecs::entity::Entity, log, math::UVec3, platform::collections::HashMap};
+use bevy::{
+    ecs::entity::Entity,
+    log,
+    math::{IVec3, UVec3},
+    platform::collections::{HashMap, HashSet},
+};
 use ndarray::ArrayView3;
 
 use crate::{
@@ -12,7 +17,7 @@ use crate::{
     node::Node,
     path::Path,
     prelude::Neighborhood,
-    raycast::{bresenham_path, bresenham_path_filtered, path_line_trace},
+    raycast::{bresenham_path, bresenham_path_filtered},
 };
 
 /// AStar pathfinding
@@ -137,7 +142,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
     let mut path: Vec<UVec3> = Vec::new();
     let mut cost = 0;
 
-    for start_node in start_nodes {
+    for start_node in &start_nodes {
         for goal_node in goal_nodes.clone() {
             let node_path = astar_graph(
                 &grid.neighborhood,
@@ -147,11 +152,23 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 100,
             );
 
-            if let Some(node_path) = node_path {
+            if let Some(mut node_path) = node_path {
+                let start_keys: HashSet<_> = start_paths.keys().copied().collect();
+                let goal_keys: HashSet<_> = goal_paths.keys().copied().collect();
+
+                trim_path(
+                    &mut node_path,
+                    &start_keys,
+                    &goal_keys,
+                    start_chunk,
+                    goal_chunk,
+                );
+
+                let start_pos = node_path.path.front().unwrap();
+                let goal_pos = node_path.path.back().unwrap();
+
                 // Add start_path to the node_path
-                let start_path = start_paths
-                    .get(&(start_node.pos - start_chunk.min()))
-                    .unwrap();
+                let start_path = start_paths.get(&(start_pos - start_chunk.min())).unwrap();
                 path.extend(start_path.path().iter().map(|pos| *pos + start_chunk.min()));
                 cost += start_path.cost();
 
@@ -166,7 +183,7 @@ pub(crate) fn pathfind<N: Neighborhood>(
                 }
 
                 // Add end path to path
-                let end_path = goal_paths.get(&(goal_node.pos - goal_chunk.min())).unwrap();
+                let end_path = goal_paths.get(&(goal_pos - goal_chunk.min())).unwrap();
                 path.extend(
                     end_path
                         .path()
@@ -178,6 +195,17 @@ pub(crate) fn pathfind<N: Neighborhood>(
 
                 if path.is_empty() {
                     return None;
+                }
+
+                // On some occassions extending the goal path can add in a duplicate goal position at the end.
+                // It's cheaper/cleaner to just clean up after it.
+                if path.len() >= 2 && path[path.len() - 1] == path[path.len() - 2] {
+                    path.pop();
+                }
+
+                // Same with the start
+                if path.len() >= 2 && path[0] == path[1] {
+                    log::warn!("Start contains duplicate nodes: {:?}", path);
                 }
 
                 if !refined {
@@ -207,6 +235,93 @@ pub(crate) fn pathfind<N: Neighborhood>(
     None
 }
 
+// Some times the Graph A* will return a path that has valid but redundant nodes at the start and end
+// of the path. Leading to awkward paths where the agent appears to veers off before heading to the goal.
+// This trims the path to ensure that only one entrance and exit node is used for the start and goal chunks.
+pub(crate) fn trim_path(
+    path: &mut Path,
+    start_keys: &HashSet<UVec3>, // local positions in start_paths
+    goal_keys: &HashSet<UVec3>,  // local positions in goal_paths
+    start_chunk: &Chunk,
+    goal_chunk: &Chunk,
+) {
+    // === Trim start ===
+    if let Some(i) = path
+        .path
+        .iter()
+        .position(|pos| start_keys.contains(&(*pos - start_chunk.min())))
+    {
+        // Remove everything before this index
+        for _ in 0..i {
+            path.path.pop_front();
+        }
+    }
+
+    // === Trim end ===
+    if let Some(i) = path
+        .path
+        .iter()
+        .rposition(|pos| goal_keys.contains(&(*pos - goal_chunk.min())))
+    {
+        // Remove everything after this index
+        let len = path.path.len();
+        for _ in (i + 1)..len {
+            path.path.pop_back();
+        }
+    }
+
+    assert!(
+        !path.path.is_empty(),
+        "BUG: trim_path() removed all nodes — this should never happen"
+    );
+}
+
+/*#[inline(always)]
+pub(crate) fn trim_path(
+    path: &mut Path,
+    starts: Vec<UVec3>,
+    goals: Vec<UVec3>,
+) {
+    // Trim out reduntant nodes in the viable starts
+    if let Some(last_start_node) = path
+        .path
+        .iter()
+        .rev()
+        .find(|&&pos| starts.contains(&pos))
+        .cloned()
+    {
+        while let Some(first) = path.path.front() {
+            // Trim only if it's a different node in the start chunk
+            if starts.contains(first) && *first != last_start_node {
+                path.path.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Trim out redundant nodes in the viable goals
+    if let Some(first_goal_node) = path
+        .path
+        .iter()
+        .find(|&&pos| goals.contains(&pos))
+        .cloned()
+    {
+        while let Some(last) = path.path.back() {
+            if goals.contains(last) && *last != first_goal_node {
+                path.path.pop_back();
+            } else {
+                break;
+            }
+        }
+    }
+
+    assert!(
+        !path.path.is_empty(),
+        "BUG: trim_path() removed all nodes — this should never happen"
+    );
+}*/
+
 /// Optimize a path by using line of sight checks to skip waypoints.
 ///
 /// This is used to optimize paths generated by the HPA* algorithms.
@@ -232,6 +347,78 @@ pub(crate) fn optimize_path<N: Neighborhood>(
 
     let filtered = !neighborhood.filters().is_empty();
 
+    let mut refined_path = Vec::with_capacity(path.len());
+    let mut i = 0;
+
+    let mut last_dir: Option<IVec3> = None;
+
+    refined_path.push(path.path[i]); // Always keep the first node
+
+    while i < path.len() {
+        let mut shortcut_taken = false;
+
+        for farthest in (i + 1..path.len()).rev() {
+            let candidate = path.path[farthest];
+            let dir = (candidate.as_ivec3() - path.path[i].as_ivec3()).signum();
+
+            // Reject if direction changes drastically
+            if let Some(prev_dir) = last_dir {
+                if dir != prev_dir && dir.dot(prev_dir) < 0 {
+                    continue; // Skip this candidate
+                }
+            }
+
+            let maybe_shortcut = if filtered {
+                bresenham_path_filtered(grid, path.path[i], candidate, neighborhood.is_ordinal())
+            } else {
+                bresenham_path(grid, path.path[i], candidate, neighborhood.is_ordinal())
+            };
+
+            if let Some(shortcut) = maybe_shortcut {
+                refined_path.extend(shortcut.into_iter().skip(1));
+                i = farthest;
+                shortcut_taken = true;
+                last_dir = Some(dir);
+                break;
+            }
+        }
+
+        if !shortcut_taken {
+            i += 1;
+            if i < path.len() {
+                let dir = if let Some(prev) = refined_path.last() {
+                    (path.path[i].as_ivec3() - prev.as_ivec3()).signum()
+                } else {
+                    IVec3::ZERO
+                };
+                refined_path.push(path.path[i]);
+                last_dir = Some(dir);
+            }
+        }
+    }
+
+    // Recompute cost of new path
+    let cost = refined_path
+        .iter()
+        .map(|pos| grid[[pos.x as usize, pos.y as usize, pos.z as usize]].cost)
+        .sum();
+
+    let mut path = Path::new(refined_path.clone(), cost);
+    path.graph_path = refined_path.into();
+    path
+}
+
+/*pub(crate) fn optimize_path_old<N: Neighborhood>(
+    neighborhood: &N,
+    grid: &ArrayView3<NavCell>,
+    path: &Path,
+) -> Path {
+    if path.is_empty() {
+        return path.clone();
+    }
+
+    let filtered = !neighborhood.filters().is_empty();
+
     let goal = *path.path.back().unwrap();
     let mut refined_path = Vec::with_capacity(path.len());
     let mut i = 0;
@@ -239,22 +426,18 @@ pub(crate) fn optimize_path<N: Neighborhood>(
     refined_path.push(path.path[i]); // Always keep the first node
 
     while i < path.len() {
-        // Try to shortcut directly to goal first
-        /*if let Some(direct_path) = bresenham_path(
-            grid,
-            path.path[i],
-            goal,
-            neighborhood.is_ordinal(),
-            allow_corner_clipping,
-        ) {
-            refined_path.extend(direct_path.into_iter().skip(1));
-            break;
-        }*/
-
-        if let Some(direct_path) = path_line_trace(grid, path.path[i], goal) {
-            // If we can reach the goal directly, add it and break
-            refined_path.extend(direct_path.into_iter().skip(1));
-            break;
+        if !filtered {
+            if let Some(direct_path) = bresenham_path(grid, path.path[i], goal, neighborhood.is_ordinal()) {
+                // If we can reach the goal directly, add it and break
+                refined_path.extend(direct_path.into_iter().skip(1));
+                break;
+            }
+        } else {
+            if let Some(direct_path) = bresenham_path_filtered(grid, path.path[i], goal, neighborhood.is_ordinal()) {
+                // If we can reach the goal directly, add it and break
+                refined_path.extend(direct_path.into_iter().skip(1));
+                break;
+            }
         }
 
         // Try to find the farthest reachable waypoint from i (greedy)
@@ -303,7 +486,7 @@ pub(crate) fn optimize_path<N: Neighborhood>(
     let mut path = Path::new(refined_path.clone(), cost);
     path.graph_path = refined_path.into();
     path
-}
+}*/
 
 // Filters and ranks nodes within a chunk based on reachability and proximity.
 #[inline(always)]
