@@ -172,3 +172,46 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::grid::{Grid, GridSettingsBuilder};
+    use crate::nav::Nav;
+    use crate::neighbor::OrdinalNeighborhood3d;
+    use crate::prelude::OrdinalNeighborhood;
+
+    #[test]
+    fn test_thetastar_grid() {
+        let grid_settings = GridSettingsBuilder::new_2d(9, 9).chunk_size(3).build();
+        let mut grid = Grid::<OrdinalNeighborhood>::new(&grid_settings);
+
+        grid.set_nav(UVec3::new(2, 1, 0), Nav::Impassable);
+
+        grid.build();
+
+        let start = UVec3::new(0, 0, 0);
+        let goal = UVec3::new(3, 3, 0);
+
+        let path = thetastar_grid(
+            &OrdinalNeighborhood3d {
+                filters: Vec::new(),
+            },
+            &grid.view(),
+            start,
+            goal,
+            64,
+            false,
+            &HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(path.cost(), 3);
+        assert_eq!(path.len(), 2);
+        // Ensure first position is the start position
+        assert_eq!(path.path()[0], start);
+        // Ensure last position is the goal position
+        assert_eq!(path.path()[1], goal);
+    }
+}
