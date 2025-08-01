@@ -106,9 +106,6 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
                 continue;
             }
 
-            let new_cost = cost + neighbor_cell.cost;
-            let h;
-            let n;
             let parent_index = visited.get_index(index).unwrap().1 .0;
 
             if parent_index != usize::MAX {
@@ -119,6 +116,9 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
                 }
             };
 
+            let new_cost = cost + neighbor_cell.cost;
+            let h;
+            let n;
             match visited.entry(neighbor) {
                 Vacant(e) => {
                     h = neighborhood.heuristic(neighbor, goal);
