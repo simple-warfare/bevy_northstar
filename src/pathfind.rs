@@ -17,7 +17,8 @@ use crate::{
     node::Node,
     path::Path,
     prelude::Neighborhood,
-    raycast::{bresenham_path, bresenham_path_filtered}, thetastar::thetastar_grid,
+    raycast::{bresenham_path, bresenham_path_filtered},
+    thetastar::thetastar_grid,
 };
 
 /// AStar pathfinding

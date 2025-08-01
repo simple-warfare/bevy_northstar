@@ -1595,7 +1595,6 @@ impl<N: Neighborhood + Default> Grid<N> {
         })
     }
 
-    
     /// Generate a traditional A* path from `start` to `goal`.
     /// This method is useful for generating paths that require precise navigation and CPU cost isn't a concern.
     /// Great for a turn based game where movment cost is important.

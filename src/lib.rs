@@ -9,7 +9,6 @@ use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
 
 mod astar;
-mod thetastar;
 mod chunk;
 pub mod components;
 pub mod debug;
@@ -27,6 +26,7 @@ pub mod path;
 pub mod pathfind;
 pub mod plugin;
 pub mod raycast;
+mod thetastar;
 
 /// Crate Prelude
 pub mod prelude {
