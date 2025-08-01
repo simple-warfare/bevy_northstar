@@ -9,6 +9,7 @@ use std::cmp::Ordering;
 use std::hash::BuildHasherDefault;
 
 mod astar;
+mod thetastar;
 mod chunk;
 pub mod components;
 pub mod debug;
