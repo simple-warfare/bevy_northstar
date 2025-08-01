@@ -118,6 +118,7 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
                     index = parent_index;
                 }
             };
+
             match visited.entry(neighbor) {
                 Vacant(e) => {
                     h = neighborhood.heuristic(neighbor, goal);
