@@ -49,6 +49,7 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
     let max = UVec3::new(shape[0] as u32, shape[1] as u32, shape[2] as u32);
 
     while let Some(SmallestCostHolder { cost, index, .. }) = to_visit.pop() {
+        let mut index = index;
         let neighbors = {
             let (current_pos, &(_, current_cost)) = visited.get_index(index).unwrap();
             let current_distance = neighborhood.heuristic(*current_pos, goal);
@@ -108,6 +109,15 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
             let new_cost = cost + neighbor_cell.cost;
             let h;
             let n;
+            let parent_index = visited.get_index(index).unwrap().1 .0;
+
+            if parent_index != usize::MAX {
+                let parent = visited.get_index(parent_index).unwrap().0;
+
+                if line_of_sight(grid, neighbor, *parent) {
+                    index = parent_index;
+                }
+            };
             match visited.entry(neighbor) {
                 Vacant(e) => {
                     h = neighborhood.heuristic(neighbor, goal);
@@ -122,15 +132,6 @@ pub(crate) fn thetastar_grid<N: Neighborhood>(
                     } else {
                         continue;
                     }
-                }
-            }
-
-            let parent_index = visited.get_index(index).unwrap().1 .0;
-            if parent_index != usize::MAX {
-                let parent = visited.get_index(parent_index).unwrap().0;
-
-                if line_of_sight(grid, neighbor, *parent) {
-                    visited.insert(neighbor, (parent_index, new_cost));
                 }
             }
 
