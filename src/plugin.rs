@@ -210,6 +210,9 @@ fn pathfind<N: Neighborhood + 'static>(
             PathfindMode::AStar => {
                 grid.pathfind_astar(start.0, pathfind.goal, blocking, pathfind.partial)
             }
+            PathfindMode::ThetaStar => {
+                grid.pathfind_thetastar(start.0, pathfind.goal, blocking, pathfind.partial)
+            }
         };
 
         #[cfg(feature = "stats")]
@@ -505,7 +508,8 @@ fn reroute_path<N: Neighborhood + 'static>(
         let refined = match pathfind.mode {
             PathfindMode::Refined => true,
             PathfindMode::Coarse => false,
-            PathfindMode::AStar => false, // A* is not supported for rerouting
+            PathfindMode::AStar => false,
+            PathfindMode::ThetaStar => false,
         };
 
         let new_path = grid.reroute_path(path, position.0, pathfind.goal, &blocking.0, refined);
