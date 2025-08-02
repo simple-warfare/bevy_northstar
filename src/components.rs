@@ -31,9 +31,6 @@ pub enum PathfindMode {
     /// Full-grid A* pathfinding without hierarchy.
     /// Useful for small grids or a turn based pathfinding path where movement cost needs to be the most accurate and cpu usage isn't a concern.
     AStar,
-    /// Any-Angle θ* pathfinding without hierarchy.
-    /// Useful for small grids or a turn based pathfinding path where movement cost needs to be the most accurate and cpu usage isn't a concern.
-    ThetaStar,
 }
 
 /// Insert [`Pathfind`] on an entity to pathfind to a goal.
