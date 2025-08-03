@@ -28,6 +28,7 @@ use crate::{
 
 /// Settings for how the grid is divided into chunks.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChunkSettings {
     /// The square size of each chunk in the grid.
     /// Needs to be at least 3.
@@ -53,6 +54,7 @@ impl Default for ChunkSettings {
 /// Defaults movement cost and passability for initializing the grid cells.
 /// Useful if you're generating your a large map to reduce your initialization time.
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct NavSettings {
     /// The default cost for each cell in the grid.
     pub default_movement_cost: MovementCost,
@@ -71,6 +73,7 @@ impl Default for NavSettings {
 
 /// Settings for collision
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CollisionSettings {
     /// If true, collision avoidance is enabled.
     pub enabled: bool,

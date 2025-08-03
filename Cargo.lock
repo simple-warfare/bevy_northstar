@@ -969,6 +969,7 @@ dependencies = [
  "rand 0.9.1",
  "rayon",
  "rustc-hash 2.1.1",
+ "serde",
  "slab",
  "smallvec",
  "strum 0.27.1",
