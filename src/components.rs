@@ -187,11 +187,10 @@ pub struct PathfindingFailed;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RerouteFailed;
 
-#[cfg(feature = "debug")]
 /****************************************
     DEBUGGING COMPONENTS
 *****************************************/
-
+#[cfg(feature = "debug")]
 /// Add this component to the same entity as [`DebugPath`] to offset the debug gizmos.
 /// Useful for aligning the gizmos with your tilemap rendering offset.
 #[derive(Component, Default, Reflect)]
