@@ -15,11 +15,10 @@ keywords = ["bevy", "pathfinding", "astar", "hpa", "game"]
 exclude = ["assets/*", "res/*"]
 
 [features]
-default = ["parallel", "bevy/bevy_log"]
+default = ["parallel"]
 stats = []
 parallel = ["rayon", "ndarray/rayon"]
 serde = ["dep:serde", "bevy/serialize"]
-gui = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 
 [dependencies]
 thiserror = "2.0.12"
@@ -34,8 +33,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 [dependencies.bevy]
 version = "0.16.1"
 default-features = false
-features = ["bevy_render", "bevy_gizmos", "bevy_log"]
-optional = true
+features = ["bevy_log"]
 
 [dev-dependencies]
 bevy = { version = "0.16.1", features = ["bevy_dev_tools"] }
@@ -55,16 +53,14 @@ harness = false
 
 [[example]]
 name = "demo"
-required-features = ["stats", "gui"]
+required-features = ["stats"]
 
 [[example]]
 name = "isometric"
-required-features = ["gui"]
 
 [[example]]
 name = "collision_testing"
-required-features = ["stats", "gui"]
+required-features = ["stats"]
 
 [[example]]
 name = "basic"
-required-features = ["gui"]
