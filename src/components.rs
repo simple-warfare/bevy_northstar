@@ -1,14 +1,15 @@
 //! Components for pathfinding, collision, and debugging.
+#[cfg(feature = "debug")]
 use bevy::{
     color::palettes::css,
-    ecs::entity::Entity,
-    math::{UVec3, Vec2, Vec3},
+    math::{Vec2, Vec3},
     platform::collections::HashMap,
-    prelude::{Color, Component},
-    reflect::Reflect,
+    prelude::Color,
     transform::components::Transform,
 };
+use bevy::{ecs::entity::Entity, math::UVec3, prelude::Component, reflect::Reflect};
 
+#[cfg(feature = "debug")]
 use crate::debug::DebugTilemapType;
 
 /// An entities position on the pathfinding [`crate::grid::Grid`].
@@ -186,6 +187,7 @@ pub struct PathfindingFailed;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RerouteFailed;
 
+#[cfg(feature = "debug")]
 /****************************************
     DEBUGGING COMPONENTS
 *****************************************/
@@ -195,25 +197,25 @@ pub struct RerouteFailed;
 #[derive(Component, Default, Reflect)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DebugOffset(pub Vec3);
-
+#[cfg(feature = "debug")]
 /// You can add DebugDepthOffsets to your DebugGrid entity and the debug gizmo's y position
 /// will be offset by the depth (z-coordinate) of the grid/path position.
 #[derive(Component, Default, Reflect)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DebugDepthYOffsets(pub HashMap<u32, f32>);
-
+#[cfg(feature = "debug")]
 /// Add [`DebugCursor`] to your DebugGrid entity and provide it with the current position
 /// of your mouse cursor.
 /// This will allow [`DebugGrid::set_show_connections_on_hover()`] to only draw connections graph node under the cursor.
 #[derive(Component, Debug, Default, Reflect)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DebugCursor(pub Option<Vec2>);
-
+#[cfg(feature = "debug")]
 // Internal component to hold which cell the mouse is hovering over.
 #[derive(Component, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct DebugNode(pub(crate) Option<UVec3>);
-
+#[cfg(feature = "debug")]
 /// Component for debugging an entity's [`crate::path::Path`].
 #[derive(Component, Reflect)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -224,7 +226,7 @@ pub struct DebugPath {
     /// This is useful for debugging the HPA* algorithm.
     pub draw_unrefined: bool,
 }
-
+#[cfg(feature = "debug")]
 impl DebugPath {
     /// Creates a new [`DebugPath`] component with the specified color.
     /// The default color is red.
@@ -235,7 +237,7 @@ impl DebugPath {
         }
     }
 }
-
+#[cfg(feature = "debug")]
 impl Default for DebugPath {
     fn default() -> Self {
         DebugPath {
@@ -245,6 +247,7 @@ impl Default for DebugPath {
     }
 }
 
+#[cfg(feature = "debug")]
 /// Component for debugging [`crate::grid::Grid`].
 /// You need to insert [`DebugGrid`] as a child of your map.
 #[derive(Reflect, Component)]
@@ -271,6 +274,7 @@ pub struct DebugGrid {
     pub show_connections_on_hover: bool,
 }
 
+#[cfg(feature = "debug")]
 impl DebugGrid {
     /// The width and height of a tile in pixels. This is required because your tile pixel dimensions may not match the grid size.
     pub fn tile_size(&mut self, width: u32, height: u32) -> &Self {
@@ -362,6 +366,7 @@ impl DebugGrid {
     }
 }
 
+#[cfg(feature = "debug")]
 /// Builder for [`DebugGrid`].
 /// Use this to configure debugging for a grid before inserting it into your map entity.
 /// Insert the returned [`DebugGrid`] as a child of the entity with your [`crate::grid::Grid`] component.
@@ -378,6 +383,7 @@ pub struct DebugGridBuilder {
     show_connections_on_hover: bool,
 }
 
+#[cfg(feature = "debug")]
 impl DebugGridBuilder {
     /// Creates a new [`DebugGridBuilder`] with the specified tile width and height.
     pub fn new(tile_width: u32, tile_height: u32) -> Self {
